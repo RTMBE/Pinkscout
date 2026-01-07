@@ -84,16 +84,10 @@ PAGE LAYOUT:
           <li><a href="index.html">🏠 Home</a></li>
           <!-- class="active" highlights current page -->
           <li><a href="dashboard.html" class="active">📊 Dashboard</a></li>
-          <li><a href="team.html">🔍 Team Search</a></li>
           <li><a href="admin.html">⚙️ Admin</a></li>
           <li><a href="newscounting.html">📝 Scouting</a></li>
         </ul>
       </nav>
-      <!-- Theme Toggle -->
-      <div class="theme-toggle" id="themeToggle">
-        <span class="theme-toggle-icon" id="themeToggleIcon">☀️</span>
-        <span class="theme-toggle-label" id="themeToggleLabel">Light Mode</span>
-      </div>
       <!-- User Info - shown when logged in -->
       <div class="user-info" id="userInfo" style="display: none;">
         <div class="user-email" id="userEmail"></div>
@@ -108,21 +102,10 @@ PAGE LAYOUT:
     -->
     <main class="main-content">
 
-      <!-- Page Header with Event Filter -->
+      <!-- Page Header -->
       <header class="page-header">
-        <div class="header-row">
-          <div>
-            <h1>Dashboard</h1>
-            <p>View and analyze scouting data from all matches.</p>
-          </div>
-          <div class="event-filter-container">
-            <label for="eventFilter">📍 Event:</label>
-            <select id="eventFilter" class="event-filter-select">
-              <option value="">All Events</option>
-            </select>
-          </div>
-        </div>
-        <div class="current-event-badge" id="currentEventDisplay">All Events</div>
+        <h1>Dashboard</h1>
+        <p>View and analyze scouting data from all matches.</p>
       </header>
 
       <!--
@@ -169,48 +152,36 @@ PAGE LAYOUT:
 
       <!--
       ======================================================================
-      TOP 10 TEAMS
+      SCORING DISTRIBUTION CHART
       ======================================================================
-      Shows the top 10 performing teams with their average scores.
-      Useful for quickly identifying the best teams at an event.
+      A doughnut chart showing how scoring is distributed across categories.
+
+      CANVAS ELEMENT:
+      <canvas> is an HTML5 element for drawing graphics.
+      Chart.js uses the canvas to render the chart.
+      The id="scoringChart" is used by dashboard.js to find this element.
       ======================================================================
       -->
       <div class="content-card">
-        <h2>🏆 Top 10 Teams</h2>
-        <div id="top10Teams">
-          <p class="text-center" style="color: #888; padding: 20px;">Loading team rankings...</p>
+        <h2>📊 Scoring Distribution</h2>
+        <div class="chart-container">
+          <!-- Chart.js will draw the chart on this canvas -->
+          <canvas id="scoringChart"></canvas>
         </div>
       </div>
 
       <!--
       ======================================================================
-      CHARTS GRID
+      TEAM PERFORMANCE CHART
       ======================================================================
-      Two charts side by side on larger screens.
+      A stacked bar chart comparing team performance.
+      Shows auto vs teleop scores for top teams.
       ======================================================================
       -->
-      <div class="charts-grid">
-        <!--
-        SCORING DISTRIBUTION CHART
-        A doughnut chart showing how scoring is distributed across categories.
-        -->
-        <div class="content-card">
-          <h2>📊 Scoring Distribution</h2>
-          <div class="chart-container">
-            <canvas id="scoringChart"></canvas>
-          </div>
-        </div>
-
-        <!--
-        TEAM PERFORMANCE CHART
-        A stacked bar chart comparing team performance.
-        Shows auto vs teleop scores for top teams.
-        -->
-        <div class="content-card">
-          <h2>📈 Team Performance</h2>
-          <div class="chart-container">
-            <canvas id="performanceChart"></canvas>
-          </div>
+      <div class="content-card">
+        <h2>📈 Team Performance Comparison</h2>
+        <div class="chart-container">
+          <canvas id="performanceChart"></canvas>
         </div>
       </div>
 
@@ -250,7 +221,6 @@ PAGE LAYOUT:
   - Generating the recent entries table
   ============================================================================
   -->
-  <script src="js/theme.js"></script>
   <script type="module" src="js/firebase.js"></script>
   <script type="module" src="js/app.js"></script>
   <script type="module" src="js/dashboard.js"></script>

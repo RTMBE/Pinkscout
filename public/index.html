@@ -106,7 +106,6 @@ PAGE LAYOUT:
           <!-- class="active" indicates this is the current page -->
           <li><a href="index.html" class="active">🏠 Home</a></li>
           <li><a href="dashboard.html">📊 Dashboard</a></li>
-          <li><a href="team.html">🔍 Team Search</a></li>
           <li><a href="admin.html">⚙️ Admin</a></li>
           <li><a href="newscounting.html">📝 Scouting</a></li>
         </ul>
@@ -118,12 +117,6 @@ PAGE LAYOUT:
       This section is hidden by default (style="display: none;").
       JavaScript shows it when a user is logged in.
       -->
-      <!-- Theme Toggle -->
-      <div class="theme-toggle" id="themeToggle">
-        <span class="theme-toggle-icon" id="themeToggleIcon">☀️</span>
-        <span class="theme-toggle-label" id="themeToggleLabel">Light Mode</span>
-      </div>
-
       <div class="user-info" id="userInfo" style="display: none;">
         <div class="user-email" id="userEmail"></div>
         <button class="btn-logout" id="logoutBtn">Sign Out</button>
@@ -196,9 +189,6 @@ PAGE LAYOUT:
   - Scoped variables (won't pollute global scope)
   ============================================================================
   -->
-
-  <!-- Load theme script first to prevent flash -->
-  <script src="js/theme.js"></script>
 
   <!-- Load Firebase configuration and initialization -->
   <script type="module" src="js/firebase.js"></script>

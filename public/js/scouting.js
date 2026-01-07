@@ -28,14 +28,7 @@
 
 // Import the save function from app.js
 // This function handles the actual Firestore write operation
-import {
-  saveScoutingData,
-  getCurrentEvent,
-  setCurrentEvent,
-  getAllEvents,
-  saveEvent,
-  importEventFromTBA
-} from './app.js';
+import { saveScoutingData } from './app.js';
 
 
 // =============================================================================
@@ -142,19 +135,9 @@ function collectFormData() {
   // This automatically collects all named inputs
   const formData = new FormData(form);
 
-  // Get the current event (required for all scouting data)
-  const currentEvent = getCurrentEvent();
-
   // Build the scouting data object
   // Each property corresponds to a form field
   const scoutingData = {
-    // =========================================
-    // EVENT INFORMATION
-    // Link this scouting record to an event
-    // =========================================
-    eventId: currentEvent ? currentEvent.id : null,
-    eventName: currentEvent ? currentEvent.name : 'No Event Selected',
-
     // =========================================
     // MATCH INFORMATION
     // Basic info about the match being scouted
@@ -340,256 +323,6 @@ window.resetForm = function() {
 //
 // =============================================================================
 
-// =============================================================================
-// EVENT SELECTION MANAGEMENT
-// =============================================================================
-//
-// Functions for managing event selection on the scouting page.
-//
-// =============================================================================
-
-/**
- * UPDATE EVENT BANNER
- * -------------------
- * Updates the event banner to show the currently selected event.
- */
-function updateEventBanner() {
-  const currentEvent = getCurrentEvent();
-  const eventNameEl = document.getElementById('currentEventName');
-  const warningEl = document.getElementById('noEventWarning');
-
-  if (currentEvent) {
-    eventNameEl.textContent = currentEvent.name;
-    if (warningEl) warningEl.style.display = 'none';
-  } else {
-    eventNameEl.textContent = 'No event selected';
-    if (warningEl) warningEl.style.display = 'block';
-  }
-}
-
-
-/**
- * LOAD EVENTS INTO MODAL
- * ----------------------
- * Fetches all events from Firestore and displays them in the modal.
- */
-async function loadEventsIntoModal() {
-  const eventListEl = document.getElementById('eventList');
-  if (!eventListEl) return;
-
-  eventListEl.innerHTML = '<p class="loading">Loading events...</p>';
-
-  try {
-    const events = await getAllEvents();
-    const currentEvent = getCurrentEvent();
-
-    if (events.length === 0) {
-      eventListEl.innerHTML = '<p class="loading">No events yet. Create one below!</p>';
-      return;
-    }
-
-    eventListEl.innerHTML = events.map(event => `
-      <div class="event-item ${currentEvent && currentEvent.id === event.id ? 'selected' : ''}"
-           data-event-id="${event.id}">
-        <div class="event-item-name">${event.name}</div>
-        <div class="event-item-details">
-          ${event.location || ''} ${event.startDate ? `• ${event.startDate}` : ''}
-        </div>
-      </div>
-    `).join('');
-
-    // Add click handlers to event items
-    eventListEl.querySelectorAll('.event-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const eventId = item.dataset.eventId;
-        const selectedEvent = events.find(e => e.id === eventId);
-        if (selectedEvent) {
-          setCurrentEvent(selectedEvent);
-          updateEventBanner();
-          closeEventModal();
-        }
-      });
-    });
-  } catch (error) {
-    console.error('Error loading events:', error);
-    eventListEl.innerHTML = '<p class="loading">Error loading events. Please try again.</p>';
-  }
-}
-
-
-/**
- * OPEN EVENT MODAL
- * ----------------
- * Shows the event selection modal.
- */
-function openEventModal() {
-  const modal = document.getElementById('eventModal');
-  if (modal) {
-    modal.style.display = 'flex';
-    loadEventsIntoModal();
-  }
-}
-
-
-/**
- * CLOSE EVENT MODAL
- * -----------------
- * Hides the event selection modal.
- */
-function closeEventModal() {
-  const modal = document.getElementById('eventModal');
-  if (modal) {
-    modal.style.display = 'none';
-  }
-}
-
-
-/**
- * CREATE NEW EVENT
- * ----------------
- * Creates a new event from the form inputs in the modal.
- */
-async function createNewEvent() {
-  const nameInput = document.getElementById('newEventName');
-  const locationInput = document.getElementById('newEventLocation');
-  const startDateInput = document.getElementById('newEventStartDate');
-  const endDateInput = document.getElementById('newEventEndDate');
-
-  const name = nameInput?.value.trim();
-  if (!name) {
-    alert('Please enter an event name');
-    return;
-  }
-
-  try {
-    const eventData = {
-      name: name,
-      location: locationInput?.value.trim() || '',
-      startDate: startDateInput?.value || '',
-      endDate: endDateInput?.value || '',
-      source: 'manual'
-    };
-
-    const eventId = await saveEvent(eventData);
-    const newEvent = { id: eventId, ...eventData };
-
-    // Set as current event
-    setCurrentEvent(newEvent);
-    updateEventBanner();
-
-    // Clear form
-    if (nameInput) nameInput.value = '';
-    if (locationInput) locationInput.value = '';
-    if (startDateInput) startDateInput.value = '';
-    if (endDateInput) endDateInput.value = '';
-
-    closeEventModal();
-    console.log('✅ Event created:', name);
-  } catch (error) {
-    console.error('Error creating event:', error);
-    alert('Error creating event. Please try again.');
-  }
-}
-
-
-/**
- * IMPORT EVENT FROM TBA
- * ---------------------
- * Imports an event from The Blue Alliance API.
- */
-async function handleTBAImport() {
-  const eventKeyInput = document.getElementById('tbaEventKey');
-  const eventKey = eventKeyInput?.value.trim();
-
-  if (!eventKey) {
-    alert('Please enter a TBA event key (e.g., 2024casj)');
-    return;
-  }
-
-  // Get TBA API key from localStorage or prompt user
-  let tbaApiKey = localStorage.getItem('tba_api_key');
-  if (!tbaApiKey) {
-    tbaApiKey = prompt('Enter your TBA API key (get one at thebluealliance.com/account):');
-    if (!tbaApiKey) return;
-    localStorage.setItem('tba_api_key', tbaApiKey);
-  }
-
-  try {
-    const importBtn = document.getElementById('importTBABtn');
-    if (importBtn) {
-      importBtn.textContent = 'Importing...';
-      importBtn.disabled = true;
-    }
-
-    const event = await importEventFromTBA(eventKey, tbaApiKey);
-
-    // Set as current event
-    setCurrentEvent(event);
-    updateEventBanner();
-
-    // Clear input
-    if (eventKeyInput) eventKeyInput.value = '';
-
-    closeEventModal();
-    console.log('✅ Event imported from TBA:', event.name);
-  } catch (error) {
-    console.error('Error importing from TBA:', error);
-    alert('Error importing event. Check the event key and try again.');
-  } finally {
-    const importBtn = document.getElementById('importTBABtn');
-    if (importBtn) {
-      importBtn.textContent = 'Import';
-      importBtn.disabled = false;
-    }
-  }
-}
-
-
-/**
- * INITIALIZE EVENT SELECTION
- * --------------------------
- * Sets up event handlers for the event selection UI.
- */
-function initEventSelection() {
-  // Update banner with current event
-  updateEventBanner();
-
-  // Change Event button
-  const changeEventBtn = document.getElementById('changeEventBtn');
-  if (changeEventBtn) {
-    changeEventBtn.addEventListener('click', openEventModal);
-  }
-
-  // Close modal button
-  const closeModalBtn = document.getElementById('closeEventModal');
-  if (closeModalBtn) {
-    closeModalBtn.addEventListener('click', closeEventModal);
-  }
-
-  // Close modal when clicking outside
-  const modal = document.getElementById('eventModal');
-  if (modal) {
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) {
-        closeEventModal();
-      }
-    });
-  }
-
-  // Create event button
-  const createEventBtn = document.getElementById('createEventBtn');
-  if (createEventBtn) {
-    createEventBtn.addEventListener('click', createNewEvent);
-  }
-
-  // Import from TBA button
-  const importTBABtn = document.getElementById('importTBABtn');
-  if (importTBABtn) {
-    importTBABtn.addEventListener('click', handleTBAImport);
-  }
-}
-
-
 /**
  * DOMCONTENTLOADED EVENT
  * ----------------------
@@ -609,9 +342,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (form) {
     form.addEventListener('submit', handleFormSubmit);
   }
-
-  // Set up event selection
-  initEventSelection();
 
   console.log('📝 Scouting form initialized');
 });

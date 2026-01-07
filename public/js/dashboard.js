@@ -27,14 +27,8 @@
 // IMPORTS
 // =============================================================================
 
-// Import data fetching functions from app.js
-import {
-  getAllScoutingData,
-  getScoutingDataByEvent,
-  getAllEvents,
-  getCurrentEvent,
-  setCurrentEvent
-} from './app.js';
+// Import data fetching function from app.js
+import { getAllScoutingData } from './app.js';
 
 // Import authentication functions from firebase.js
 import { requireAuth, signOut, setupAuthListener } from './firebase.js';
@@ -92,32 +86,17 @@ document.getElementById('logoutBtn').addEventListener('click', signOut);
  * Main function that loads all data and updates the dashboard.
  *
  * FLOW:
- * 1. Check if an event is selected
- * 2. Fetch scouting data (filtered by event if selected)
- * 3. If no data, show a helpful message
- * 4. If data exists:
+ * 1. Fetch all scouting data from Firestore
+ * 2. If no data, show a helpful message
+ * 3. If data exists:
  *    - Update statistics cards
  *    - Create/update charts
  *    - Display recent entries table
- *    - Display top 10 teams
  */
 async function loadDashboardData() {
   try {
-    // Update the event selector first
-    await updateEventSelector();
-
-    // Get current event (if any)
-    const currentEvent = getCurrentEvent();
-    let scoutingData;
-
-    // Fetch data - either for specific event or all data
-    if (currentEvent && currentEvent.id) {
-      scoutingData = await getScoutingDataByEvent(currentEvent.id);
-      updateEventDisplay(currentEvent.name);
-    } else {
-      scoutingData = await getAllScoutingData();
-      updateEventDisplay('All Events');
-    }
+    // Fetch all scouting records from Firestore
+    const scoutingData = await getAllScoutingData();
 
     // Check if we have any data
     if (scoutingData.length === 0) {
@@ -132,9 +111,6 @@ async function loadDashboardData() {
     createScoringChart(scoutingData);
     createPerformanceChart(scoutingData);
 
-    // Display the top 10 teams
-    displayTop10Teams(scoutingData);
-
     // Display the recent entries table
     displayRecentEntries(scoutingData);
 
@@ -148,71 +124,6 @@ async function loadDashboardData() {
 
 
 /**
- * UPDATE EVENT SELECTOR
- * ---------------------
- * Loads available events and populates the event dropdown.
- */
-async function updateEventSelector() {
-  const eventSelect = document.getElementById('eventFilter');
-  if (!eventSelect) return;
-
-  try {
-    const events = await getAllEvents();
-    const currentEvent = getCurrentEvent();
-
-    // Build options HTML
-    let optionsHtml = '<option value="">All Events</option>';
-    events.forEach(event => {
-      const selected = currentEvent && currentEvent.id === event.id ? 'selected' : '';
-      optionsHtml += `<option value="${event.id}" ${selected}>${event.name}</option>`;
-    });
-
-    eventSelect.innerHTML = optionsHtml;
-  } catch (error) {
-    console.error('Error loading events:', error);
-  }
-}
-
-
-/**
- * UPDATE EVENT DISPLAY
- * --------------------
- * Updates the current event display in the header.
- */
-function updateEventDisplay(eventName) {
-  const display = document.getElementById('currentEventDisplay');
-  if (display) {
-    display.textContent = eventName;
-  }
-}
-
-
-/**
- * HANDLE EVENT FILTER CHANGE
- * --------------------------
- * Called when user selects a different event.
- */
-async function handleEventFilterChange(event) {
-  const eventId = event.target.value;
-
-  if (eventId) {
-    // Find the selected event
-    const events = await getAllEvents();
-    const selectedEvent = events.find(e => e.id === eventId);
-    if (selectedEvent) {
-      setCurrentEvent(selectedEvent);
-    }
-  } else {
-    // Clear event filter (show all events)
-    localStorage.removeItem('pinkscout_current_event');
-  }
-
-  // Reload dashboard with new filter
-  loadDashboardData();
-}
-
-
-/**
  * SHOW NO DATA MESSAGE
  * --------------------
  * Displays a helpful message when there's no scouting data yet.
@@ -220,12 +131,6 @@ async function handleEventFilterChange(event) {
 function showNoDataMessage() {
   document.getElementById('recentEntries').innerHTML =
     '<p class="text-center" style="color: #888; padding: 20px;">No scouting data available yet. <a href="newscounting.html">Start scouting</a> to see data here.</p>';
-
-  // Also clear the top 10 section
-  const top10Container = document.getElementById('top10Teams');
-  if (top10Container) {
-    top10Container.innerHTML = '<p class="text-center" style="color: #888;">No team data yet.</p>';
-  }
 }
 
 
@@ -489,76 +394,6 @@ function createPerformanceChart(data) {
 
 
 // =============================================================================
-// TOP 10 TEAMS DISPLAY
-// =============================================================================
-
-/**
- * DISPLAY TOP 10 TEAMS
- * --------------------
- * Creates a ranked list of the top 10 performing teams.
- * Shows team number, average score, and match count.
- *
- * @param {Array} data - Array of scouting records
- */
-function displayTop10Teams(data) {
-  const container = document.getElementById('top10Teams');
-  if (!container) return;
-
-  // Aggregate scores by team
-  const teamData = {};
-  data.forEach(d => {
-    if (!teamData[d.teamNumber]) {
-      teamData[d.teamNumber] = { scores: [], climbs: 0 };
-    }
-
-    // Calculate total score for this match
-    const autoScore = (d.autoSpeaker || 0) * 5 + (d.autoAmp || 0) * 2;
-    const teleopScore = (d.teleopSpeaker || 0) * 2 + (d.teleopAmp || 0) + (d.amplifiedScored || 0) * 5;
-    const total = autoScore + teleopScore;
-
-    teamData[d.teamNumber].scores.push(total);
-
-    // Count successful climbs
-    if (d.climbStatus === 'climbed' || d.climbStatus === 'harmony') {
-      teamData[d.teamNumber].climbs++;
-    }
-  });
-
-  // Calculate averages and sort
-  const teams = Object.entries(teamData)
-    .map(([team, data]) => ({
-      team: team,
-      avgScore: data.scores.reduce((a, b) => a + b, 0) / data.scores.length,
-      matches: data.scores.length,
-      climbRate: (data.climbs / data.scores.length * 100).toFixed(0)
-    }))
-    .sort((a, b) => b.avgScore - a.avgScore)
-    .slice(0, 10);
-
-  // Build HTML
-  let html = '<div class="top10-list">';
-  teams.forEach((team, index) => {
-    const rankClass = index < 3 ? 'top-rank' : '';
-    const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`;
-
-    html += `
-      <div class="top10-item ${rankClass}">
-        <span class="rank">${medal}</span>
-        <div class="team-info">
-          <span class="team-number">Team ${team.team}</span>
-          <span class="team-stats">${team.matches} matches • ${team.climbRate}% climb</span>
-        </div>
-        <div class="avg-score">${team.avgScore.toFixed(1)}</div>
-      </div>
-    `;
-  });
-  html += '</div>';
-
-  container.innerHTML = html;
-}
-
-
-// =============================================================================
 // TABLE DISPLAY
 // =============================================================================
 
@@ -633,14 +468,6 @@ function displayRecentEntries(data) {
 // =============================================================================
 // INITIALIZATION
 // =============================================================================
-
-// Set up event filter change handler
-document.addEventListener('DOMContentLoaded', () => {
-  const eventFilter = document.getElementById('eventFilter');
-  if (eventFilter) {
-    eventFilter.addEventListener('change', handleEventFilterChange);
-  }
-});
 
 // Log that the module loaded successfully
 console.log('📊 Dashboard module loaded');

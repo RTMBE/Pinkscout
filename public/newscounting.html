@@ -55,16 +55,10 @@ FORM CONTROLS:
         <ul>
           <li><a href="index.html">🏠 Home</a></li>
           <li><a href="dashboard.html">📊 Dashboard</a></li>
-          <li><a href="team.html">🔍 Team Search</a></li>
           <li><a href="admin.html">⚙️ Admin</a></li>
           <li><a href="newscounting.html" class="active">📝 Scouting</a></li>
         </ul>
       </nav>
-      <!-- Theme Toggle -->
-      <div class="theme-toggle" id="themeToggle">
-        <span class="theme-toggle-icon" id="themeToggleIcon">☀️</span>
-        <span class="theme-toggle-label" id="themeToggleLabel">Light Mode</span>
-      </div>
       <!-- User Info - shown when logged in -->
       <div class="user-info" id="userInfo" style="display: none;">
         <div class="user-email" id="userEmail"></div>
@@ -83,103 +77,6 @@ FORM CONTROLS:
         <h1>Match Scouting</h1>
         <p>Record team performance data during matches.</p>
       </header>
-
-      <!--
-      ======================================================================
-      CURRENT EVENT BANNER
-      ======================================================================
-      Shows the currently selected event. Users must select an event
-      before scouting. Click to change the event.
-      ======================================================================
-      -->
-      <div class="content-card event-banner" id="eventBanner">
-        <div class="event-banner-content">
-          <div class="event-info">
-            <span class="event-label">📍 Current Event:</span>
-            <span class="event-name" id="currentEventName">No event selected</span>
-          </div>
-          <button type="button" class="btn btn-secondary btn-sm" id="changeEventBtn">
-            Change Event
-          </button>
-        </div>
-        <p class="event-warning" id="noEventWarning" style="display: none;">
-          ⚠️ Please select an event before scouting. Your data won't be saved without an event.
-        </p>
-      </div>
-
-      <!--
-      ======================================================================
-      EVENT SELECTION MODAL
-      ======================================================================
-      Modal dialog for selecting or creating an event.
-      Hidden by default, shown when "Change Event" is clicked.
-      ======================================================================
-      -->
-      <div class="modal" id="eventModal" style="display: none;">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h2>🏆 Select Event</h2>
-            <button type="button" class="modal-close" id="closeEventModal">&times;</button>
-          </div>
-          <div class="modal-body">
-            <!-- Existing Events -->
-            <div class="event-list" id="eventList">
-              <p class="loading">Loading events...</p>
-            </div>
-
-            <div class="modal-divider">
-              <span>or create new</span>
-            </div>
-
-            <!-- Create New Event Form -->
-            <div class="new-event-form">
-              <h3>Create Manual Event</h3>
-              <div class="form-group">
-                <label for="newEventName">Event Name</label>
-                <input type="text" id="newEventName" placeholder="e.g. Sacramento Regional 2024">
-              </div>
-              <div class="form-group">
-                <label for="newEventLocation">Location</label>
-                <input type="text" id="newEventLocation" placeholder="e.g. Sacramento, CA">
-              </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label for="newEventStartDate">Start Date</label>
-                  <input type="date" id="newEventStartDate">
-                </div>
-                <div class="form-group">
-                  <label for="newEventEndDate">End Date</label>
-                  <input type="date" id="newEventEndDate">
-                </div>
-              </div>
-              <button type="button" class="btn btn-primary" id="createEventBtn">
-                Create Event
-              </button>
-            </div>
-
-            <div class="modal-divider">
-              <span>or import from TBA</span>
-            </div>
-
-            <!-- Import from TBA -->
-            <div class="tba-import-form">
-              <h3>Import from The Blue Alliance</h3>
-              <div class="form-row">
-                <div class="form-group" style="flex: 2;">
-                  <label for="tbaEventKey">Event Key</label>
-                  <input type="text" id="tbaEventKey" placeholder="e.g. 2024casj">
-                </div>
-                <div class="form-group" style="flex: 1;">
-                  <button type="button" class="btn btn-secondary" id="importTBABtn">
-                    Import
-                  </button>
-                </div>
-              </div>
-              <small class="form-hint">Find event keys at thebluealliance.com</small>
-            </div>
-          </div>
-        </div>
-      </div>
 
       <!--
       ======================================================================
@@ -495,7 +392,6 @@ FORM CONTROLS:
   3. scouting.js - Form handling and submission logic
   ============================================================================
   -->
-  <script src="js/theme.js"></script>
   <script type="module" src="js/firebase.js"></script>
   <script type="module" src="js/app.js"></script>
   <script type="module" src="js/scouting.js"></script>

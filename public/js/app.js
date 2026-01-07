@@ -395,6 +395,425 @@ document.addEventListener('DOMContentLoaded', initApp);
 
 
 // =============================================================================
+// EVENT MANAGEMENT
+// =============================================================================
+//
+// Events are the core organizational unit for scouting data.
+// Each scouting record belongs to a specific event.
+//
+// =============================================================================
+
+/**
+ * SAVE EVENT
+ * ----------
+ * Creates a new event in Firestore.
+ *
+ * @param {Object} eventData - Event data (name, location, dates, etc.)
+ * @returns {Promise<string>} - The document ID of the created event
+ */
+async function saveEvent(eventData) {
+  try {
+    const dataWithTimestamp = {
+      ...eventData,
+      createdAt: new Date().toISOString()
+    };
+    const docRef = await addDoc(collection(db, 'events'), dataWithTimestamp);
+    console.log('✅ Event saved with ID:', docRef.id);
+    return docRef.id;
+  } catch (error) {
+    console.error('❌ Error saving event:', error);
+    throw error;
+  }
+}
+
+
+/**
+ * GET ALL EVENTS
+ * --------------
+ * Retrieves all events, sorted by start date (newest first).
+ *
+ * @returns {Promise<Array>} - Array of event objects with their IDs
+ */
+async function getAllEvents() {
+  try {
+    const eventsRef = collection(db, 'events');
+    const q = query(eventsRef, orderBy('startDate', 'desc'));
+    const querySnapshot = await getDocs(q);
+
+    const events = [];
+    querySnapshot.forEach((doc) => {
+      events.push({ id: doc.id, ...doc.data() });
+    });
+
+    console.log('✅ Retrieved', events.length, 'events');
+    return events;
+  } catch (error) {
+    console.error('❌ Error retrieving events:', error);
+    throw error;
+  }
+}
+
+
+/**
+ * GET EVENT BY ID
+ * ---------------
+ * Retrieves a single event by its document ID.
+ *
+ * @param {string} eventId - The event document ID
+ * @returns {Promise<Object|null>} - The event object or null if not found
+ */
+async function getEventById(eventId) {
+  try {
+    const eventDoc = await getDoc(doc(db, 'events', eventId));
+    if (eventDoc.exists()) {
+      return { id: eventDoc.id, ...eventDoc.data() };
+    }
+    return null;
+  } catch (error) {
+    console.error('❌ Error retrieving event:', error);
+    throw error;
+  }
+}
+
+
+/**
+ * GET SCOUTING DATA BY EVENT
+ * --------------------------
+ * Retrieves all scouting records for a specific event.
+ *
+ * @param {string} eventId - The event document ID
+ * @returns {Promise<Array>} - Array of scouting records for that event
+ */
+async function getScoutingDataByEvent(eventId) {
+  try {
+    const scoutingRef = collection(db, 'scouting');
+    const q = query(
+      scoutingRef,
+      where('eventId', '==', eventId),
+      orderBy('createdAt', 'desc')
+    );
+    const querySnapshot = await getDocs(q);
+
+    const records = [];
+    querySnapshot.forEach((doc) => {
+      records.push({ id: doc.id, ...doc.data() });
+    });
+
+    console.log('✅ Retrieved', records.length, 'records for event', eventId);
+    return records;
+  } catch (error) {
+    console.error('❌ Error retrieving event scouting data:', error);
+    throw error;
+  }
+}
+
+
+/**
+ * IMPORT EVENT FROM THE BLUE ALLIANCE
+ * ------------------------------------
+ * Fetches event data from The Blue Alliance API and saves it to Firestore.
+ *
+ * TBA API EXPLAINED:
+ * The Blue Alliance (TBA) is the central data hub for FRC.
+ * Their API provides event info, team data, match schedules, and results.
+ *
+ * @param {string} eventKey - The TBA event key (e.g., "2024caph")
+ * @param {string} tbaApiKey - Your TBA API key
+ * @returns {Promise<Object>} - The saved event data
+ */
+async function importEventFromTBA(eventKey, tbaApiKey) {
+  try {
+    console.log('📡 Fetching event from TBA:', eventKey);
+
+    // Fetch event data from TBA API
+    const response = await fetch(
+      `https://www.thebluealliance.com/api/v3/event/${eventKey}`,
+      {
+        headers: {
+          'X-TBA-Auth-Key': tbaApiKey
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`TBA API error: ${response.status}`);
+    }
+
+    const tbaEvent = await response.json();
+
+    // Convert TBA event format to our format
+    const eventData = {
+      name: tbaEvent.name,
+      eventKey: tbaEvent.key,
+      location: `${tbaEvent.city}, ${tbaEvent.state_prov}, ${tbaEvent.country}`,
+      venue: tbaEvent.location_name,
+      startDate: tbaEvent.start_date,
+      endDate: tbaEvent.end_date,
+      eventType: tbaEvent.event_type_string,
+      week: tbaEvent.week,
+      year: tbaEvent.year,
+      source: 'tba',  // Mark as imported from TBA
+      tbaKey: eventKey
+    };
+
+    // Save to Firestore
+    const eventId = await saveEvent(eventData);
+    return { id: eventId, ...eventData };
+  } catch (error) {
+    console.error('❌ Error importing event from TBA:', error);
+    throw error;
+  }
+}
+
+
+/**
+ * SEARCH EVENTS FROM TBA
+ * ----------------------
+ * Searches for events on TBA by year.
+ *
+ * @param {number} year - The year to search for events
+ * @param {string} tbaApiKey - Your TBA API key
+ * @returns {Promise<Array>} - Array of events from TBA
+ */
+async function searchTBAEvents(year, tbaApiKey) {
+  try {
+    console.log('📡 Searching TBA events for year:', year);
+
+    const response = await fetch(
+      `https://www.thebluealliance.com/api/v3/events/${year}`,
+      {
+        headers: {
+          'X-TBA-Auth-Key': tbaApiKey
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`TBA API error: ${response.status}`);
+    }
+
+    const events = await response.json();
+    console.log('✅ Found', events.length, 'events from TBA');
+    return events;
+  } catch (error) {
+    console.error('❌ Error searching TBA events:', error);
+    throw error;
+  }
+}
+
+
+// =============================================================================
+// EXTERNAL DATA INTEGRATION - TBA & STATBOTICS
+// =============================================================================
+//
+// Functions for fetching external data from The Blue Alliance and Statbotics.
+//
+// =============================================================================
+
+/**
+ * GET TEAM INFO FROM TBA
+ * ----------------------
+ * Fetches basic team information from The Blue Alliance.
+ *
+ * @param {number} teamNumber - The FRC team number
+ * @param {string} tbaApiKey - Your TBA API key
+ * @returns {Promise<Object>} - Team information
+ */
+async function getTeamFromTBA(teamNumber, tbaApiKey) {
+  try {
+    const response = await fetch(
+      `https://www.thebluealliance.com/api/v3/team/frc${teamNumber}`,
+      { headers: { 'X-TBA-Auth-Key': tbaApiKey } }
+    );
+
+    if (!response.ok) {
+      throw new Error(`TBA API error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('❌ Error fetching team from TBA:', error);
+    throw error;
+  }
+}
+
+
+/**
+ * GET EVENT TEAMS FROM TBA
+ * ------------------------
+ * Fetches list of teams attending an event.
+ *
+ * @param {string} eventKey - The TBA event key
+ * @param {string} tbaApiKey - Your TBA API key
+ * @returns {Promise<Array>} - Array of teams
+ */
+async function getEventTeamsFromTBA(eventKey, tbaApiKey) {
+  try {
+    const response = await fetch(
+      `https://www.thebluealliance.com/api/v3/event/${eventKey}/teams`,
+      { headers: { 'X-TBA-Auth-Key': tbaApiKey } }
+    );
+
+    if (!response.ok) {
+      throw new Error(`TBA API error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('❌ Error fetching event teams from TBA:', error);
+    throw error;
+  }
+}
+
+
+/**
+ * GET MATCH SCHEDULE FROM TBA
+ * ---------------------------
+ * Fetches match schedule for an event.
+ *
+ * @param {string} eventKey - The TBA event key
+ * @param {string} tbaApiKey - Your TBA API key
+ * @returns {Promise<Array>} - Array of matches
+ */
+async function getEventMatchesFromTBA(eventKey, tbaApiKey) {
+  try {
+    const response = await fetch(
+      `https://www.thebluealliance.com/api/v3/event/${eventKey}/matches`,
+      { headers: { 'X-TBA-Auth-Key': tbaApiKey } }
+    );
+
+    if (!response.ok) {
+      throw new Error(`TBA API error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('❌ Error fetching matches from TBA:', error);
+    throw error;
+  }
+}
+
+
+/**
+ * GET TEAM STATS FROM STATBOTICS
+ * ------------------------------
+ * Fetches team statistics from Statbotics API.
+ * Statbotics provides EPA (Expected Points Added) and other advanced stats.
+ *
+ * WHAT IS EPA?
+ * EPA (Expected Points Added) is a metric that measures how many points
+ * a team contributes to their alliance compared to an average team.
+ *
+ * @param {number} teamNumber - The FRC team number
+ * @param {number} year - The year to fetch stats for
+ * @returns {Promise<Object>} - Team statistics
+ */
+async function getTeamStatsFromStatbotics(teamNumber, year) {
+  try {
+    const response = await fetch(
+      `https://api.statbotics.io/v3/team_year/${teamNumber}/${year}`
+    );
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null; // Team not found for this year
+      }
+      throw new Error(`Statbotics API error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('❌ Error fetching from Statbotics:', error);
+    throw error;
+  }
+}
+
+
+/**
+ * GET EVENT RANKINGS FROM STATBOTICS
+ * ----------------------------------
+ * Fetches event team rankings from Statbotics.
+ *
+ * @param {string} eventKey - The event key (e.g., "2024casj")
+ * @returns {Promise<Array>} - Team rankings for the event
+ */
+async function getEventRankingsFromStatbotics(eventKey) {
+  try {
+    const response = await fetch(
+      `https://api.statbotics.io/v3/team_events?event=${eventKey}`
+    );
+
+    if (!response.ok) {
+      throw new Error(`Statbotics API error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('❌ Error fetching event rankings from Statbotics:', error);
+    throw error;
+  }
+}
+
+
+// =============================================================================
+// CURRENT EVENT MANAGEMENT (Local Storage)
+// =============================================================================
+//
+// We store the currently selected event in localStorage so it persists
+// across page reloads and browser sessions.
+//
+// =============================================================================
+
+const CURRENT_EVENT_KEY = 'pinkscout_current_event';
+
+/**
+ * SET CURRENT EVENT
+ * -----------------
+ * Stores the currently selected event in localStorage.
+ *
+ * @param {Object} event - The event object (must include id)
+ */
+function setCurrentEvent(event) {
+  if (event && event.id) {
+    localStorage.setItem(CURRENT_EVENT_KEY, JSON.stringify(event));
+    console.log('✅ Current event set:', event.name);
+  }
+}
+
+
+/**
+ * GET CURRENT EVENT
+ * -----------------
+ * Retrieves the currently selected event from localStorage.
+ *
+ * @returns {Object|null} - The current event or null if none selected
+ */
+function getCurrentEvent() {
+  const stored = localStorage.getItem(CURRENT_EVENT_KEY);
+  if (stored) {
+    try {
+      return JSON.parse(stored);
+    } catch (e) {
+      console.warn('⚠️ Error parsing stored event:', e);
+      return null;
+    }
+  }
+  return null;
+}
+
+
+/**
+ * CLEAR CURRENT EVENT
+ * -------------------
+ * Removes the currently selected event from localStorage.
+ */
+function clearCurrentEvent() {
+  localStorage.removeItem(CURRENT_EVENT_KEY);
+  console.log('✅ Current event cleared');
+}
+
+
+// =============================================================================
 // EXPORTS
 // =============================================================================
 //
@@ -404,12 +823,32 @@ document.addEventListener('DOMContentLoaded', initApp);
 // =============================================================================
 
 export {
-  // CRUD Operations
+  // CRUD Operations for Scouting Data
   saveScoutingData,
   getAllScoutingData,
   getTeamScoutingData,
   updateScoutingData,
   deleteScoutingData,
+
+  // Event Management
+  saveEvent,
+  getAllEvents,
+  getEventById,
+  getScoutingDataByEvent,
+  importEventFromTBA,
+  searchTBAEvents,
+
+  // External API Integration (TBA & Statbotics)
+  getTeamFromTBA,
+  getEventTeamsFromTBA,
+  getEventMatchesFromTBA,
+  getTeamStatsFromStatbotics,
+  getEventRankingsFromStatbotics,
+
+  // Current Event (localStorage)
+  setCurrentEvent,
+  getCurrentEvent,
+  clearCurrentEvent,
 
   // Diagnostics
   runDiagnostics

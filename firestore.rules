@@ -2,15 +2,71 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Scouting collection - requires authentication
-    match /scouting/{entryId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+
+    // =========================================================================
+    // HELPER FUNCTIONS
+    // =========================================================================
+
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
     }
 
-    // Diagnostics collection - for testing
+    // Check if user is an admin (whitelist approach)
+    // Only these emails have admin access
+    function isAdmin() {
+      return isAuthenticated() &&
+        request.auth.token.email in ['rtmbe20@gmail.com', 'ontrandem18@gmail.com'];
+    }
+
+    // =========================================================================
+    // SCOUTING DATA
+    // =========================================================================
+    // All authenticated users can read/write scouting data
+
+    match /scouting/{entryId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // =========================================================================
+    // EVENTS COLLECTION
+    // =========================================================================
+    // All authenticated users can read events
+    // Only admins can create/modify events
+
+    match /events/{eventId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // =========================================================================
+    // ADMIN SETTINGS
+    // =========================================================================
+    // Only admins can read/write admin settings
+
+    match /admin/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // =========================================================================
+    // USER PROFILES
+    // =========================================================================
+    // Users can read their own profile
+    // Admins can read all profiles
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() &&
+        (request.auth.uid == userId || isAdmin());
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // =========================================================================
+    // DIAGNOSTICS (for testing)
+    // =========================================================================
+
     match /_diagnostics/{docId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAuthenticated();
     }
   }
 }

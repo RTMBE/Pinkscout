@@ -83,12 +83,12 @@ import {
 // =============================================================================
 
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyCqUoIrwQdBFlaF0P9NfTRN7pVfji5p3-M",
+  authDomain: "pinkscout-470d1.firebaseapp.com",
+  projectId: "pinkscout-470d1",
+  storageBucket: "pinkscout-470d1.firebasestorage.app",
+  messagingSenderId: "386591970958",
+  appId: "1:386591970958:web:a7a9483684c3418cea1bdf"
 };
 
 
@@ -253,6 +253,84 @@ function setupAuthListener(onUserSignedIn, onUserSignedOut) {
 
 
 // =============================================================================
+// ADMIN ACCESS CONTROL
+// =============================================================================
+//
+// Only specific email addresses are allowed to access admin features.
+// This is a simple whitelist approach - more complex apps might use
+// custom claims or database roles.
+//
+// =============================================================================
+
+/**
+ * ADMIN EMAIL LIST
+ * ----------------
+ * These Gmail accounts have admin access to the app.
+ * Add or remove emails here to control admin access.
+ */
+const ADMIN_EMAILS = [
+  'rtmbe20@gmail.com',
+  'ontrandem18@gmail.com'
+];
+
+
+/**
+ * CHECK IF USER IS ADMIN
+ * ----------------------
+ * Checks if the given email address is in the admin whitelist.
+ *
+ * @param {string} email - The email address to check
+ * @returns {boolean} True if the email is an admin, false otherwise
+ *
+ * USAGE:
+ *   if (isAdmin(user.email)) {
+ *     // Show admin features
+ *   }
+ */
+function isAdmin(email) {
+  if (!email) return false;
+  // Convert to lowercase for case-insensitive comparison
+  return ADMIN_EMAILS.includes(email.toLowerCase());
+}
+
+
+/**
+ * REQUIRE ADMIN ACCESS
+ * --------------------
+ * Checks if the current user is an admin. If not, redirects to dashboard.
+ * Use this at the top of admin-only pages.
+ *
+ * @param {string} redirectUrl - Where to redirect non-admins (default: dashboard.html)
+ * @returns {Promise<Object|null>} The user object if admin, null otherwise
+ *
+ * USAGE:
+ *   // At the top of an admin page:
+ *   const user = await requireAdmin();
+ *   // Code here only runs if user is an admin
+ */
+function requireAdmin(redirectUrl = 'dashboard.html') {
+  return new Promise((resolve) => {
+    onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        // Not logged in - redirect to login
+        window.location.href = 'login.html';
+        resolve(null);
+      } else if (!isAdmin(user.email)) {
+        // Logged in but not an admin - redirect to dashboard
+        console.warn('⛔ Access denied: User is not an admin');
+        window.location.href = redirectUrl;
+        resolve(null);
+      } else {
+        // User is an admin - allow access
+        console.log('✅ Admin access granted for:', user.email);
+        resolve(user);
+      }
+    });
+  });
+}
+
+
+// =============================================================================
 // EXPORTS
 // =============================================================================
 //
@@ -269,6 +347,9 @@ function setupAuthListener(onUserSignedIn, onUserSignedOut) {
 // - getCurrentUser: Function to get the current user
 // - requireAuth: Function to require authentication on a page
 // - setupAuthListener: Function to listen for auth state changes
+// - isAdmin: Function to check if an email is an admin
+// - requireAdmin: Function to require admin access on a page
+// - ADMIN_EMAILS: List of admin email addresses
 //
 // =============================================================================
 
@@ -279,5 +360,8 @@ export {
   signOut,
   getCurrentUser,
   requireAuth,
-  setupAuthListener
+  setupAuthListener,
+  isAdmin,
+  requireAdmin,
+  ADMIN_EMAILS
 };

@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<!--
+================================================================================
+LOGIN.HTML - Authentication Page
+================================================================================
+
+WHAT IS THIS PAGE?
+The login page handles user authentication:
+- Sign in existing users
+- Create new accounts
+- Redirect authenticated users to the dashboard
+
+AUTHENTICATION FLOW:
+1. User enters email and password
+2. Form submits to Firebase Auth
+3. On success: redirect to dashboard
+4. On error: show friendly error message
+
+NO SIDEBAR:
+This page doesn't have the sidebar because:
+- It's a standalone auth page
+- User isn't logged in yet
+- Simple, focused design for login
+
+================================================================================
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Pinkscout</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+  <!--
+  ============================================================================
+  AUTHENTICATION CONTAINER
+  ============================================================================
+  Centered container for the login card.
+  Uses flexbox to center vertically and horizontally.
+  ============================================================================
+  -->
+  <div class="auth-container">
+    <div class="auth-card">
+
+      <!-- Header with app branding -->
+      <div class="auth-header">
+        <h1>🤖 Pinkscout</h1>
+        <p>Sign in to access your scouting dashboard</p>
+      </div>
+
+      <!--
+      ERROR MESSAGE CONTAINER
+      =======================
+      Hidden by default, shown when auth fails.
+      The .show class makes it visible (see style.css).
+      -->
+      <div id="authError" class="auth-error"></div>
+
+      <!--
+      LOGIN FORM
+      ==========
+      Simple email/password form.
+      JavaScript handles submission and switches between login/signup.
+      -->
+      <form id="loginForm" class="auth-form">
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input type="email" id="email" name="email" required placeholder="you@example.com">
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <!-- minlength="6" enforces Firebase's minimum password length -->
+          <input type="password" id="password" name="password" required placeholder="Your password" minlength="6">
+        </div>
+        <button type="submit" class="btn btn-primary" id="submitBtn">Sign In</button>
+      </form>
+
+      <!-- Divider between form and signup link -->
+      <div class="auth-divider">
+        <span>or</span>
+      </div>
+
+      <!-- Toggle between login and signup modes -->
+      <div class="auth-switch">
+        <span id="authSwitchText">Don't have an account?</span>
+        <a href="#" id="authSwitchLink">Create one</a>
+      </div>
+
+    </div>
+  </div>
+
+  <!--
+  ============================================================================
+  JAVASCRIPT - Authentication Logic
+  ============================================================================
+  -->
+  <script type="module">
+    /*
+     * IMPORTS
+     * =======
+     * Import our auth instance and Firebase Auth functions.
+     * We import directly from Firebase CDN for auth-specific functions.
+     */
+    import { auth } from './js/firebase.js';
+    import {
+      signInWithEmailAndPassword,
+      createUserWithEmailAndPassword,
+      onAuthStateChanged
+    } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+
+    /*
+     * DOM ELEMENT REFERENCES
+     * ======================
+     * Get references to all the elements we need to interact with.
+     */
+    const form = document.getElementById('loginForm');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const submitBtn = document.getElementById('submitBtn');
+    const authError = document.getElementById('authError');
+    const switchLink = document.getElementById('authSwitchLink');
+    const switchText = document.getElementById('authSwitchText');
+
+    /*
+     * MODE TRACKING
+     * =============
+     * This variable tracks whether we're in login or signup mode.
+     * We use ONE form for both - just change the button text and behavior.
+     */
+    let isLoginMode = true;
+
+    /*
+     * AUTH STATE LISTENER
+     * ===================
+     * onAuthStateChanged fires when:
+     * - Page loads (checks if already logged in)
+     * - User signs in
+     * - User signs out
+     *
+     * If user is already logged in, redirect to dashboard.
+     */
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // User is signed in - redirect to dashboard
+        window.location.href = 'dashboard.html';
+      }
+    });
+
+    /*
+     * TOGGLE LOGIN/SIGNUP MODE
+     * ========================
+     * Clicking "Create one" or "Sign in" switches between modes.
+     * We update the button text and helper text accordingly.
+     */
+    switchLink.addEventListener('click', (e) => {
+      e.preventDefault();  // Prevent the # from appearing in URL
+      isLoginMode = !isLoginMode;  // Toggle the mode
+
+      if (isLoginMode) {
+        submitBtn.textContent = 'Sign In';
+        switchText.textContent = "Don't have an account?";
+        switchLink.textContent = 'Create one';
+      } else {
+        submitBtn.textContent = 'Create Account';
+        switchText.textContent = 'Already have an account?';
+        switchLink.textContent = 'Sign in';
+      }
+
+      // Clear any previous error messages
+      authError.classList.remove('show');
+    });
+
+    /*
+     * FORM SUBMISSION HANDLER
+     * =======================
+     * Handles both login and signup based on current mode.
+     */
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();  // Prevent page reload
+
+      const email = emailInput.value.trim();
+      const password = passwordInput.value;
+
+      // Clear previous errors and disable button
+      authError.classList.remove('show');
+      submitBtn.disabled = true;
+      submitBtn.textContent = isLoginMode ? 'Signing in...' : 'Creating account...';
+
+      try {
+        if (isLoginMode) {
+          // SIGN IN: Authenticate existing user
+          await signInWithEmailAndPassword(auth, email, password);
+          console.log('✅ User signed in successfully');
+        } else {
+          // SIGN UP: Create new user account
+          await createUserWithEmailAndPassword(auth, email, password);
+          console.log('✅ User account created successfully');
+        }
+        // onAuthStateChanged will handle the redirect
+      } catch (error) {
+        console.error('❌ Auth error:', error);
+
+        /*
+         * ERROR HANDLING
+         * ==============
+         * Firebase returns error codes. We convert these to
+         * user-friendly messages.
+         */
+        let message = 'An error occurred. Please try again.';
+        switch (error.code) {
+          case 'auth/user-not-found':
+            message = 'No account found with this email.';
+            break;
+          case 'auth/wrong-password':
+            message = 'Incorrect password.';
+            break;
+          case 'auth/email-already-in-use':
+            message = 'An account with this email already exists.';
+            break;
+          case 'auth/weak-password':
+            message = 'Password should be at least 6 characters.';
+            break;
+          case 'auth/invalid-email':
+            message = 'Please enter a valid email address.';
+            break;
+          case 'auth/invalid-credential':
+            message = 'Invalid email or password.';
+            break;
+        }
+
+        // Display the error message
+        authError.textContent = message;
+        authError.classList.add('show');
+
+        // Re-enable the submit button
+        submitBtn.disabled = false;
+        submitBtn.textContent = isLoginMode ? 'Sign In' : 'Create Account';
+      }
+    });
+  </script>
+
+</body>
+</html>
+

@@ -1,0 +1,268 @@
+[debug] [2026-01-07T23:28:07.503Z] ----------------------------------------------------------------------
+[debug] [2026-01-07T23:28:07.506Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\rkuzmik\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only hosting --project pinkscout-470d1 --debug
+[debug] [2026-01-07T23:28:07.506Z] CLI Version:   15.1.0
+[debug] [2026-01-07T23:28:07.506Z] Platform:      win32
+[debug] [2026-01-07T23:28:07.507Z] Node Version:  v24.12.0
+[debug] [2026-01-07T23:28:07.507Z] Time:          Wed Jan 07 2026 18:28:07 GMT-0500 (Eastern Standard Time)
+[debug] [2026-01-07T23:28:07.507Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-01-07T23:28:09.690Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-01-07T23:28:09.692Z] > authorizing via signed-in user (rtmbe20@gmail.com)
+[debug] [2026-01-07T23:28:09.692Z] [iam] checking project pinkscout-470d1 for permissions ["firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-01-07T23:28:09.694Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:09.695Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:09.697Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions [none]
+[debug] [2026-01-07T23:28:09.697Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions x-goog-quota-user=projects/pinkscout-470d1
+[debug] [2026-01-07T23:28:09.697Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-01-07T23:28:10.046Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions 200
+[debug] [2026-01-07T23:28:10.046Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-01-07T23:28:10.048Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:10.048Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:10.049Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/pinkscout-470d1 [none]
+[debug] [2026-01-07T23:28:10.426Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/pinkscout-470d1 200
+[debug] [2026-01-07T23:28:10.427Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/pinkscout-470d1 {"projectId":"pinkscout-470d1","projectNumber":"386591970958","displayName":"Pinkscout","name":"projects/pinkscout-470d1","resources":{"hostingSite":"pinkscout-470d1"},"state":"ACTIVE","etag":"1_f34afd01-a77f-4e09-b7c1-21199945c1ef"}
+[info] 
+[info] === Deploying to 'pinkscout-470d1'...
+[info] 
+[info] i  deploying hosting 
+[debug] [2026-01-07T23:28:10.444Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:10.444Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:10.444Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions [none]
+[debug] [2026-01-07T23:28:10.445Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions {"status":"CREATED","labels":{"deployment-tool":"cli-firebase"}}
+[debug] [2026-01-07T23:28:11.100Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions 200
+[debug] [2026-01-07T23:28:11.100Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions {"name":"projects/386591970958/sites/pinkscout-470d1/versions/39a236919c4568ee","status":"CREATED","config":{},"labels":{"deployment-tool":"cli-firebase"}}
+[info] i  hosting[pinkscout-470d1]: beginning deploy... 
+[info] i  hosting[pinkscout-470d1]: found 13 files in public 
+[debug] [2026-01-07T23:28:11.115Z] [hosting] uploading with 200 concurrency
+[debug] [2026-01-07T23:28:11.121Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:11.121Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:11.123Z] [hosting] hash cache [cHVibGlj] stored for 13 files
+[debug] [2026-01-07T23:28:11.123Z] [hosting][hash queue][FINAL] {"max":3,"min":1,"avg":1,"active":0,"complete":13,"success":13,"errored":0,"retried":0,"total":13,"elapsed":6}
+[debug] [2026-01-07T23:28:11.124Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/386591970958/sites/pinkscout-470d1/versions/39a236919c4568ee:populateFiles [none]
+[debug] [2026-01-07T23:28:11.124Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/386591970958/sites/pinkscout-470d1/versions/39a236919c4568ee:populateFiles {"files":{"/team.html":"d524b51e80f4ab5b4162b276a08fef539dd3d65b9994ab1efb31d3127baec86a","/newscounting.html":"84ef742d0e2366b7232d3be05d02e0ee9de7523b72876c6936790bf9cc632599","/login.html":"10535265fc3cb9f585ef0f5d283a2d35f5399c36ecff2273a229c58415deda47","/index.html":"ed7a2fbe2a97f76bbaa58262282e162bef98ad1536cc81cb19b43fa6596e166d","/dashboard.html":"a1fc6f8193df0733103df16494f27aa8d12402a9b6fe57b972a5b4df5a71e72d","/admin.html":"053c940a694940bb73b82bbfafe49325af90837482cfc37b17dc920b5b14ec4a","/js/theme.js":"e6f658e46f3ef51cf82d5c181fe0a174c5165f80a94f43925ef955874887bc7a","/js/team.js":"42e102192e7326a7ddbf8409717fe2a0213630bdb679df8d23dbb94b6a5a4947","/js/scouting.js":"550873a95d1cc1ae65d7fdacc6512615fdef60f8fb48df0d71d7eadf77798546","/js/firebase.js":"1ad70807c8a186946fa3db3beacc3dd42c46f304f4313bbf1c03ffb3cd269136","/js/dashboard.js":"0d9c10cf8f564c4ab0e2036731bbc0f5c3950c5748c5c3f506c880004a6eda54","/js/app.js":"d1b1fa34fcc9eb79723ac9d390e795f9080ddb24649bf0587f55c42b83fad2ee","/css/style.css":"222a20a52d17601e2e0a2e6a1e6cd303f9ae7a7c2cf4c9f21f71f0728777d711"}}
+[debug] [2026-01-07T23:28:11.369Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/386591970958/sites/pinkscout-470d1/versions/39a236919c4568ee:populateFiles 200
+[debug] [2026-01-07T23:28:11.370Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/386591970958/sites/pinkscout-470d1/versions/39a236919c4568ee:populateFiles {"uploadUrl":"https://upload-firebasehosting.googleapis.com/upload/sites/pinkscout-470d1/versions/39a236919c4568ee/files"}
+[debug] [2026-01-07T23:28:11.371Z] [hosting][populate queue][FINAL] {"max":249,"min":249,"avg":249,"active":0,"complete":1,"success":1,"errored":0,"retried":0,"total":1,"elapsed":250}
+[debug] [2026-01-07T23:28:11.371Z] [hosting] uploads queued: 0
+[debug] [2026-01-07T23:28:11.371Z] [hosting][upload queue][FINAL] {"max":0,"min":9999999999,"avg":0,"active":0,"complete":0,"success":0,"errored":0,"retried":0,"total":0,"elapsed":1767828491371}
+[info] i  hosting: upload complete 
+[info] +  hosting[pinkscout-470d1]: file upload complete 
+[debug] [2026-01-07T23:28:11.373Z] [hosting] deploy completed after 270ms
+[debug] [2026-01-07T23:28:11.373Z] [
+  {
+    "config": {
+      "site": "pinkscout-470d1",
+      "public": "public",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ]
+    },
+    "version": "projects/386591970958/sites/pinkscout-470d1/versions/39a236919c4568ee"
+  }
+]
+[info] i  hosting[pinkscout-470d1]: finalizing version... 
+[debug] [2026-01-07T23:28:11.376Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:11.376Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:11.377Z] >>> [apiv2][query] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions/39a236919c4568ee updateMask=status%2Cconfig
+[debug] [2026-01-07T23:28:11.377Z] >>> [apiv2][body] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions/39a236919c4568ee {"status":"FINALIZED","config":{}}
+[debug] [2026-01-07T23:28:11.564Z] <<< [apiv2][status] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions/39a236919c4568ee 200
+[debug] [2026-01-07T23:28:11.564Z] <<< [apiv2][body] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions/39a236919c4568ee {"name":"projects/386591970958/sites/pinkscout-470d1/versions/39a236919c4568ee","status":"FINALIZED","config":{},"labels":{"deployment-tool":"cli-firebase"},"createTime":"2026-01-07T23:28:10.037664Z","createUser":{"email":"rtmbe20@gmail.com"},"finalizeTime":"2026-01-07T23:28:10.751384Z","finalizeUser":{"email":"rtmbe20@gmail.com"}}
+[debug] [2026-01-07T23:28:11.565Z] [hosting] finalized version for pinkscout-470d1:[object Object]
+[info] +  hosting[pinkscout-470d1]: version finalized 
+[info] i  hosting[pinkscout-470d1]: releasing new version... 
+[debug] [2026-01-07T23:28:11.565Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:11.565Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:11.566Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/channels/live/releases versionName=projects%2F386591970958%2Fsites%2Fpinkscout-470d1%2Fversions%2F39a236919c4568ee
+[debug] [2026-01-07T23:28:11.566Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/channels/live/releases {}
+[debug] [2026-01-07T23:28:11.737Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/channels/live/releases 200
+[debug] [2026-01-07T23:28:11.737Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/channels/live/releases {"name":"projects/386591970958/sites/pinkscout-470d1/channels/live/releases/1767828490440000","version":{"name":"projects/386591970958/sites/pinkscout-470d1/versions/39a236919c4568ee","status":"FINALIZED","config":{},"labels":{"deployment-tool":"cli-firebase"},"createTime":"2026-01-07T23:28:10.037664Z","createUser":{"email":"rtmbe20@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocKPy9TA00fNIfhkMLrN3FI8yuMPWR25aFfkjSkMthn5aIuJ0g=mo"},"finalizeTime":"2026-01-07T23:28:10.751384Z","finalizeUser":{"email":"rtmbe20@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocKPy9TA00fNIfhkMLrN3FI8yuMPWR25aFfkjSkMthn5aIuJ0g=mo"}},"type":"DEPLOY","releaseTime":"2026-01-07T23:28:10.440Z","releaseUser":{"email":"rtmbe20@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocKPy9TA00fNIfhkMLrN3FI8yuMPWR25aFfkjSkMthn5aIuJ0g=mo"}}
+[debug] [2026-01-07T23:28:11.737Z] [hosting] release: {"name":"projects/386591970958/sites/pinkscout-470d1/channels/live/releases/1767828490440000","version":{"name":"projects/386591970958/sites/pinkscout-470d1/versions/39a236919c4568ee","status":"FINALIZED","config":{},"labels":{"deployment-tool":"cli-firebase"},"createTime":"2026-01-07T23:28:10.037664Z","createUser":{"email":"rtmbe20@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocKPy9TA00fNIfhkMLrN3FI8yuMPWR25aFfkjSkMthn5aIuJ0g=mo"},"finalizeTime":"2026-01-07T23:28:10.751384Z","finalizeUser":{"email":"rtmbe20@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocKPy9TA00fNIfhkMLrN3FI8yuMPWR25aFfkjSkMthn5aIuJ0g=mo"}},"type":"DEPLOY","releaseTime":"2026-01-07T23:28:10.440Z","releaseUser":{"email":"rtmbe20@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocKPy9TA00fNIfhkMLrN3FI8yuMPWR25aFfkjSkMthn5aIuJ0g=mo"}}
+[info] +  hosting[pinkscout-470d1]: release complete 
+[info] 
+[info] +  Deploy complete! 
+[info] 
+[info] Project Console: https://console.firebase.google.com/project/pinkscout-470d1/overview
+[info] Hosting URL: https://pinkscout-470d1.web.app
+[debug] [2026-01-07T23:28:29.619Z] ----------------------------------------------------------------------
+[debug] [2026-01-07T23:28:29.621Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\rkuzmik\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only hosting --project pinkscout-470d1 --debug
+[debug] [2026-01-07T23:28:29.622Z] CLI Version:   15.1.0
+[debug] [2026-01-07T23:28:29.622Z] Platform:      win32
+[debug] [2026-01-07T23:28:29.622Z] Node Version:  v24.12.0
+[debug] [2026-01-07T23:28:29.622Z] Time:          Wed Jan 07 2026 18:28:29 GMT-0500 (Eastern Standard Time)
+[debug] [2026-01-07T23:28:29.622Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-01-07T23:28:32.042Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-01-07T23:28:32.044Z] > authorizing via signed-in user (rtmbe20@gmail.com)
+[debug] [2026-01-07T23:28:32.044Z] [iam] checking project pinkscout-470d1 for permissions ["firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-01-07T23:28:32.045Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:32.045Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:32.046Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions [none]
+[debug] [2026-01-07T23:28:32.047Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions x-goog-quota-user=projects/pinkscout-470d1
+[debug] [2026-01-07T23:28:32.047Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-01-07T23:28:32.294Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions 200
+[debug] [2026-01-07T23:28:32.294Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-01-07T23:28:32.296Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:32.296Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:32.297Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/pinkscout-470d1 [none]
+[debug] [2026-01-07T23:28:32.746Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/pinkscout-470d1 200
+[debug] [2026-01-07T23:28:32.746Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/pinkscout-470d1 {"projectId":"pinkscout-470d1","projectNumber":"386591970958","displayName":"Pinkscout","name":"projects/pinkscout-470d1","resources":{"hostingSite":"pinkscout-470d1"},"state":"ACTIVE","etag":"1_f34afd01-a77f-4e09-b7c1-21199945c1ef"}
+[info] 
+[info] === Deploying to 'pinkscout-470d1'...
+[info] 
+[info] i  deploying hosting 
+[debug] [2026-01-07T23:28:32.756Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:32.756Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:32.757Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions [none]
+[debug] [2026-01-07T23:28:32.757Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions {"status":"CREATED","labels":{"deployment-tool":"cli-firebase"}}
+[debug] [2026-01-07T23:28:33.376Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions 200
+[debug] [2026-01-07T23:28:33.376Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions {"name":"projects/386591970958/sites/pinkscout-470d1/versions/52be07209fb6e934","status":"CREATED","config":{},"labels":{"deployment-tool":"cli-firebase"}}
+[info] i  hosting[pinkscout-470d1]: beginning deploy... 
+[info] i  hosting[pinkscout-470d1]: found 13 files in public 
+[debug] [2026-01-07T23:28:33.393Z] [hosting] uploading with 200 concurrency
+[debug] [2026-01-07T23:28:33.394Z] [hosting] hash cache [cHVibGlj] not populated
+[debug] [2026-01-07T23:28:33.407Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:33.407Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:33.408Z] [hosting] hash cache [cHVibGlj] stored for 13 files
+[debug] [2026-01-07T23:28:33.409Z] [hosting][hash queue][FINAL] {"max":10,"min":8,"avg":8.692307692307692,"active":0,"complete":13,"success":13,"errored":0,"retried":0,"total":13,"elapsed":14}
+[debug] [2026-01-07T23:28:33.409Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/386591970958/sites/pinkscout-470d1/versions/52be07209fb6e934:populateFiles [none]
+[debug] [2026-01-07T23:28:33.409Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/386591970958/sites/pinkscout-470d1/versions/52be07209fb6e934:populateFiles {"files":{"/team.html":"d524b51e80f4ab5b4162b276a08fef539dd3d65b9994ab1efb31d3127baec86a","/login.html":"10535265fc3cb9f585ef0f5d283a2d35f5399c36ecff2273a229c58415deda47","/newscounting.html":"84ef742d0e2366b7232d3be05d02e0ee9de7523b72876c6936790bf9cc632599","/dashboard.html":"a1fc6f8193df0733103df16494f27aa8d12402a9b6fe57b972a5b4df5a71e72d","/js/team.js":"42e102192e7326a7ddbf8409717fe2a0213630bdb679df8d23dbb94b6a5a4947","/index.html":"ed7a2fbe2a97f76bbaa58262282e162bef98ad1536cc81cb19b43fa6596e166d","/js/scouting.js":"550873a95d1cc1ae65d7fdacc6512615fdef60f8fb48df0d71d7eadf77798546","/js/theme.js":"e6f658e46f3ef51cf82d5c181fe0a174c5165f80a94f43925ef955874887bc7a","/js/firebase.js":"1ad70807c8a186946fa3db3beacc3dd42c46f304f4313bbf1c03ffb3cd269136","/admin.html":"053c940a694940bb73b82bbfafe49325af90837482cfc37b17dc920b5b14ec4a","/js/dashboard.js":"0d9c10cf8f564c4ab0e2036731bbc0f5c3950c5748c5c3f506c880004a6eda54","/js/app.js":"d1b1fa34fcc9eb79723ac9d390e795f9080ddb24649bf0587f55c42b83fad2ee","/css/style.css":"222a20a52d17601e2e0a2e6a1e6cd303f9ae7a7c2cf4c9f21f71f0728777d711"}}
+[debug] [2026-01-07T23:28:33.607Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/386591970958/sites/pinkscout-470d1/versions/52be07209fb6e934:populateFiles 200
+[debug] [2026-01-07T23:28:33.607Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/386591970958/sites/pinkscout-470d1/versions/52be07209fb6e934:populateFiles {"uploadUrl":"https://upload-firebasehosting.googleapis.com/upload/sites/pinkscout-470d1/versions/52be07209fb6e934/files"}
+[debug] [2026-01-07T23:28:33.608Z] [hosting][populate queue][FINAL] {"max":202,"min":202,"avg":202,"active":0,"complete":1,"success":1,"errored":0,"retried":0,"total":1,"elapsed":202}
+[debug] [2026-01-07T23:28:33.608Z] [hosting] uploads queued: 0
+[debug] [2026-01-07T23:28:33.609Z] [hosting][upload queue][FINAL] {"max":0,"min":9999999999,"avg":0,"active":0,"complete":0,"success":0,"errored":0,"retried":0,"total":0,"elapsed":1767828513609}
+[info] i  hosting: upload complete 
+[info] +  hosting[pinkscout-470d1]: file upload complete 
+[debug] [2026-01-07T23:28:33.609Z] [hosting] deploy completed after 229ms
+[debug] [2026-01-07T23:28:33.610Z] [
+  {
+    "config": {
+      "site": "pinkscout-470d1",
+      "public": "public",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ]
+    },
+    "version": "projects/386591970958/sites/pinkscout-470d1/versions/52be07209fb6e934"
+  }
+]
+[info] i  hosting[pinkscout-470d1]: finalizing version... 
+[debug] [2026-01-07T23:28:33.612Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:33.613Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:33.613Z] >>> [apiv2][query] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions/52be07209fb6e934 updateMask=status%2Cconfig
+[debug] [2026-01-07T23:28:33.613Z] >>> [apiv2][body] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions/52be07209fb6e934 {"status":"FINALIZED","config":{}}
+[debug] [2026-01-07T23:28:33.783Z] <<< [apiv2][status] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions/52be07209fb6e934 200
+[debug] [2026-01-07T23:28:33.783Z] <<< [apiv2][body] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions/52be07209fb6e934 {"name":"projects/386591970958/sites/pinkscout-470d1/versions/52be07209fb6e934","status":"FINALIZED","config":{},"labels":{"deployment-tool":"cli-firebase"},"createTime":"2026-01-07T23:28:32.362976Z","createUser":{"email":"rtmbe20@gmail.com"},"finalizeTime":"2026-01-07T23:28:32.971946Z","finalizeUser":{"email":"rtmbe20@gmail.com"}}
+[debug] [2026-01-07T23:28:33.783Z] [hosting] finalized version for pinkscout-470d1:[object Object]
+[info] +  hosting[pinkscout-470d1]: version finalized 
+[info] i  hosting[pinkscout-470d1]: releasing new version... 
+[debug] [2026-01-07T23:28:33.784Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:33.784Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:28:33.784Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/channels/live/releases versionName=projects%2F386591970958%2Fsites%2Fpinkscout-470d1%2Fversions%2F52be07209fb6e934
+[debug] [2026-01-07T23:28:33.785Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/channels/live/releases {}
+[debug] [2026-01-07T23:28:34.042Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/channels/live/releases 200
+[debug] [2026-01-07T23:28:34.043Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/channels/live/releases {"name":"projects/386591970958/sites/pinkscout-470d1/channels/live/releases/1767828512679000","version":{"name":"projects/386591970958/sites/pinkscout-470d1/versions/52be07209fb6e934","status":"FINALIZED","config":{},"labels":{"deployment-tool":"cli-firebase"},"createTime":"2026-01-07T23:28:32.362976Z","createUser":{"email":"rtmbe20@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocKPy9TA00fNIfhkMLrN3FI8yuMPWR25aFfkjSkMthn5aIuJ0g=mo"},"finalizeTime":"2026-01-07T23:28:32.971946Z","finalizeUser":{"email":"rtmbe20@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocKPy9TA00fNIfhkMLrN3FI8yuMPWR25aFfkjSkMthn5aIuJ0g=mo"}},"type":"DEPLOY","releaseTime":"2026-01-07T23:28:32.679Z","releaseUser":{"email":"rtmbe20@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocKPy9TA00fNIfhkMLrN3FI8yuMPWR25aFfkjSkMthn5aIuJ0g=mo"}}
+[debug] [2026-01-07T23:28:34.043Z] [hosting] release: {"name":"projects/386591970958/sites/pinkscout-470d1/channels/live/releases/1767828512679000","version":{"name":"projects/386591970958/sites/pinkscout-470d1/versions/52be07209fb6e934","status":"FINALIZED","config":{},"labels":{"deployment-tool":"cli-firebase"},"createTime":"2026-01-07T23:28:32.362976Z","createUser":{"email":"rtmbe20@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocKPy9TA00fNIfhkMLrN3FI8yuMPWR25aFfkjSkMthn5aIuJ0g=mo"},"finalizeTime":"2026-01-07T23:28:32.971946Z","finalizeUser":{"email":"rtmbe20@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocKPy9TA00fNIfhkMLrN3FI8yuMPWR25aFfkjSkMthn5aIuJ0g=mo"}},"type":"DEPLOY","releaseTime":"2026-01-07T23:28:32.679Z","releaseUser":{"email":"rtmbe20@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocKPy9TA00fNIfhkMLrN3FI8yuMPWR25aFfkjSkMthn5aIuJ0g=mo"}}
+[info] +  hosting[pinkscout-470d1]: release complete 
+[info] 
+[info] +  Deploy complete! 
+[info] 
+[info] Project Console: https://console.firebase.google.com/project/pinkscout-470d1/overview
+[info] Hosting URL: https://pinkscout-470d1.web.app
+[debug] [2026-01-07T23:30:22.853Z] ----------------------------------------------------------------------
+[debug] [2026-01-07T23:30:22.858Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\rkuzmik\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only hosting --project pinkscout-470d1 --debug
+[debug] [2026-01-07T23:30:22.858Z] CLI Version:   15.1.0
+[debug] [2026-01-07T23:30:22.859Z] Platform:      win32
+[debug] [2026-01-07T23:30:22.859Z] Node Version:  v24.12.0
+[debug] [2026-01-07T23:30:22.859Z] Time:          Wed Jan 07 2026 18:30:22 GMT-0500 (Eastern Standard Time)
+[debug] [2026-01-07T23:30:22.859Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-01-07T23:30:24.912Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-01-07T23:30:24.913Z] > authorizing via signed-in user (rtmbe20@gmail.com)
+[debug] [2026-01-07T23:30:24.913Z] [iam] checking project pinkscout-470d1 for permissions ["firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-01-07T23:30:24.915Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:30:24.915Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:30:24.916Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions [none]
+[debug] [2026-01-07T23:30:24.916Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions x-goog-quota-user=projects/pinkscout-470d1
+[debug] [2026-01-07T23:30:24.917Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-01-07T23:30:25.191Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions 200
+[debug] [2026-01-07T23:30:25.191Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-01-07T23:30:25.193Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:30:25.193Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:30:25.194Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/pinkscout-470d1 [none]
+[debug] [2026-01-07T23:30:25.616Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/pinkscout-470d1 200
+[debug] [2026-01-07T23:30:25.617Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/pinkscout-470d1 {"projectId":"pinkscout-470d1","projectNumber":"386591970958","displayName":"Pinkscout","name":"projects/pinkscout-470d1","resources":{"hostingSite":"pinkscout-470d1"},"state":"ACTIVE","etag":"1_f34afd01-a77f-4e09-b7c1-21199945c1ef"}
+[info] 
+[info] === Deploying to 'pinkscout-470d1'...
+[info] 
+[info] i  deploying hosting 
+[debug] [2026-01-07T23:30:25.627Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:30:25.627Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:30:25.627Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions [none]
+[debug] [2026-01-07T23:30:25.627Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions {"status":"CREATED","labels":{"deployment-tool":"cli-firebase"}}
+[debug] [2026-01-07T23:30:26.205Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions 200
+[debug] [2026-01-07T23:30:26.206Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions {"name":"projects/386591970958/sites/pinkscout-470d1/versions/34eab079d01c2e1b","status":"CREATED","config":{},"labels":{"deployment-tool":"cli-firebase"}}
+[info] i  hosting[pinkscout-470d1]: beginning deploy... 
+[info] i  hosting[pinkscout-470d1]: found 13 files in public 
+[debug] [2026-01-07T23:30:26.248Z] [hosting] uploading with 200 concurrency
+[debug] [2026-01-07T23:30:26.259Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:30:26.260Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:30:26.261Z] [hosting] hash cache [cHVibGlj] stored for 13 files
+[debug] [2026-01-07T23:30:26.261Z] [hosting][hash queue][FINAL] {"max":8,"min":0,"avg":0.6153846153846154,"active":0,"complete":13,"success":13,"errored":0,"retried":0,"total":13,"elapsed":11}
+[debug] [2026-01-07T23:30:26.261Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/386591970958/sites/pinkscout-470d1/versions/34eab079d01c2e1b:populateFiles [none]
+[debug] [2026-01-07T23:30:26.262Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/386591970958/sites/pinkscout-470d1/versions/34eab079d01c2e1b:populateFiles {"files":{"/team.html":"d524b51e80f4ab5b4162b276a08fef539dd3d65b9994ab1efb31d3127baec86a","/newscounting.html":"84ef742d0e2366b7232d3be05d02e0ee9de7523b72876c6936790bf9cc632599","/login.html":"10535265fc3cb9f585ef0f5d283a2d35f5399c36ecff2273a229c58415deda47","/dashboard.html":"a1fc6f8193df0733103df16494f27aa8d12402a9b6fe57b972a5b4df5a71e72d","/admin.html":"053c940a694940bb73b82bbfafe49325af90837482cfc37b17dc920b5b14ec4a","/js/theme.js":"e6f658e46f3ef51cf82d5c181fe0a174c5165f80a94f43925ef955874887bc7a","/js/team.js":"42e102192e7326a7ddbf8409717fe2a0213630bdb679df8d23dbb94b6a5a4947","/js/scouting.js":"550873a95d1cc1ae65d7fdacc6512615fdef60f8fb48df0d71d7eadf77798546","/js/firebase.js":"1ad70807c8a186946fa3db3beacc3dd42c46f304f4313bbf1c03ffb3cd269136","/js/dashboard.js":"0d9c10cf8f564c4ab0e2036731bbc0f5c3950c5748c5c3f506c880004a6eda54","/js/app.js":"d1b1fa34fcc9eb79723ac9d390e795f9080ddb24649bf0587f55c42b83fad2ee","/css/style.css":"222a20a52d17601e2e0a2e6a1e6cd303f9ae7a7c2cf4c9f21f71f0728777d711","/index.html":"edddd87254f84b830424e981ef7151413f7564209c75426d774312b0ddc0ae75"}}
+[debug] [2026-01-07T23:30:26.536Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/386591970958/sites/pinkscout-470d1/versions/34eab079d01c2e1b:populateFiles 200
+[debug] [2026-01-07T23:30:26.536Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/386591970958/sites/pinkscout-470d1/versions/34eab079d01c2e1b:populateFiles {"uploadRequiredHashes":["edddd87254f84b830424e981ef7151413f7564209c75426d774312b0ddc0ae75"],"uploadUrl":"https://upload-firebasehosting.googleapis.com/upload/sites/pinkscout-470d1/versions/34eab079d01c2e1b/files"}
+[debug] [2026-01-07T23:30:26.537Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:30:26.537Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:30:26.537Z] >>> [apiv2][query] POST https://upload-firebasehosting.googleapis.com/upload/sites/pinkscout-470d1/versions/34eab079d01c2e1b/files/edddd87254f84b830424e981ef7151413f7564209c75426d774312b0ddc0ae75 [none]
+[debug] [2026-01-07T23:30:26.538Z] >>> [apiv2][body] POST https://upload-firebasehosting.googleapis.com/upload/sites/pinkscout-470d1/versions/34eab079d01c2e1b/files/edddd87254f84b830424e981ef7151413f7564209c75426d774312b0ddc0ae75 [stream]
+[debug] [2026-01-07T23:30:26.539Z] [hosting][populate queue][FINAL] {"max":278,"min":278,"avg":278,"active":0,"complete":1,"success":1,"errored":0,"retried":0,"total":1,"elapsed":280}
+[debug] [2026-01-07T23:30:26.540Z] [hosting] uploads queued: 1
+[debug] [2026-01-07T23:30:27.232Z] <<< [apiv2][status] POST https://upload-firebasehosting.googleapis.com/upload/sites/pinkscout-470d1/versions/34eab079d01c2e1b/files/edddd87254f84b830424e981ef7151413f7564209c75426d774312b0ddc0ae75 200
+[debug] [2026-01-07T23:30:27.232Z] <<< [apiv2][body] POST https://upload-firebasehosting.googleapis.com/upload/sites/pinkscout-470d1/versions/34eab079d01c2e1b/files/edddd87254f84b830424e981ef7151413f7564209c75426d774312b0ddc0ae75 [stream]
+[debug] [2026-01-07T23:30:27.233Z] [hosting][upload queue][FINAL] {"max":696,"min":696,"avg":696,"active":0,"complete":1,"success":1,"errored":0,"retried":0,"total":1,"elapsed":697}
+[info] i  hosting: upload complete 
+[info] +  hosting[pinkscout-470d1]: file upload complete 
+[debug] [2026-01-07T23:30:27.234Z] [hosting] deploy completed after 1020ms
+[debug] [2026-01-07T23:30:27.235Z] [
+  {
+    "config": {
+      "site": "pinkscout-470d1",
+      "public": "public",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ]
+    },
+    "version": "projects/386591970958/sites/pinkscout-470d1/versions/34eab079d01c2e1b"
+  }
+]
+[info] i  hosting[pinkscout-470d1]: finalizing version... 
+[debug] [2026-01-07T23:30:27.238Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:30:27.238Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:30:27.239Z] >>> [apiv2][query] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions/34eab079d01c2e1b updateMask=status%2Cconfig
+[debug] [2026-01-07T23:30:27.239Z] >>> [apiv2][body] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions/34eab079d01c2e1b {"status":"FINALIZED","config":{}}
+[debug] [2026-01-07T23:30:27.374Z] <<< [apiv2][status] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions/34eab079d01c2e1b 200
+[debug] [2026-01-07T23:30:27.375Z] <<< [apiv2][body] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/versions/34eab079d01c2e1b {"name":"projects/386591970958/sites/pinkscout-470d1/versions/34eab079d01c2e1b","status":"FINALIZED","config":{},"labels":{"deployment-tool":"cli-firebase"},"createTime":"2026-01-07T23:30:25.238211Z","createUser":{"email":"rtmbe20@gmail.com"},"finalizeTime":"2026-01-07T23:30:26.622376Z","finalizeUser":{"email":"rtmbe20@gmail.com"}}
+[debug] [2026-01-07T23:30:27.375Z] [hosting] finalized version for pinkscout-470d1:[object Object]
+[info] +  hosting[pinkscout-470d1]: version finalized 
+[info] i  hosting[pinkscout-470d1]: releasing new version... 
+[debug] [2026-01-07T23:30:27.376Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:30:27.376Z] Checked if tokens are valid: true, expires at: 1767830426296
+[debug] [2026-01-07T23:30:27.376Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/channels/live/releases versionName=projects%2F386591970958%2Fsites%2Fpinkscout-470d1%2Fversions%2F34eab079d01c2e1b
+[debug] [2026-01-07T23:30:27.376Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/channels/live/releases {}
+[debug] [2026-01-07T23:30:27.607Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/channels/live/releases 200
+[debug] [2026-01-07T23:30:27.607Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/pinkscout-470d1/channels/live/releases {"name":"projects/386591970958/sites/pinkscout-470d1/channels/live/releases/1767828626257000","version":{"name":"projects/386591970958/sites/pinkscout-470d1/versions/34eab079d01c2e1b","status":"FINALIZED","config":{},"labels":{"deployment-tool":"cli-firebase"},"createTime":"2026-01-07T23:30:25.238211Z","createUser":{"email":"rtmbe20@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocKPy9TA00fNIfhkMLrN3FI8yuMPWR25aFfkjSkMthn5aIuJ0g=mo"},"finalizeTime":"2026-01-07T23:30:26.622376Z","finalizeUser":{"email":"rtmbe20@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocKPy9TA00fNIfhkMLrN3FI8yuMPWR25aFfkjSkMthn5aIuJ0g=mo"}},"type":"DEPLOY","releaseTime":"2026-01-07T23:30:26.257Z","releaseUser":{"email":"rtmbe20@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocKPy9TA00fNIfhkMLrN3FI8yuMPWR25aFfkjSkMthn5aIuJ0g=mo"}}
+[debug] [2026-01-07T23:30:27.608Z] [hosting] release: {"name":"projects/386591970958/sites/pinkscout-470d1/channels/live/releases/1767828626257000","version":{"name":"projects/386591970958/sites/pinkscout-470d1/versions/34eab079d01c2e1b","status":"FINALIZED","config":{},"labels":{"deployment-tool":"cli-firebase"},"createTime":"2026-01-07T23:30:25.238211Z","createUser":{"email":"rtmbe20@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocKPy9TA00fNIfhkMLrN3FI8yuMPWR25aFfkjSkMthn5aIuJ0g=mo"},"finalizeTime":"2026-01-07T23:30:26.622376Z","finalizeUser":{"email":"rtmbe20@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocKPy9TA00fNIfhkMLrN3FI8yuMPWR25aFfkjSkMthn5aIuJ0g=mo"}},"type":"DEPLOY","releaseTime":"2026-01-07T23:30:26.257Z","releaseUser":{"email":"rtmbe20@gmail.com","imageUrl":"https://lh3.googleusercontent.com/a/ACg8ocKPy9TA00fNIfhkMLrN3FI8yuMPWR25aFfkjSkMthn5aIuJ0g=mo"}}
+[info] +  hosting[pinkscout-470d1]: release complete 
+[info] 
+[info] +  Deploy complete! 
+[info] 
+[info] Project Console: https://console.firebase.google.com/project/pinkscout-470d1/overview
+[info] Hosting URL: https://pinkscout-470d1.web.app

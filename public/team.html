@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Team Stats - Pinkscout</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h2>🤖 Pinkscout</h2>
+        <span>FRC Scouting App</span>
+      </div>
+      <nav class="sidebar-nav">
+        <ul>
+          <li><a href="index.html">🏠 Home</a></li>
+          <li><a href="dashboard.html">📊 Dashboard</a></li>
+          <li><a href="team.html" class="active">🔍 Team Search</a></li>
+          <li><a href="admin.html">⚙️ Admin</a></li>
+          <li><a href="newscounting.html">📝 Scouting</a></li>
+        </ul>
+      </nav>
+      <div class="user-info" id="userInfo" style="display: none;">
+        <div class="user-email" id="userEmail"></div>
+        <button class="btn-logout" id="logoutBtn">Sign Out</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <h1>🔍 Team Search</h1>
+        <p>Search for a team to view their scouting data and statistics.</p>
+      </header>
+
+      <div class="content-card">
+        <h2>Find a Team</h2>
+        <div class="search-container">
+          <input type="number" id="teamSearchInput" placeholder="Enter team number (e.g., 254)" class="form-input">
+          <button id="searchBtn" class="btn btn-primary">Search</button>
+        </div>
+      </div>
+
+      <div id="teamResults" style="display: none;">
+        <div class="content-card">
+          <h2>Team <span id="teamNumber"></span></h2>
+          <div id="teamInfo"></div>
+        </div>
+
+        <div class="content-card">
+          <h2>Performance Over Matches</h2>
+          <canvas id="teamPerformanceChart"></canvas>
+        </div>
+
+        <div class="content-card">
+          <h2>Scoring Breakdown</h2>
+          <div class="stats-grid" id="scoringStats"></div>
+        </div>
+
+        <div class="content-card">
+          <h2>Match History</h2>
+          <table class="data-table" id="matchHistoryTable">
+            <thead>
+              <tr>
+                <th>Match</th>
+                <th>Auto Points</th>
+                <th>Teleop Points</th>
+                <th>Endgame</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody id="matchHistoryBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="noResults" class="content-card" style="display: none;">
+        <p>No scouting data found for this team.</p>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="js/firebase.js"></script>
+  <script type="module" src="js/team.js"></script>
+</body>
+</html>
+

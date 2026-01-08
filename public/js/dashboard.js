@@ -27,8 +27,10 @@
 // IMPORTS
 // =============================================================================
 
-// Import data fetching function from app.js
-import { getAllScoutingData } from './app.js';
+// Import data fetching functions from app.js
+// getAllScoutingData: Gets all scouting entries (for charts and stats)
+// readTopTeams: Gets the top teams by average score (for leaderboard)
+import { getAllScoutingData, readTopTeams } from './app.js';
 
 // Import authentication functions from firebase.js
 import { requireAuth, signOut, setupAuthListener } from './firebase.js';
@@ -92,6 +94,7 @@ document.getElementById('logoutBtn').addEventListener('click', signOut);
  *    - Update statistics cards
  *    - Create/update charts
  *    - Display recent entries table
+ *    - Display leaderboard
  */
 async function loadDashboardData() {
   try {
@@ -113,6 +116,9 @@ async function loadDashboardData() {
 
     // Display the recent entries table
     displayRecentEntries(scoutingData);
+
+    // Display the leaderboard (top teams by average score)
+    await displayLeaderboard();
 
   } catch (error) {
     // Handle errors (usually Firebase configuration issues)
@@ -462,6 +468,86 @@ function displayRecentEntries(data) {
 
   // Insert the HTML into the container
   container.innerHTML = html;
+}
+
+
+// =============================================================================
+// LEADERBOARD DISPLAY
+// =============================================================================
+
+/**
+ * DISPLAY LEADERBOARD
+ * -------------------
+ * Shows the top teams ranked by average total score.
+ * Uses the readTopTeams function which queries the 'teams' collection.
+ *
+ * The leaderboard shows:
+ * - Rank (1st, 2nd, 3rd, etc.)
+ * - Team number
+ * - Average total score
+ * - Matches played
+ * - Max score achieved
+ */
+async function displayLeaderboard() {
+  const container = document.getElementById('leaderboard');
+
+  // If no leaderboard container exists, skip
+  if (!container) {
+    console.log('⚠️ No leaderboard container found');
+    return;
+  }
+
+  try {
+    // Get top 10 teams from the teams collection
+    const topTeams = await readTopTeams(10);
+
+    if (topTeams.length === 0) {
+      container.innerHTML = '<p class="text-center" style="color: #888; padding: 20px;">No team stats available yet.</p>';
+      return;
+    }
+
+    // Build the leaderboard HTML
+    let html = `
+      <table class="data-table leaderboard-table">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Team</th>
+            <th>Avg Score</th>
+            <th>Matches</th>
+            <th>Best</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    topTeams.forEach((team, index) => {
+      // Add medal emoji for top 3
+      let rankDisplay = `#${index + 1}`;
+      if (index === 0) rankDisplay = '🥇';
+      else if (index === 1) rankDisplay = '🥈';
+      else if (index === 2) rankDisplay = '🥉';
+
+      html += `
+        <tr class="${index < 3 ? 'top-three' : ''}">
+          <td>${rankDisplay}</td>
+          <td><strong>${team.teamNumber}</strong></td>
+          <td>${team.avgTotal?.toFixed(1) || '-'}</td>
+          <td>${team.matchesPlayed || '-'}</td>
+          <td>${team.maxScore || '-'}</td>
+        </tr>
+      `;
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+
+    console.log('✅ Leaderboard displayed with', topTeams.length, 'teams');
+
+  } catch (error) {
+    console.error('❌ Error displaying leaderboard:', error);
+    container.innerHTML = '<p class="text-center" style="color: #c62828; padding: 20px;">Error loading leaderboard.</p>';
+  }
 }
 
 

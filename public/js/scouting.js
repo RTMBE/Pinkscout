@@ -26,9 +26,10 @@
 // IMPORTS
 // =============================================================================
 
-// Import the save function from app.js
-// This function handles the actual Firestore write operation
-import { saveScoutingData } from './app.js';
+// Import functions from app.js
+// saveScoutingData: Saves the scouting entry to Firestore
+// recalculateTeamStats: Updates the team's aggregated statistics
+import { saveScoutingData, recalculateTeamStats } from './app.js';
 
 
 // =============================================================================
@@ -243,6 +244,13 @@ async function handleFormSubmit(e) {
     // =========================================
     const scoutingData = collectFormData();       // Gather all form values
     const docId = await saveScoutingData(scoutingData);  // Save to Firestore
+
+    // =========================================
+    // STEP 2.5: Update team statistics
+    // =========================================
+    // After saving the scouting entry, recalculate the team's stats
+    // This updates the leaderboard and team stats pages
+    await recalculateTeamStats(scoutingData.teamNumber);
 
     // =========================================
     // STEP 3: Show success message

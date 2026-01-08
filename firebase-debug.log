@@ -1,0 +1,80 @@
+[debug] [2026-01-08T03:34:44.074Z] ----------------------------------------------------------------------
+[debug] [2026-01-08T03:34:44.076Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\rkuzmik\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js serve --only hosting
+[debug] [2026-01-08T03:34:44.076Z] CLI Version:   15.1.0
+[debug] [2026-01-08T03:34:44.076Z] Platform:      win32
+[debug] [2026-01-08T03:34:44.076Z] Node Version:  v24.12.0
+[debug] [2026-01-08T03:34:44.076Z] Time:          Wed Jan 07 2026 22:34:44 GMT-0500 (Eastern Standard Time)
+[debug] [2026-01-08T03:34:44.076Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-01-08T03:34:45.031Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-01-08T03:34:45.031Z] > authorizing via signed-in user (rtmbe20@gmail.com)
+[debug] [2026-01-08T03:34:45.031Z] [iam] checking project pinkscout-470d1 for permissions ["firebase.projects.get"]
+[debug] [2026-01-08T03:34:45.031Z] Checked if tokens are valid: true, expires at: 1767845259397
+[debug] [2026-01-08T03:34:45.032Z] Checked if tokens are valid: true, expires at: 1767845259397
+[debug] [2026-01-08T03:34:45.032Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions [none]
+[debug] [2026-01-08T03:34:45.032Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions x-goog-quota-user=projects/pinkscout-470d1
+[debug] [2026-01-08T03:34:45.032Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions {"permissions":["firebase.projects.get"]}
+[debug] [2026-01-08T03:34:45.269Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions 200
+[debug] [2026-01-08T03:34:45.269Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions {"permissions":["firebase.projects.get"]}
+[debug] [2026-01-08T03:34:45.270Z] Checked if tokens are valid: true, expires at: 1767845259397
+[debug] [2026-01-08T03:34:45.270Z] Checked if tokens are valid: true, expires at: 1767845259397
+[debug] [2026-01-08T03:34:45.270Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1 [none]
+[debug] [2026-01-08T03:34:45.422Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1 200
+[debug] [2026-01-08T03:34:45.423Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1 {"projectNumber":"386591970958","projectId":"pinkscout-470d1","lifecycleState":"ACTIVE","name":"Pinkscout","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2026-01-06T18:02:56.331454Z"}
+[debug] [2026-01-08T03:34:45.424Z] Checked if tokens are valid: true, expires at: 1767845259397
+[debug] [2026-01-08T03:34:45.424Z] Checked if tokens are valid: true, expires at: 1767845259397
+[debug] [2026-01-08T03:34:45.424Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/pinkscout-470d1/sites 
+[debug] [2026-01-08T03:34:45.809Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/pinkscout-470d1/sites 200
+[debug] [2026-01-08T03:34:45.809Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/pinkscout-470d1/sites {"sites":[{"name":"projects/pinkscout-470d1/sites/pinkscout-470d1","defaultUrl":"https://pinkscout-470d1.web.app","appId":"1:386591970958:web:a7a9483684c3418cea1bdf","type":"DEFAULT_SITE"},{"name":"projects/pinkscout-470d1/sites/pinkscout-app","defaultUrl":"https://pinkscout-app.web.app","type":"USER_SITE"}]}
+[debug] [2026-01-08T03:34:45.809Z] Checked if tokens are valid: true, expires at: 1767845259397
+[debug] [2026-01-08T03:34:45.809Z] Checked if tokens are valid: true, expires at: 1767845259397
+[debug] [2026-01-08T03:34:45.809Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/pinkscout-470d1/webApps/1:386591970958:web:a7a9483684c3418cea1bdf/config [none]
+[debug] [2026-01-08T03:34:46.232Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/pinkscout-470d1/webApps/1:386591970958:web:a7a9483684c3418cea1bdf/config 200
+[debug] [2026-01-08T03:34:46.232Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/pinkscout-470d1/webApps/1:386591970958:web:a7a9483684c3418cea1bdf/config {"projectId":"pinkscout-470d1","appId":"1:386591970958:web:a7a9483684c3418cea1bdf","storageBucket":"pinkscout-470d1.firebasestorage.app","apiKey":"AIzaSyCqUoIrwQdBFlaF0P9NfTRN7pVfji5p3-M","authDomain":"pinkscout-470d1.firebaseapp.com","messagingSenderId":"386591970958","measurementId":"G-HM5D0Z7L6N","projectNumber":"386591970958","version":"2"}
+[debug] [2026-01-08T03:34:46.238Z] Checked if tokens are valid: true, expires at: 1767845259397
+[debug] [2026-01-08T03:34:46.239Z] Checked if tokens are valid: true, expires at: 1767845259397
+[debug] [2026-01-08T03:34:46.239Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/pinkscout-470d1 [none]
+[debug] [2026-01-08T03:34:46.528Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/pinkscout-470d1 200
+[debug] [2026-01-08T03:34:46.528Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/pinkscout-470d1 {"projectId":"pinkscout-470d1","projectNumber":"386591970958","displayName":"Pinkscout","name":"projects/pinkscout-470d1","resources":{"hostingSite":"pinkscout-470d1"},"state":"ACTIVE","etag":"1_f34afd01-a77f-4e09-b7c1-21199945c1ef"}
+[info] i  hosting[pinkscout-470d1]: Serving hosting files from: public {"metadata":{"emulator":{"name":"hosting"},"message":"Serving hosting files from: \u001b[1mpublic\u001b[22m"}}
+[info] +  hosting[pinkscout-470d1]: Local server: http://localhost:5000 {"metadata":{"emulator":{"name":"hosting"},"message":"Local server: \u001b[4m\u001b[1mhttp://localhost:5000\u001b[22m\u001b[24m"}}
+[debug] [2026-01-08T03:35:29.201Z] ----------------------------------------------------------------------
+[debug] [2026-01-08T03:35:29.203Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\rkuzmik\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js serve --only hosting --port 5000
+[debug] [2026-01-08T03:35:29.204Z] CLI Version:   15.1.0
+[debug] [2026-01-08T03:35:29.204Z] Platform:      win32
+[debug] [2026-01-08T03:35:29.204Z] Node Version:  v24.12.0
+[debug] [2026-01-08T03:35:29.204Z] Time:          Wed Jan 07 2026 22:35:29 GMT-0500 (Eastern Standard Time)
+[debug] [2026-01-08T03:35:29.204Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-01-08T03:35:30.158Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-01-08T03:35:30.159Z] > authorizing via signed-in user (rtmbe20@gmail.com)
+[debug] [2026-01-08T03:35:30.159Z] [iam] checking project pinkscout-470d1 for permissions ["firebase.projects.get"]
+[debug] [2026-01-08T03:35:30.159Z] Checked if tokens are valid: true, expires at: 1767845259397
+[debug] [2026-01-08T03:35:30.159Z] Checked if tokens are valid: true, expires at: 1767845259397
+[debug] [2026-01-08T03:35:30.160Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions [none]
+[debug] [2026-01-08T03:35:30.160Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions x-goog-quota-user=projects/pinkscout-470d1
+[debug] [2026-01-08T03:35:30.160Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions {"permissions":["firebase.projects.get"]}
+[debug] [2026-01-08T03:35:30.408Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions 200
+[debug] [2026-01-08T03:35:30.408Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1:testIamPermissions {"permissions":["firebase.projects.get"]}
+[debug] [2026-01-08T03:35:30.408Z] Checked if tokens are valid: true, expires at: 1767845259397
+[debug] [2026-01-08T03:35:30.409Z] Checked if tokens are valid: true, expires at: 1767845259397
+[debug] [2026-01-08T03:35:30.409Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1 [none]
+[debug] [2026-01-08T03:35:30.577Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1 200
+[debug] [2026-01-08T03:35:30.577Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/pinkscout-470d1 {"projectNumber":"386591970958","projectId":"pinkscout-470d1","lifecycleState":"ACTIVE","name":"Pinkscout","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2026-01-06T18:02:56.331454Z"}
+[debug] [2026-01-08T03:35:30.578Z] Checked if tokens are valid: true, expires at: 1767845259397
+[debug] [2026-01-08T03:35:30.578Z] Checked if tokens are valid: true, expires at: 1767845259397
+[debug] [2026-01-08T03:35:30.578Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/pinkscout-470d1/sites 
+[debug] [2026-01-08T03:35:31.013Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/pinkscout-470d1/sites 200
+[debug] [2026-01-08T03:35:31.013Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/pinkscout-470d1/sites {"sites":[{"name":"projects/pinkscout-470d1/sites/pinkscout-470d1","defaultUrl":"https://pinkscout-470d1.web.app","appId":"1:386591970958:web:a7a9483684c3418cea1bdf","type":"DEFAULT_SITE"},{"name":"projects/pinkscout-470d1/sites/pinkscout-app","defaultUrl":"https://pinkscout-app.web.app","type":"USER_SITE"}]}
+[debug] [2026-01-08T03:35:31.013Z] Checked if tokens are valid: true, expires at: 1767845259397
+[debug] [2026-01-08T03:35:31.013Z] Checked if tokens are valid: true, expires at: 1767845259397
+[debug] [2026-01-08T03:35:31.013Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/pinkscout-470d1/webApps/1:386591970958:web:a7a9483684c3418cea1bdf/config [none]
+[debug] [2026-01-08T03:35:31.356Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/pinkscout-470d1/webApps/1:386591970958:web:a7a9483684c3418cea1bdf/config 200
+[debug] [2026-01-08T03:35:31.356Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/pinkscout-470d1/webApps/1:386591970958:web:a7a9483684c3418cea1bdf/config {"projectId":"pinkscout-470d1","appId":"1:386591970958:web:a7a9483684c3418cea1bdf","storageBucket":"pinkscout-470d1.firebasestorage.app","apiKey":"AIzaSyCqUoIrwQdBFlaF0P9NfTRN7pVfji5p3-M","authDomain":"pinkscout-470d1.firebaseapp.com","messagingSenderId":"386591970958","measurementId":"G-HM5D0Z7L6N","projectNumber":"386591970958","version":"2"}
+[debug] [2026-01-08T03:35:31.358Z] Checked if tokens are valid: true, expires at: 1767845259397
+[debug] [2026-01-08T03:35:31.358Z] Checked if tokens are valid: true, expires at: 1767845259397
+[debug] [2026-01-08T03:35:31.359Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/pinkscout-470d1 [none]
+[debug] [2026-01-08T03:35:31.664Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/pinkscout-470d1 200
+[debug] [2026-01-08T03:35:31.664Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/pinkscout-470d1 {"projectId":"pinkscout-470d1","projectNumber":"386591970958","displayName":"Pinkscout","name":"projects/pinkscout-470d1","resources":{"hostingSite":"pinkscout-470d1"},"state":"ACTIVE","etag":"1_f34afd01-a77f-4e09-b7c1-21199945c1ef"}
+[info] i  hosting[pinkscout-470d1]: Serving hosting files from: public {"metadata":{"emulator":{"name":"hosting"},"message":"Serving hosting files from: \u001b[1mpublic\u001b[22m"}}
+[info] +  hosting[pinkscout-470d1]: Local server: http://localhost:5000 {"metadata":{"emulator":{"name":"hosting"},"message":"Local server: \u001b[4m\u001b[1mhttp://localhost:5000\u001b[22m\u001b[24m"}}

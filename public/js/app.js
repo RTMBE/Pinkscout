@@ -48,20 +48,23 @@
 // Import our initialized Firestore database and auth
 import { db, auth } from './firebase.js';
 
-// Import Firestore functions we need for database operations
-// Each function has a specific purpose:
+// Import Firestore functions from our firebase.js file
+// We re-export them there for convenience
 import {
-  collection,    // Reference to a collection of documents
-  addDoc,        // Add a new document (Create)
-  getDocs,       // Get multiple documents (Read)
-  doc,           // Reference to a single document
-  getDoc,        // Get a single document (Read)
-  updateDoc,     // Update a document (Update)
-  deleteDoc,     // Delete a document (Delete)
-  query,         // Create a query with filters/ordering
-  orderBy,       // Sort results by a field
-  where          // Filter results by a condition
-} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+  collection,
+  addDoc,
+  getDocs,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  orderBy,
+  where,
+  limit as firestoreLimit,
+  serverTimestamp
+} from './firebase.js';
 
 
 // =============================================================================
@@ -375,23 +378,24 @@ async function runDiagnostics() {
 /**
  * READ RECENT SCOUTING
  * --------------------
- * Alias for getAllScoutingData with a limit parameter.
- * Returns the most recent scouting entries.
+ * Returns the most recent scouting entries, with optional limit.
  *
- * @param {number} limit - Maximum number of entries to return (default: 10)
+ * @param {number} limitCount - Maximum number of entries to return (default: 10)
  * @returns {Promise<Array>} - Array of recent scouting records
  */
-async function readRecentScouting(limit = 10) {
+async function readRecentScouting(limitCount = 10) {
   try {
+    console.log('📖 Reading recent scouting entries (limit:', limitCount, ')');
     const scoutingRef = collection(db, 'scouting');
-    const q = query(scoutingRef, orderBy('createdAt', 'desc'));
+    // Order by createdAt descending (newest first) and limit results
+    const q = query(scoutingRef, orderBy('createdAt', 'desc'), firestoreLimit(limitCount));
     const querySnapshot = await getDocs(q);
+
     const records = [];
     querySnapshot.forEach((docSnap) => {
-      if (records.length < limit) {
-        records.push({ id: docSnap.id, ...docSnap.data() });
-      }
+      records.push({ id: docSnap.id, ...docSnap.data() });
     });
+
     console.log('✅ Retrieved', records.length, 'recent scouting records');
     return records;
   } catch (error) {
@@ -400,10 +404,473 @@ async function readRecentScouting(limit = 10) {
   }
 }
 
+
+// =============================================================================
+// TEAM STATS ENGINE (CRITICAL FEATURE)
+// =============================================================================
+//
+// This section handles aggregating scouting data into team statistics.
+//
+// HOW IT WORKS:
+// 1. When a scouting entry is submitted, we recalculate that team's stats
+// 2. We query all scouting entries for the team
+// 3. We compute averages and find the max score
+// 4. We store the aggregated stats in the 'teams' collection
+//
+// DATA STRUCTURE:
+//   teams/{teamNumber}
+//     matchesPlayed: number
+//     avgAuto: number
+//     avgTeleop: number
+//     avgTotal: number
+//     maxScore: number
+//     lastUpdated: timestamp
+//
+// =============================================================================
+
+/**
+ * RECALCULATE TEAM STATS
+ * ----------------------
+ * Recalculates and updates the aggregated statistics for a team.
+ * This should be called after every new scouting entry is added.
+ *
+ * AGGREGATION LOGIC:
+ * - matchesPlayed: Count of all scouting entries for this team
+ * - avgAuto: Sum of autoPoints / matchesPlayed
+ * - avgTeleop: Sum of teleopPoints / matchesPlayed
+ * - avgTotal: Sum of totalPoints / matchesPlayed
+ * - maxScore: Maximum totalPoints across all matches
+ *
+ * @param {number|string} teamNumber - The FRC team number
+ * @returns {Promise<Object>} - The calculated team stats
+ *
+ * @example
+ * // After saving a scouting entry:
+ * await saveScoutingData(formData);
+ * await recalculateTeamStats(formData.teamNumber);
+ */
+async function recalculateTeamStats(teamNumber) {
+  try {
+    console.log('📊 Recalculating stats for team', teamNumber);
+
+    // Step 1: Get all scouting entries for this team
+    const scoutingRef = collection(db, 'scouting');
+    const q = query(scoutingRef, where('teamNumber', '==', Number(teamNumber)));
+    const snapshot = await getDocs(q);
+
+    // If no entries exist, remove team from stats
+    if (snapshot.empty) {
+      console.log('⚠️ No scouting data found for team', teamNumber);
+      return null;
+    }
+
+    // Step 2: Calculate aggregated statistics
+    let totalAuto = 0;
+    let totalTeleop = 0;
+    let totalPoints = 0;
+    let maxScore = 0;
+    let matchCount = 0;
+
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+
+      // Calculate auto score from component fields (2024 FRC scoring)
+      const autoSpeaker = Number(data.autoSpeaker) || 0;
+      const autoAmp = Number(data.autoAmp) || 0;
+      const auto = autoSpeaker * 5 + autoAmp * 2;
+
+      // Calculate teleop score from component fields
+      const teleopSpeaker = Number(data.teleopSpeaker) || 0;
+      const teleopAmp = Number(data.teleopAmp) || 0;
+      const amplifiedScored = Number(data.amplifiedScored) || 0;
+      const teleop = teleopSpeaker * 2 + teleopAmp + amplifiedScored * 5;
+
+      const total = auto + teleop;
+
+      // Add to running totals
+      totalAuto += auto;
+      totalTeleop += teleop;
+      totalPoints += total;
+      matchCount++;
+
+      // Track max score
+      if (total > maxScore) {
+        maxScore = total;
+      }
+    });
+
+    // Step 3: Compute averages (round to 2 decimal places)
+    const stats = {
+      teamNumber: Number(teamNumber),
+      matchesPlayed: matchCount,
+      avgAuto: Math.round((totalAuto / matchCount) * 100) / 100,
+      avgTeleop: Math.round((totalTeleop / matchCount) * 100) / 100,
+      avgTotal: Math.round((totalPoints / matchCount) * 100) / 100,
+      maxScore: maxScore,
+      lastUpdated: serverTimestamp()
+    };
+
+    console.log('📊 Calculated stats:', stats);
+
+    // Step 4: Save stats to teams collection
+    // We use setDoc with the team number as the document ID
+    // This allows easy lookup and prevents duplicates
+    const teamDocRef = doc(db, 'teams', String(teamNumber));
+    await setDoc(teamDocRef, stats);
+
+    console.log('✅ Team stats updated for team', teamNumber);
+    return stats;
+
+  } catch (error) {
+    console.error('❌ Error recalculating team stats:', error);
+    throw error;
+  }
+}
+
+
+/**
+ * READ TOP TEAMS (LEADERBOARD)
+ * ----------------------------
+ * Returns the top N teams ranked by average total points.
+ * This powers the leaderboard feature on Dashboard and Teams pages.
+ *
+ * RANKING LOGIC:
+ * - Primary sort: avgTotal (descending) - higher average is better
+ * - Tiebreaker: maxScore (descending) - higher best match is better
+ *
+ * CACHING:
+ * For performance, callers should cache results in sessionStorage
+ * and refresh periodically (e.g., every 5 minutes).
+ *
+ * @param {number} limitCount - Number of teams to return (default: 10)
+ * @returns {Promise<Array>} - Array of team stats, sorted by ranking
+ *
+ * @example
+ * const topTeams = await readTopTeams(10);
+ * topTeams.forEach((team, index) => {
+ *   console.log(`#${index + 1}: Team ${team.teamNumber} - ${team.avgTotal} avg`);
+ * });
+ */
+async function readTopTeams(limitCount = 10) {
+  try {
+    console.log('🏆 Reading top', limitCount, 'teams');
+
+    // First try to get from teams collection
+    const teamsRef = collection(db, 'teams');
+    let teams = [];
+
+    try {
+      // Try ordered query (requires index)
+      const q = query(teamsRef, orderBy('avgTotal', 'desc'), firestoreLimit(limitCount));
+      const snapshot = await getDocs(q);
+      snapshot.forEach((docSnap) => {
+        teams.push({ id: docSnap.id, ...docSnap.data() });
+      });
+    } catch (indexError) {
+      // If index doesn't exist, fetch all and sort client-side
+      console.log('⚠️ Index not available, fetching all teams...');
+      const snapshot = await getDocs(teamsRef);
+      snapshot.forEach((docSnap) => {
+        teams.push({ id: docSnap.id, ...docSnap.data() });
+      });
+    }
+
+    // If no teams in collection, calculate from scouting data
+    if (teams.length === 0) {
+      console.log('📊 No team stats found, calculating from scouting data...');
+      teams = await calculateLeaderboardFromScouting();
+    }
+
+    // Sort by avgTotal descending, then by maxScore for tiebreaker
+    teams.sort((a, b) => {
+      if ((b.avgTotal || 0) !== (a.avgTotal || 0)) {
+        return (b.avgTotal || 0) - (a.avgTotal || 0);
+      }
+      return (b.maxScore || 0) - (a.maxScore || 0);
+    });
+
+    // Limit results
+    teams = teams.slice(0, limitCount);
+
+    console.log('✅ Retrieved', teams.length, 'top teams');
+    return teams;
+
+  } catch (error) {
+    console.error('❌ Error reading top teams:', error);
+    // Return empty array instead of throwing to prevent UI errors
+    return [];
+  }
+}
+
+/**
+ * CALCULATE LEADERBOARD FROM SCOUTING
+ * ------------------------------------
+ * Fallback function to calculate team stats from raw scouting data
+ * when the teams collection is empty.
+ */
+async function calculateLeaderboardFromScouting() {
+  const scoutingRef = collection(db, 'scouting');
+  const snapshot = await getDocs(scoutingRef);
+
+  const teamStats = {};
+
+  snapshot.forEach((docSnap) => {
+    const data = docSnap.data();
+    const teamNum = String(data.teamNumber);
+
+    if (!teamNum) return;
+
+    // Calculate scores
+    const autoSpeaker = Number(data.autoSpeaker) || 0;
+    const autoAmp = Number(data.autoAmp) || 0;
+    const auto = autoSpeaker * 5 + autoAmp * 2;
+
+    const teleopSpeaker = Number(data.teleopSpeaker) || 0;
+    const teleopAmp = Number(data.teleopAmp) || 0;
+    const amplifiedScored = Number(data.amplifiedScored) || 0;
+    const teleop = teleopSpeaker * 2 + teleopAmp + amplifiedScored * 5;
+
+    const total = auto + teleop;
+
+    // Aggregate stats
+    if (!teamStats[teamNum]) {
+      teamStats[teamNum] = {
+        teamNumber: Number(teamNum),
+        totalAuto: 0,
+        totalTeleop: 0,
+        totalPoints: 0,
+        maxScore: 0,
+        matchesPlayed: 0
+      };
+    }
+
+    teamStats[teamNum].totalAuto += auto;
+    teamStats[teamNum].totalTeleop += teleop;
+    teamStats[teamNum].totalPoints += total;
+    teamStats[teamNum].matchesPlayed++;
+    if (total > teamStats[teamNum].maxScore) {
+      teamStats[teamNum].maxScore = total;
+    }
+  });
+
+  // Convert to array with averages
+  return Object.values(teamStats).map(team => ({
+    teamNumber: team.teamNumber,
+    avgAuto: team.matchesPlayed > 0 ? Math.round((team.totalAuto / team.matchesPlayed) * 100) / 100 : 0,
+    avgTeleop: team.matchesPlayed > 0 ? Math.round((team.totalTeleop / team.matchesPlayed) * 100) / 100 : 0,
+    avgTotal: team.matchesPlayed > 0 ? Math.round((team.totalPoints / team.matchesPlayed) * 100) / 100 : 0,
+    maxScore: team.maxScore,
+    matchesPlayed: team.matchesPlayed
+  }));
+}
+
+
+/**
+ * SEARCH TEAMS
+ * ------------
+ * Searches for teams by team number (supports partial matching).
+ * Returns team stats for matching teams.
+ *
+ * HOW PARTIAL MATCHING WORKS:
+ * - Firestore doesn't support LIKE queries natively
+ * - For small datasets, we fetch all teams and filter client-side
+ * - For exact matches, we query directly by document ID
+ *
+ * @param {string|number} searchQuery - The team number to search for
+ * @returns {Promise<Array>} - Array of matching team stats
+ *
+ * @example
+ * const results = await searchTeams('125');
+ * // Returns teams: 125, 1250, 1251, 2125, etc.
+ */
+async function searchTeams(searchQuery) {
+  try {
+    const queryStr = String(searchQuery).trim();
+    console.log('🔍 Searching teams for:', queryStr);
+
+    if (!queryStr) {
+      console.log('⚠️ Empty search query');
+      return [];
+    }
+
+    // First, try to search in the teams collection (aggregated stats)
+    const teamsRef = collection(db, 'teams');
+    const teamsSnapshot = await getDocs(teamsRef);
+
+    const results = [];
+    const foundTeamNumbers = new Set();
+
+    teamsSnapshot.forEach((docSnap) => {
+      const teamNum = String(docSnap.id);
+      // Partial match: team number contains the search query
+      if (teamNum.includes(queryStr)) {
+        results.push({ id: docSnap.id, ...docSnap.data() });
+        foundTeamNumbers.add(teamNum);
+      }
+    });
+
+    // If no results in teams collection, search scouting data directly
+    if (results.length === 0) {
+      console.log('🔍 No team stats found, searching scouting data...');
+      const scoutingRef = collection(db, 'scouting');
+      const scoutingSnapshot = await getDocs(scoutingRef);
+
+      // Aggregate stats for matching teams
+      const teamStats = {};
+
+      scoutingSnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const teamNum = String(data.teamNumber);
+
+        // Partial match and not already found in teams collection
+        if (teamNum.includes(queryStr) && !foundTeamNumbers.has(teamNum)) {
+          // Calculate scores
+          const autoScore = (Number(data.autoSpeaker) || 0) * 5 + (Number(data.autoAmp) || 0) * 2;
+          const teleopScore = (Number(data.teleopSpeaker) || 0) * 2 + (Number(data.teleopAmp) || 0) + (Number(data.amplifiedScored) || 0) * 5;
+          const total = autoScore + teleopScore;
+
+          if (!teamStats[teamNum]) {
+            teamStats[teamNum] = { totalAuto: 0, totalTeleop: 0, totalPoints: 0, maxScore: 0, matchesPlayed: 0 };
+          }
+          teamStats[teamNum].totalAuto += autoScore;
+          teamStats[teamNum].totalTeleop += teleopScore;
+          teamStats[teamNum].totalPoints += total;
+          teamStats[teamNum].matchesPlayed++;
+          if (total > teamStats[teamNum].maxScore) teamStats[teamNum].maxScore = total;
+        }
+      });
+
+      // Convert to results array with calculated averages
+      for (const [teamNum, stats] of Object.entries(teamStats)) {
+        results.push({
+          id: teamNum,
+          teamNumber: parseInt(teamNum),
+          avgAuto: stats.matchesPlayed > 0 ? stats.totalAuto / stats.matchesPlayed : 0,
+          avgTeleop: stats.matchesPlayed > 0 ? stats.totalTeleop / stats.matchesPlayed : 0,
+          avgTotal: stats.matchesPlayed > 0 ? stats.totalPoints / stats.matchesPlayed : 0,
+          maxScore: stats.maxScore,
+          matchesPlayed: stats.matchesPlayed
+        });
+        foundTeamNumbers.add(teamNum);
+      }
+    }
+
+    // Sort by best match (exact match first, then by team number)
+    results.sort((a, b) => {
+      const aExact = String(a.teamNumber) === queryStr;
+      const bExact = String(b.teamNumber) === queryStr;
+      if (aExact && !bExact) return -1;
+      if (!aExact && bExact) return 1;
+      return Number(a.teamNumber) - Number(b.teamNumber);
+    });
+
+    console.log('✅ Found', results.length, 'matching teams');
+    return results;
+
+  } catch (error) {
+    console.error('❌ Error searching teams:', error);
+    throw error;
+  }
+}
+
+
+/**
+ * GET TEAM STATS
+ * --------------
+ * Gets the aggregated statistics for a single team.
+ *
+ * @param {number|string} teamNumber - The FRC team number
+ * @returns {Promise<Object|null>} - Team stats or null if not found
+ */
+async function getTeamStats(teamNumber) {
+  try {
+    console.log('📊 Getting stats for team', teamNumber);
+
+    const teamDocRef = doc(db, 'teams', String(teamNumber));
+    const docSnap = await getDoc(teamDocRef);
+
+    if (docSnap.exists()) {
+      console.log('✅ Found stats for team', teamNumber);
+      return { id: docSnap.id, ...docSnap.data() };
+    } else {
+      console.log('⚠️ No stats found for team', teamNumber);
+      return null;
+    }
+
+  } catch (error) {
+    console.error('❌ Error getting team stats:', error);
+    throw error;
+  }
+}
+
+
 // Aliases for required function names
 const createScoutingEntry = saveScoutingData;
 const updateScoutingEntry = updateScoutingData;
 const deleteScoutingEntry = deleteScoutingData;
+
+
+// =============================================================================
+// QUESTION MANAGEMENT
+// =============================================================================
+//
+// These functions allow admins to manage scouting form questions.
+// Questions are stored in Firestore in a 'settings' collection.
+//
+// =============================================================================
+
+/**
+ * GET SCOUTING QUESTIONS
+ * ----------------------
+ * Retrieves the custom scouting questions from Firestore.
+ *
+ * @returns {Promise<Array>} Array of question objects
+ */
+async function getScoutingQuestions() {
+  try {
+    console.log('📋 Loading scouting questions...');
+    const settingsRef = doc(db, 'settings', 'scoutingQuestions');
+    const docSnap = await getDoc(settingsRef);
+
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      console.log('✅ Loaded', data.questions?.length || 0, 'questions');
+      return data.questions || [];
+    } else {
+      console.log('⚠️ No custom questions found, using defaults');
+      return [];
+    }
+
+  } catch (error) {
+    console.error('❌ Error loading questions:', error);
+    throw error;
+  }
+}
+
+
+/**
+ * SAVE SCOUTING QUESTIONS
+ * -----------------------
+ * Saves the scouting questions to Firestore.
+ *
+ * @param {Array} questions - Array of question objects
+ * @returns {Promise<void>}
+ */
+async function saveScoutingQuestions(questions) {
+  try {
+    console.log('💾 Saving scouting questions...');
+    const settingsRef = doc(db, 'settings', 'scoutingQuestions');
+    await setDoc(settingsRef, {
+      questions: questions,
+      updatedAt: serverTimestamp()
+    });
+    console.log('✅ Questions saved successfully');
+
+  } catch (error) {
+    console.error('❌ Error saving questions:', error);
+    throw error;
+  }
+}
 
 
 // =============================================================================
@@ -446,6 +913,18 @@ export {
   readRecentScouting,
   updateScoutingEntry,
   deleteScoutingEntry,
+
+  // Team Stats Engine
+  recalculateTeamStats,  // Call after saving scouting data
+  getTeamStats,          // Get stats for a single team
+
+  // Leaderboard & Search
+  readTopTeams,          // Get top N teams by average score
+  searchTeams,           // Search teams by number
+
+  // Question Management
+  getScoutingQuestions,  // Get custom scouting questions
+  saveScoutingQuestions, // Save custom scouting questions
 
   // Diagnostics
   runDiagnostics

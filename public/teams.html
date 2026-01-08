@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<!--
+================================================================================
+TEAMS.HTML - Teams, Leaderboard & Dashboard
+================================================================================
+
+WHAT IS THIS PAGE?
+The main data page combining:
+- Statistics cards (matches, teams, averages)
+- Scoring distribution chart
+- Team performance chart
+- Team search functionality
+- Leaderboard rankings
+- Recent scouting entries
+- Team detail modal
+
+================================================================================
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teams & Dashboard - Pinkscout</title>
+  <link rel="stylesheet" href="css/style.css">
+  <!-- Chart.js for data visualization -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+  <div class="app-container">
+
+    <!-- SIDEBAR NAVIGATION -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h2>🤖 Pinkscout</h2>
+        <span>FRC Scouting App</span>
+      </div>
+      <nav class="sidebar-nav">
+        <ul>
+          <li><a href="index.html">🏠 Home</a></li>
+          <li><a href="newscounting.html">📝 Scouting</a></li>
+          <li><a href="teams.html" class="active">🏆 Teams</a></li>
+          <li><a href="admin.html">⚙️ Admin</a></li>
+        </ul>
+      </nav>
+      <div class="user-info" id="userInfo" style="display: none;">
+        <div class="user-email" id="userEmail"></div>
+        <button class="btn-logout" id="logoutBtn">Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+
+      <header class="page-header">
+        <h1>Teams & Dashboard</h1>
+        <p>View statistics, search teams, and analyze scouting data.</p>
+      </header>
+
+      <!-- STATISTICS CARDS -->
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+          <div class="stat-value" id="totalMatches">0</div>
+          <div class="stat-label">Matches Scouted</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="totalTeams">0</div>
+          <div class="stat-label">Teams Tracked</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="avgScore">0</div>
+          <div class="stat-label">Avg Total Score</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="topTeam">-</div>
+          <div class="stat-label">Top Performer</div>
+        </div>
+      </div>
+
+      <!-- TEAM SEARCH -->
+      <div class="content-card">
+        <h2>🔍 Search Teams</h2>
+        <div class="team-search-container">
+          <input
+            type="text"
+            id="teamSearch"
+            placeholder="Enter team number (e.g., 254, 1678)"
+            autocomplete="off"
+          >
+        </div>
+        <div id="searchResults"></div>
+      </div>
+
+      <!-- LEADERBOARD -->
+      <div class="content-card">
+        <h2>🏆 Leaderboard</h2>
+        <p>Top teams ranked by average total score.</p>
+        <div id="leaderboard">
+          <p class="loading">Loading leaderboard...</p>
+        </div>
+      </div>
+
+      <!-- CHARTS ROW -->
+      <div class="charts-row">
+        <div class="content-card chart-card">
+          <h2>📊 Scoring Distribution</h2>
+          <div class="chart-container">
+            <canvas id="scoringChart"></canvas>
+          </div>
+        </div>
+        <div class="content-card chart-card">
+          <h2>📈 Team Performance</h2>
+          <div class="chart-container">
+            <canvas id="performanceChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- RECENT ENTRIES -->
+      <div class="content-card">
+        <h2>📋 Recent Scouting Entries</h2>
+        <div id="recentEntries">
+          <p class="loading">Loading scouting data...</p>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- TEAM DETAIL MODAL -->
+  <div id="teamModal">
+    <div id="teamModalContent"></div>
+  </div>
+
+  <!-- JAVASCRIPT -->
+  <script type="module" src="js/firebase.js"></script>
+  <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/teams.js"></script>
+
+</body>
+</html>
+

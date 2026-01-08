@@ -55,9 +55,9 @@ All pages include the same sidebar for consistent navigation.
       <nav class="sidebar-nav">
         <ul>
           <li><a href="index.html">🏠 Home</a></li>
-          <li><a href="dashboard.html">📊 Dashboard</a></li>
-          <li><a href="admin.html">⚙️ Admin</a></li>
           <li><a href="newscounting.html">📝 Scouting</a></li>
+          <li><a href="teams.html">🏆 Teams</a></li>
+          <li><a href="admin.html">⚙️ Admin</a></li>
         </ul>
       </nav>
       <!-- User Info - shown when logged in -->
@@ -182,13 +182,8 @@ All pages include the same sidebar for consistent navigation.
      */
     onAuthStateChanged(auth, (user) => {
       if (user) {
-        // User is signed in - show user status
-        document.getElementById('userInfo').style.display = 'block';
-        document.getElementById('userEmail').textContent = user.email;
-        document.getElementById('userStatus').style.display = 'block';
-        document.getElementById('statusText').textContent = 'Signed in as: ' + user.email;
-        // Redirect to dashboard after short delay to show status
-        setTimeout(() => window.location.href = 'dashboard.html', 1000);
+        // User is already signed in - redirect immediately to teams page
+        window.location.href = 'teams.html';
       } else {
         document.getElementById('userInfo').style.display = 'none';
         document.getElementById('userStatus').style.display = 'none';

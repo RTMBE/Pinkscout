@@ -20,10 +20,12 @@ Pinkscout/
     │   ├── firebase.js    # Firebase initialization
     │   ├── app.js         # Shared CRUD functions & diagnostics
     │   ├── dashboard.js   # Dashboard-specific logic
-    │   └── scouting.js    # Scouting form handling
+    │   ├── scouting.js    # Scouting form handling
+    │   └── teams.js       # Team search & leaderboard
     ├── index.html         # Home page
     ├── login.html         # Sign in / Sign up page
     ├── dashboard.html     # Data visualization & charts
+    ├── teams.html         # Team search & leaderboard
     ├── admin.html         # Admin controls & diagnostics
     └── newscounting.html  # Match scouting form
 ```
@@ -123,8 +125,9 @@ Your app will be live at: `https://your-project-id.web.app`
 |------|-----|-------------|
 | Home | `index.html` | Welcome page with links to all sections |
 | Login | `login.html` | Sign in or create an account |
-| Dashboard | `dashboard.html` | View scouting data and charts |
 | Scouting | `newscounting.html` | Enter match scouting data |
+| Dashboard | `dashboard.html` | View scouting data and charts |
+| Teams | `teams.html` | Search teams and view leaderboard |
 | Admin | `admin.html` | Run diagnostics, manage settings |
 
 ---

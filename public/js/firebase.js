@@ -55,7 +55,37 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
 
 // Firestore database - for storing and retrieving scouting data
-import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+// We import many Firestore functions for our scouting operations:
+// - getFirestore: Get database reference
+// - collection: Reference a collection (like a folder)
+// - addDoc: Add a new document with auto-generated ID
+// - getDocs: Get multiple documents from a query
+// - doc: Reference a specific document by ID
+// - getDoc: Get a single document
+// - setDoc: Create or overwrite a document
+// - updateDoc: Update specific fields in a document
+// - deleteDoc: Delete a document
+// - query: Create a query with conditions
+// - where: Filter documents (where field == value)
+// - orderBy: Sort results (orderBy('field', 'desc'))
+// - limit: Limit number of results
+// - serverTimestamp: Get server's current time
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
+  limit,
+  serverTimestamp
+} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 // Firebase Authentication - for user login/signup
 // Note: We rename 'signOut' to 'firebaseSignOut' to avoid naming conflicts
@@ -83,12 +113,12 @@ import {
 // =============================================================================
 
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyCqUoIrwQdBFlaF0P9NfTRN7pVfji5p3-M",
+  authDomain: "pinkscout-470d1.firebaseapp.com",
+  projectId: "pinkscout-470d1",
+  storageBucket: "pinkscout-470d1.firebasestorage.app",
+  messagingSenderId: "386591970958",
+  appId: "1:386591970958:web:a7a9483684c3418cea1bdf"
 };
 
 
@@ -273,11 +303,30 @@ function setupAuthListener(onUserSignedIn, onUserSignedOut) {
 // =============================================================================
 
 export {
-  db,
-  auth,
-  app,
+  // Firebase instances
+  db,           // Firestore database reference
+  auth,         // Authentication reference
+  app,          // Firebase app instance
+
+  // Auth helper functions
   signOut,
   getCurrentUser,
   requireAuth,
-  setupAuthListener
+  setupAuthListener,
+
+  // Firestore functions (re-exported for convenience)
+  // These can be imported directly from firebase.js instead of the SDK
+  collection,   // Reference a collection: collection(db, 'scouting')
+  addDoc,       // Add document: addDoc(collection(db, 'scouting'), data)
+  getDocs,      // Get documents: getDocs(query)
+  doc,          // Reference document: doc(db, 'teams', '1234')
+  getDoc,       // Get single doc: getDoc(docRef)
+  setDoc,       // Set/overwrite: setDoc(docRef, data)
+  updateDoc,    // Update fields: updateDoc(docRef, { field: value })
+  deleteDoc,    // Delete: deleteDoc(docRef)
+  query,        // Create query: query(collection, where(...), orderBy(...))
+  where,        // Filter: where('teamNumber', '==', 1234)
+  orderBy,      // Sort: orderBy('totalPoints', 'desc')
+  limit,        // Limit results: limit(10)
+  serverTimestamp  // Server time: serverTimestamp()
 };

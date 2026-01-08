@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "pinkscout-470d1"
-  }
+  },
+  "targets": {
+    "pinkscout-470d1": {
+      "hosting": {
+        "main": [
+          "pinkscout-470d1"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

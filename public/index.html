@@ -105,9 +105,9 @@ PAGE LAYOUT:
         <ul>
           <!-- class="active" indicates this is the current page -->
           <li><a href="index.html" class="active">🏠 Home</a></li>
-          <li><a href="dashboard.html">📊 Dashboard</a></li>
-          <li><a href="admin.html">⚙️ Admin</a></li>
           <li><a href="newscounting.html">📝 Scouting</a></li>
+          <li><a href="teams.html">🏆 Teams</a></li>
+          <li><a href="admin.html">⚙️ Admin</a></li>
         </ul>
       </nav>
 
@@ -156,20 +156,19 @@ PAGE LAYOUT:
       <h2 class="mt-20 mb-20">Quick Links</h2>
       <div class="quick-links">
 
-        <!-- Each card is an <a> tag so the whole card is clickable -->
         <a href="newscounting.html" class="quick-link-card">
           <h3>📝 New Scout</h3>
           <p>Start scouting a match</p>
         </a>
 
-        <a href="dashboard.html" class="quick-link-card">
-          <h3>📊 View Data</h3>
-          <p>Analyze team performance</p>
+        <a href="teams.html" class="quick-link-card">
+          <h3>🏆 Teams & Stats</h3>
+          <p>View leaderboard, charts, and data</p>
         </a>
 
         <a href="admin.html" class="quick-link-card">
-          <h3>⚙️ Settings</h3>
-          <p>Configure app settings</p>
+          <h3>⚙️ Admin</h3>
+          <p>Diagnostics and settings</p>
         </a>
 
       </div>
@@ -199,7 +198,15 @@ PAGE LAYOUT:
   <!-- Page-specific JavaScript -->
   <script type="module">
     // Import functions from our firebase.js module
-    import { setupAuthListener, signOut } from './js/firebase.js';
+    import { requireAuth, setupAuthListener, signOut } from './js/firebase.js';
+
+    /*
+     * REQUIRE AUTHENTICATION
+     * ----------------------
+     * Users must be logged in to access the main page.
+     * If not logged in, they will be redirected to the login page.
+     */
+    requireAuth();
 
     /*
      * SETUP AUTH STATE LISTENER
@@ -214,13 +221,6 @@ PAGE LAYOUT:
         document.getElementById('userInfo').style.display = 'block';
         // Display the user's email
         document.getElementById('userEmail').textContent = user.email;
-      },
-
-      // Callback when user is signed out
-      // Note: We don't redirect from the home page - it's accessible to everyone
-      () => {
-        // Hide the user info section
-        document.getElementById('userInfo').style.display = 'none';
       }
     );
 

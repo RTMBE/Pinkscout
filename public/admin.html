@@ -28,6 +28,16 @@ then implement the functionality later.
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin - Pinkscout</title>
   <link rel="stylesheet" href="css/style.css">
+  <!-- Chart.js for analytics -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* Blur effect when password modal is shown */
+    .app-container.blurred {
+      filter: blur(8px);
+      pointer-events: none;
+      user-select: none;
+    }
+  </style>
 </head>
 
 <body>
@@ -52,6 +62,8 @@ then implement the functionality later.
           <li><a href="index.html">🏠 Home</a></li>
           <li><a href="newscounting.html">📝 Scouting</a></li>
           <li><a href="teams.html">🏆 Teams</a></li>
+          <li><a href="events.html">📅 Events</a></li>
+          <li><a href="scouterProfile.html">👤 Profile</a></li>
           <li><a href="admin.html" class="active">⚙️ Admin</a></li>
         </ul>
       </nav>
@@ -195,6 +207,89 @@ then implement the functionality later.
         </button>
       </div>
 
+      <!--
+      ======================================================================
+      ANALYTICS SECTION
+      ======================================================================
+      Charts and data visualization from the analytics page.
+      ======================================================================
+      -->
+      <div class="content-card">
+        <h2>📈 Analytics</h2>
+        <p>View scouting data charts and statistics.</p>
+        <button id="refresh-analytics-btn" class="btn btn-primary" style="margin-top: 15px;">🔄 Refresh Analytics</button>
+
+        <!-- Summary Stats -->
+        <div class="stats-grid" style="margin-top: 20px;">
+          <div class="stat-card">
+            <span class="stat-value" id="total-entries">-</span>
+            <span class="stat-label">Scouting Entries</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value" id="total-teams">-</span>
+            <span class="stat-label">Teams Scouted</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value" id="avg-score">-</span>
+            <span class="stat-label">Avg Score</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value" id="max-score">-</span>
+            <span class="stat-label">Max Score</span>
+          </div>
+        </div>
+
+        <!-- Charts Row 1 -->
+        <div class="charts-row" style="margin-top: 20px;">
+          <div class="chart-card" style="flex: 1; min-width: 300px; padding: 15px; background: #f9f9f9; border-radius: 8px; margin-right: 10px;">
+            <h3>Score Distribution</h3>
+            <canvas id="score-distribution-chart"></canvas>
+          </div>
+          <div class="chart-card" style="flex: 1; min-width: 300px; padding: 15px; background: #f9f9f9; border-radius: 8px;">
+            <h3>Auto vs Teleop Points</h3>
+            <canvas id="auto-teleop-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- Charts Row 2 -->
+        <div class="charts-row" style="margin-top: 20px;">
+          <div class="chart-card" style="flex: 1; min-width: 300px; padding: 15px; background: #f9f9f9; border-radius: 8px; margin-right: 10px;">
+            <h3>Top Teams by Average Score</h3>
+            <canvas id="top-teams-chart"></canvas>
+          </div>
+          <div class="chart-card" style="flex: 1; min-width: 300px; padding: 15px; background: #f9f9f9; border-radius: 8px;">
+            <h3>Performance Over Time</h3>
+            <canvas id="performance-trend-chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- External API Comparison -->
+      <div class="content-card">
+        <h2>🌐 External API Data</h2>
+        <p>Compare scouting data with external sources.</p>
+
+        <div class="api-status" style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+          <span class="api-badge" id="tba-status" style="padding: 5px 12px; border-radius: 20px; background: #666; color: white;">TBA: --</span>
+          <span class="api-badge" id="statbotics-status" style="padding: 5px 12px; border-radius: 20px; background: #666; color: white;">Statbotics: --</span>
+          <span class="api-badge" id="nexus-status" style="padding: 5px 12px; border-radius: 20px; background: #666; color: white;">Nexus: --</span>
+        </div>
+
+        <div style="margin-top: 20px;">
+          <h3>Compare Team Data</h3>
+          <div style="display: flex; gap: 10px; margin-top: 10px;">
+            <input type="number" id="compare-team" placeholder="Enter team #" style="padding: 10px; border: 2px solid #ddd; border-radius: 5px; width: 150px;">
+            <button id="compare-btn" class="btn btn-primary">Compare</button>
+          </div>
+        </div>
+
+        <div id="comparison-results" style="margin-top: 20px;">
+          <div class="empty-state" style="padding: 20px; text-align: center; color: #666; background: #f5f5f5; border-radius: 8px;">
+            Enter a team number to compare scouting data with Statbotics
+          </div>
+        </div>
+      </div>
+
     </main>
   </div>
 
@@ -225,53 +320,191 @@ then implement the functionality later.
   <script type="module" src="js/app.js"></script>
 
   <script type="module">
-    import { requireAuth, signOut, setupAuthListener } from './js/firebase.js';
-    import { runDiagnostics, getScoutingQuestions, saveScoutingQuestions } from './js/app.js';
+    import { requireAuth, signOut, setupAuthListener, db } from './js/firebase.js';
+    import { runDiagnostics, getScoutingQuestions, saveScoutingQuestions, readRecentScouting } from './js/app.js';
+    import { fetchTBATeam, fetchStatboticsTeam, fetchNexusTeam } from './js/externalData.js';
+    import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-    // Secret admin password
+    // ===========================================================================
+    // ADMIN ACCESS CONTROL
+    // ===========================================================================
+    //
+    // This page uses TWO levels of access control:
+    // 1. EMAIL WHITELIST - Only certain emails can access the admin page
+    // 2. PASSWORD VERIFICATION - Additional password required for access
+    //
+    // ALLOWED EMAILS:
+    // - rtmbe20@gmail.com (default, always allowed)
+    // - Additional emails stored in Firestore: settings/admins.emails[]
+    //
+    // HOW TO ADD NEW ADMINS TO FIRESTORE:
+    // 1. Go to Firebase Console > Firestore Database
+    // 2. Navigate to 'settings' collection
+    // 3. Find or create the 'admins' document
+    // 4. Add the field 'emails' as an array type
+    // 5. Add authorized email addresses to the array
+    //
+    // Example Firestore structure:
+    // settings/
+    //   admins/
+    //     emails: ["rtmbe20@gmail.com", "admin2@example.com"]
+    //
+    // ===========================================================================
+
+    // Default admin email (always allowed)
+    const DEFAULT_ADMIN_EMAIL = 'rtmbe20@gmail.com';
+
+    // Secret admin password (additional security layer)
     const ADMIN_PASSWORD = '1551APinkout';
 
-    /*
-     * REQUIRE AUTHENTICATION
-     * ----------------------
-     * This function checks if the user is logged in.
-     * If not, it redirects them to the login page.
-     * Admin pages should always require authentication.
-     */
-    requireAuth();
+    // Chart instances for cleanup
+    let scoreDistChart = null;
+    let autoTeleopChart = null;
+    let topTeamsChart = null;
+    let trendChart = null;
 
-    /*
-     * ADMIN PASSWORD CHECK
-     * --------------------
-     * After login, check if admin password has been entered this session.
+    // DOM elements
+    const appContainer = document.querySelector('.app-container');
+    const passwordModal = document.getElementById('adminPasswordModal');
+    const passwordInput = document.getElementById('adminPassword');
+    const passwordSubmit = document.getElementById('adminPasswordSubmit');
+    const passwordCancel = document.getElementById('adminPasswordCancel');
+    const passwordError = document.getElementById('adminPasswordError');
+
+    /**
+     * Check if a user email is authorized for admin access
+     *
+     * @param {string} email - The user's email address
+     * @returns {Promise<boolean>} - True if authorized, false otherwise
      */
-    const adminVerified = sessionStorage.getItem('adminVerified');
-    if (adminVerified === 'true') {
-      document.getElementById('adminPasswordModal').style.display = 'none';
+    async function isEmailAuthorized(email) {
+      if (!email) return false;
+
+      // Always allow default admin email
+      if (email.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase()) {
+        return true;
+      }
+
+      try {
+        // Check Firestore for additional authorized emails
+        const adminsDoc = await getDoc(doc(db, 'settings', 'admins'));
+
+        if (adminsDoc.exists()) {
+          const data = adminsDoc.data();
+          const authorizedEmails = data.emails || [];
+
+          // Check if user's email is in the authorized list
+          return authorizedEmails.some(
+            adminEmail => adminEmail.toLowerCase() === email.toLowerCase()
+          );
+        }
+      } catch (error) {
+        console.error('Error checking admin authorization:', error);
+        // On error, only allow default admin
+      }
+
+      return false;
     }
 
+    /**
+     * Show unauthorized access message
+     */
+    function showUnauthorizedAccess() {
+      // Hide password modal
+      passwordModal.style.display = 'none';
+
+      // Replace content with unauthorized message
+      document.querySelector('.main-content').innerHTML = `
+        <div class="unauthorized-container">
+          <h1>🚫 Access Denied</h1>
+          <p>You are not authorized to access the Admin page.</p>
+          <p>Only approved administrators can view this content.</p>
+          <p style="margin-top: 20px; color: #666; font-size: 0.9rem;">
+            If you believe you should have access, please contact the team lead.
+          </p>
+          <div style="margin-top: 30px;">
+            <a href="teams.html" class="btn btn-primary">Go to Teams</a>
+            <a href="index.html" class="btn" style="margin-left: 10px;">Go Home</a>
+          </div>
+        </div>
+      `;
+
+      appContainer.classList.remove('blurred');
+    }
+
+    /*
+     * INITIALIZE ADMIN PAGE
+     * ---------------------
+     * 1. Wait for auth
+     * 2. Check if email is authorized
+     * 3. If authorized, show password modal (if needed)
+     * 4. If not authorized, show access denied message
+     */
+    async function initAdminPage() {
+      // First check authentication
+      const user = await requireAuth();
+
+      if (!user) {
+        // User not logged in, requireAuth will redirect
+        return;
+      }
+
+      // Check if user's email is authorized for admin access
+      const isAuthorized = await isEmailAuthorized(user.email);
+
+      if (!isAuthorized) {
+        console.log('❌ User not authorized for admin access:', user.email);
+        showUnauthorizedAccess();
+        return;
+      }
+
+      console.log('✅ User authorized for admin access:', user.email);
+
+      // Check if admin password was already entered this session
+      const adminVerified = sessionStorage.getItem('adminVerified');
+
+      if (adminVerified === 'true') {
+        passwordModal.style.display = 'none';
+        appContainer.classList.remove('blurred');
+        // Load analytics
+        loadAnalytics();
+      } else {
+        // Show password modal
+        passwordModal.style.display = 'flex';
+        appContainer.classList.add('blurred');
+        passwordInput.focus();
+      }
+    }
+
+    // Start initialization
+    initAdminPage();
+
     // Handle password submission
-    document.getElementById('adminPasswordSubmit').addEventListener('click', () => {
-      const password = document.getElementById('adminPassword').value;
+    passwordSubmit.addEventListener('click', () => {
+      const password = passwordInput.value;
       if (password === ADMIN_PASSWORD) {
         sessionStorage.setItem('adminVerified', 'true');
-        document.getElementById('adminPasswordModal').style.display = 'none';
+        passwordModal.style.display = 'none';
+        appContainer.classList.remove('blurred');
+        // Load analytics after password verified
+        loadAnalytics();
       } else {
-        document.getElementById('adminPasswordError').style.display = 'block';
-        document.getElementById('adminPassword').value = '';
+        passwordError.style.display = 'block';
+        passwordInput.value = '';
+        passwordInput.focus();
       }
     });
 
     // Handle Enter key in password field
-    document.getElementById('adminPassword').addEventListener('keypress', (e) => {
+    passwordInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
-        document.getElementById('adminPasswordSubmit').click();
+        passwordSubmit.click();
       }
     });
 
-    // Handle cancel - go back to dashboard
-    document.getElementById('adminPasswordCancel').addEventListener('click', () => {
-      window.location.href = 'dashboard.html';
+    // Handle cancel - go back to previous page or home
+    passwordCancel.addEventListener('click', () => {
+      window.history.back();
     });
 
     /*
@@ -451,8 +684,272 @@ then implement the functionality later.
       if (sessionStorage.getItem('adminVerified') === 'true') {
         clearInterval(checkAndLoad);
         loadQuestions();
+        loadAnalytics();
       }
     }, 500);
+
+    /*
+     * ========================================================================
+     * ANALYTICS FUNCTIONS
+     * ========================================================================
+     */
+
+    // Refresh analytics button
+    document.getElementById('refresh-analytics-btn').addEventListener('click', loadAnalytics);
+
+    // Compare team button
+    document.getElementById('compare-btn').addEventListener('click', compareTeam);
+
+    // Enter key for compare input
+    document.getElementById('compare-team').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') compareTeam();
+    });
+
+    async function loadAnalytics() {
+      try {
+        const entries = await readRecentScouting(500);
+        if (!entries || entries.length === 0) {
+          document.getElementById('total-entries').textContent = '0';
+          document.getElementById('total-teams').textContent = '0';
+          document.getElementById('avg-score').textContent = '-';
+          document.getElementById('max-score').textContent = '-';
+          return;
+        }
+
+        // Calculate stats
+        const teams = new Set(entries.map(e => e.teamNumber));
+        const scores = entries.map(e => (e.autoPoints || 0) + (e.teleopPoints || 0) + (e.endgamePoints || 0));
+        const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+        const maxScore = Math.max(...scores);
+
+        document.getElementById('total-entries').textContent = entries.length;
+        document.getElementById('total-teams').textContent = teams.size;
+        document.getElementById('avg-score').textContent = avgScore.toFixed(1);
+        document.getElementById('max-score').textContent = maxScore;
+
+        // Build charts
+        buildScoreDistributionChart(scores);
+        buildAutoTeleopChart(entries);
+        buildTopTeamsChart(entries);
+        buildTrendChart(entries);
+
+        // Check API status
+        checkAPIStatus();
+      } catch (error) {
+        console.error('Error loading analytics:', error);
+      }
+    }
+
+    function buildScoreDistributionChart(scores) {
+      const ctx = document.getElementById('score-distribution-chart');
+      if (!ctx) return;
+
+      // Destroy old chart
+      if (scoreDistChart) scoreDistChart.destroy();
+
+      // Create bins
+      const bins = [0, 20, 40, 60, 80, 100, 120, 140, 160];
+      const counts = new Array(bins.length).fill(0);
+      scores.forEach(score => {
+        for (let i = bins.length - 1; i >= 0; i--) {
+          if (score >= bins[i]) {
+            counts[i]++;
+            break;
+          }
+        }
+      });
+
+      scoreDistChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: bins.map((b, i) => i < bins.length - 1 ? `${b}-${bins[i+1]-1}` : `${b}+`),
+          datasets: [{
+            label: 'Matches',
+            data: counts,
+            backgroundColor: '#e91e63'
+          }]
+        },
+        options: { responsive: true, plugins: { legend: { display: false } } }
+      });
+    }
+
+    function buildAutoTeleopChart(entries) {
+      const ctx = document.getElementById('auto-teleop-chart');
+      if (!ctx) return;
+
+      if (autoTeleopChart) autoTeleopChart.destroy();
+
+      const autoTotal = entries.reduce((sum, e) => sum + (e.autoPoints || 0), 0);
+      const teleopTotal = entries.reduce((sum, e) => sum + (e.teleopPoints || 0), 0);
+      const endgameTotal = entries.reduce((sum, e) => sum + (e.endgamePoints || 0), 0);
+
+      autoTeleopChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Auto', 'Teleop', 'Endgame'],
+          datasets: [{
+            data: [autoTotal, teleopTotal, endgameTotal],
+            backgroundColor: ['#2196f3', '#4caf50', '#ff9800']
+          }]
+        },
+        options: { responsive: true }
+      });
+    }
+
+    function buildTopTeamsChart(entries) {
+      const ctx = document.getElementById('top-teams-chart');
+      if (!ctx) return;
+
+      if (topTeamsChart) topTeamsChart.destroy();
+
+      // Calculate average by team
+      const teamStats = {};
+      entries.forEach(e => {
+        const team = e.teamNumber;
+        const score = (e.autoPoints || 0) + (e.teleopPoints || 0) + (e.endgamePoints || 0);
+        if (!teamStats[team]) teamStats[team] = { total: 0, count: 0 };
+        teamStats[team].total += score;
+        teamStats[team].count++;
+      });
+
+      const sorted = Object.entries(teamStats)
+        .map(([team, stats]) => ({ team, avg: stats.total / stats.count }))
+        .sort((a, b) => b.avg - a.avg)
+        .slice(0, 10);
+
+      topTeamsChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: sorted.map(t => t.team),
+          datasets: [{
+            label: 'Avg Score',
+            data: sorted.map(t => t.avg.toFixed(1)),
+            backgroundColor: '#9c27b0'
+          }]
+        },
+        options: { responsive: true, indexAxis: 'y' }
+      });
+    }
+
+    function buildTrendChart(entries) {
+      const ctx = document.getElementById('performance-trend-chart');
+      if (!ctx) return;
+
+      if (trendChart) trendChart.destroy();
+
+      // Group by match number
+      const matchData = {};
+      entries.forEach(e => {
+        const match = e.matchNumber || 0;
+        const score = (e.autoPoints || 0) + (e.teleopPoints || 0) + (e.endgamePoints || 0);
+        if (!matchData[match]) matchData[match] = [];
+        matchData[match].push(score);
+      });
+
+      const sorted = Object.entries(matchData)
+        .map(([match, scores]) => ({ match: parseInt(match), avg: scores.reduce((a,b) => a+b, 0) / scores.length }))
+        .sort((a, b) => a.match - b.match);
+
+      trendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: sorted.map(m => `Match ${m.match}`),
+          datasets: [{
+            label: 'Avg Score',
+            data: sorted.map(m => m.avg.toFixed(1)),
+            borderColor: '#00bcd4',
+            fill: false,
+            tension: 0.3
+          }]
+        },
+        options: { responsive: true }
+      });
+    }
+
+    async function checkAPIStatus() {
+      // TBA status
+      try {
+        await fetchTBATeam(1551);
+        document.getElementById('tba-status').textContent = 'TBA: ✓';
+        document.getElementById('tba-status').style.background = '#4caf50';
+      } catch {
+        document.getElementById('tba-status').textContent = 'TBA: ✗';
+        document.getElementById('tba-status').style.background = '#f44336';
+      }
+
+      // Statbotics status
+      try {
+        await fetchStatboticsTeam(1551);
+        document.getElementById('statbotics-status').textContent = 'Statbotics: ✓';
+        document.getElementById('statbotics-status').style.background = '#4caf50';
+      } catch {
+        document.getElementById('statbotics-status').textContent = 'Statbotics: ✗';
+        document.getElementById('statbotics-status').style.background = '#f44336';
+      }
+
+      // Nexus status
+      try {
+        await fetchNexusTeam(1551);
+        document.getElementById('nexus-status').textContent = 'Nexus: ✓';
+        document.getElementById('nexus-status').style.background = '#4caf50';
+      } catch {
+        document.getElementById('nexus-status').textContent = 'Nexus: ✗';
+        document.getElementById('nexus-status').style.background = '#f44336';
+      }
+    }
+
+    async function compareTeam() {
+      const teamNum = document.getElementById('compare-team').value;
+      const resultsDiv = document.getElementById('comparison-results');
+
+      if (!teamNum) {
+        resultsDiv.innerHTML = '<div class="empty-state" style="padding: 20px; text-align: center; color: #666; background: #f5f5f5; border-radius: 8px;">Please enter a team number</div>';
+        return;
+      }
+
+      resultsDiv.innerHTML = '<div style="padding: 20px; text-align: center;">Loading...</div>';
+
+      try {
+        // Get scouting data
+        const entries = await readRecentScouting(500);
+        const teamEntries = entries.filter(e => e.teamNumber == teamNum);
+
+        let scoutingAvg = 0;
+        if (teamEntries.length > 0) {
+          const scores = teamEntries.map(e => (e.autoPoints || 0) + (e.teleopPoints || 0) + (e.endgamePoints || 0));
+          scoutingAvg = scores.reduce((a, b) => a + b, 0) / scores.length;
+        }
+
+        // Get external data
+        let statboticsData = null;
+        try {
+          statboticsData = await fetchStatboticsTeam(teamNum);
+        } catch (e) {
+          console.log('Statbotics fetch failed:', e);
+        }
+
+        // Build comparison HTML
+        let html = `
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 10px;">
+            <div style="padding: 15px; background: #e3f2fd; border-radius: 8px; text-align: center;">
+              <h4 style="margin: 0 0 10px;">Your Scouting</h4>
+              <p style="font-size: 24px; font-weight: bold; margin: 0;">${teamEntries.length > 0 ? scoutingAvg.toFixed(1) : 'No data'}</p>
+              <p style="color: #666; margin: 5px 0 0;">Avg Score (${teamEntries.length} matches)</p>
+            </div>
+            <div style="padding: 15px; background: #f3e5f5; border-radius: 8px; text-align: center;">
+              <h4 style="margin: 0 0 10px;">Statbotics EPA</h4>
+              <p style="font-size: 24px; font-weight: bold; margin: 0;">${statboticsData?.epa?.total?.toFixed(1) || 'N/A'}</p>
+              <p style="color: #666; margin: 5px 0 0;">Expected Points Added</p>
+            </div>
+          </div>
+        `;
+
+        resultsDiv.innerHTML = html;
+      } catch (error) {
+        console.error('Comparison error:', error);
+        resultsDiv.innerHTML = '<div style="padding: 20px; text-align: center; color: #c62828;">Error loading comparison data</div>';
+      }
+    }
   </script>
 
 </body>

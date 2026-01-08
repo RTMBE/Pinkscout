@@ -15,17 +15,23 @@ Pinkscout/
 │
 └── public/                # All website files (served by Firebase)
     ├── css/
-    │   └── style.css      # Main stylesheet
+    │   └── style.css      # Main stylesheet (1600+ lines)
     ├── js/
-    │   ├── firebase.js    # Firebase initialization
+    │   ├── firebase.js    # Firebase initialization & auth
     │   ├── app.js         # Shared CRUD functions & diagnostics
-    │   ├── dashboard.js   # Dashboard-specific logic
     │   ├── scouting.js    # Scouting form handling
-    │   └── teams.js       # Team search & leaderboard
+    │   ├── teams.js       # Team search & leaderboard
+    │   ├── user.js        # User profile management
+    │   ├── externalData.js # TBA, Statbotics, Nexus API integration
+    │   ├── events.js      # Event schedule & team lists
+    │   ├── analytics.js   # Charts & data visualization
+    │   └── scouterProfile.js # Scouter stats & profile
     ├── index.html         # Home page
     ├── login.html         # Sign in / Sign up page
-    ├── dashboard.html     # Data visualization & charts
     ├── teams.html         # Team search & leaderboard
+    ├── events.html        # Event schedules from TBA
+    ├── analytics.html     # Charts & external data comparison
+    ├── scouterProfile.html # User profile & scouting stats
     ├── admin.html         # Admin controls & diagnostics
     └── newscounting.html  # Match scouting form
 ```
@@ -126,8 +132,10 @@ Your app will be live at: `https://your-project-id.web.app`
 | Home | `index.html` | Welcome page with links to all sections |
 | Login | `login.html` | Sign in or create an account |
 | Scouting | `newscounting.html` | Enter match scouting data |
-| Dashboard | `dashboard.html` | View scouting data and charts |
 | Teams | `teams.html` | Search teams and view leaderboard |
+| Events | `events.html` | View event schedules from The Blue Alliance |
+| Analytics | `analytics.html` | Charts, stats, and external data comparison |
+| Profile | `scouterProfile.html` | Your scouting stats and profile settings |
 | Admin | `admin.html` | Run diagnostics, manage settings |
 
 ---
@@ -142,6 +150,38 @@ The Admin page includes a **Diagnostics** button that checks:
 4. ✅ Authentication is available
 
 Results appear in both the UI and browser console (F12 > Console).
+
+---
+
+## 🌐 External API Integration
+
+Pinkscout integrates with three external FRC data sources:
+
+### The Blue Alliance (TBA)
+- Event schedules and match lists
+- Team information and rankings
+- Requires API key from [thebluealliance.com/account](https://www.thebluealliance.com/account)
+- Set in `externalData.js` as `TBA_API_KEY`
+
+### Statbotics
+- EPA (Expected Points Added) statistics
+- Historical team performance data
+- No API key required
+
+### FRC Nexus
+- Real-time match status during events
+- Requires API key from [frc.nexus](https://frc.nexus)
+- Set in `externalData.js` as `NEXUS_API_KEY`
+
+### Setting Up API Keys
+
+1. Get your TBA API key from your TBA account
+2. Get your Nexus API key from FRC Nexus
+3. Edit `public/js/externalData.js`:
+   ```javascript
+   const TBA_API_KEY = 'your-tba-key-here';
+   const NEXUS_API_KEY = 'your-nexus-key-here';
+   ```
 
 ---
 

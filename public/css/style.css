@@ -1041,6 +1041,85 @@ html, body {
   font-size: 0.9rem;
 }
 
+/* Enhanced team result card for Statbotics integration */
+.team-result-expanded {
+  max-width: 600px;
+}
+
+.team-result-expanded .team-header {
+  margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.team-result-expanded .team-name {
+  font-size: 1rem;
+  color: #333;
+  margin-top: 5px;
+}
+
+.team-result-expanded .team-location {
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.team-section {
+  margin: 15px 0;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.team-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 0.95rem;
+  color: #333;
+}
+
+.team-section.local-data {
+  background: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%);
+}
+
+.team-section.no-local-data {
+  background: #fff3e0;
+  text-align: center;
+}
+
+.team-section.no-local-data a {
+  color: #e91e63;
+  font-weight: 600;
+}
+
+.team-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  gap: 12px;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-item .stat-label {
+  display: block;
+  font-size: 0.75rem;
+  color: #666;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.stat-item .stat-value {
+  display: block;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.team-action {
+  margin-top: 15px;
+  text-align: center;
+}
+
 /*
  * LEADERBOARD TABLE
  * Enhanced table for team rankings.
@@ -1080,6 +1159,35 @@ html, body {
   overflow-y: auto;
   padding: 30px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+/* Blurred background for modals */
+.blurred {
+  filter: blur(5px);
+  pointer-events: none;
+}
+
+/* Admin password modal styling */
+#adminPasswordModal .modal-content input:focus {
+  outline: none;
+  border-color: #e91e63;
+}
+
+#adminPasswordModal .btn {
+  cursor: pointer;
+  border: none;
+  color: white;
+  padding: 12px 20px;
+  font-size: 1rem;
+  border-radius: 5px;
+}
+
+#adminPasswordModal .btn-primary {
+  background: #e91e63;
+}
+
+#adminPasswordModal .btn-primary:hover {
+  background: #c2185b;
 }
 
 .team-detail-header {
@@ -1197,6 +1305,406 @@ html, body {
 
 
 /* =============================================================================
+   12. EVENTS PAGE STYLES
+   ============================================================================= */
+
+.events-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.event-card {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.event-card:hover {
+  border-color: #e91e63;
+  box-shadow: 0 4px 12px rgba(233, 30, 99, 0.15);
+  transform: translateY(-2px);
+}
+
+.event-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.event-card-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: #333;
+}
+
+.event-type {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  background: #e91e63;
+  color: white;
+  border-radius: 12px;
+}
+
+.event-card-body p {
+  margin: 4px 0;
+  font-size: 0.875rem;
+  color: #666;
+}
+
+.event-info {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.event-info p {
+  margin: 0;
+}
+
+/* Tab Navigation */
+.tab-nav {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  border-bottom: 2px solid #e0e0e0;
+  padding-bottom: 8px;
+}
+
+.tab-btn {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #666;
+  border-radius: 4px 4px 0 0;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  background: #f5f5f5;
+}
+
+.tab-btn.active {
+  color: #e91e63;
+  border-bottom: 2px solid #e91e63;
+  margin-bottom: -10px;
+}
+
+.tab-content {
+  min-height: 200px;
+}
+
+/* Match Schedule */
+.match-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.match-list h4 {
+  margin: 16px 0 8px;
+  color: #333;
+}
+
+.match-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px;
+  background: #f9f9f9;
+  border-radius: 6px;
+}
+
+.match-number {
+  font-weight: 600;
+  min-width: 80px;
+  color: #333;
+}
+
+.match-alliances {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+}
+
+.alliance {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 4px;
+  flex: 1;
+}
+
+.alliance.red {
+  background: rgba(244, 67, 54, 0.1);
+  border-left: 3px solid #f44336;
+}
+
+.alliance.blue {
+  background: rgba(33, 150, 243, 0.1);
+  border-left: 3px solid #2196f3;
+}
+
+.alliance .teams {
+  font-size: 0.875rem;
+}
+
+.alliance .score {
+  font-weight: 600;
+}
+
+/* Team Grid */
+.team-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.team-card-small {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f5f5f5;
+  border-radius: 4px;
+}
+
+.team-card-small .team-number {
+  font-weight: 600;
+  color: #e91e63;
+}
+
+.team-card-small .team-name {
+  font-size: 0.875rem;
+  color: #666;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Rankings Table */
+.rankings-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rankings-table th,
+.rankings-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.rankings-table th {
+  background: #f5f5f5;
+  font-weight: 600;
+  color: #333;
+}
+
+.rankings-table tr:hover {
+  background: #fce4ec;
+}
+
+
+/* =============================================================================
+   13. ANALYTICS PAGE STYLES
+   ============================================================================= */
+
+.charts-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.chart-card {
+  min-height: 300px;
+}
+
+.chart-card canvas {
+  max-height: 280px;
+}
+
+/* API Status Badges */
+.api-status {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.api-badge {
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.api-badge.online {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.api-badge.offline {
+  background: #ffebee;
+  color: #c62828;
+}
+
+/* Comparison Grid */
+.comparison-controls {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.comparison-card {
+  background: #f9f9f9;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.comparison-card h3 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  color: #333;
+}
+
+.comparison-card p {
+  margin: 8px 0;
+  font-size: 0.875rem;
+}
+
+/* Year Select */
+.year-select {
+  padding: 8px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: white;
+  cursor: pointer;
+}
+
+.year-select:focus {
+  outline: none;
+  border-color: #e91e63;
+}
+
+
+/* =============================================================================
+   14. PROFILE PAGE STYLES
+   ============================================================================= */
+
+.profile-card {
+  text-align: center;
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px;
+}
+
+.profile-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #e91e63, #ad1457);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 600;
+}
+
+.profile-info {
+  text-align: left;
+}
+
+.profile-info h2 {
+  margin: 0 0 4px;
+  color: #333;
+}
+
+.profile-info p {
+  margin: 0 0 8px;
+  color: #666;
+}
+
+.role-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  background: #e91e63;
+  color: white;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.profile-form {
+  max-width: 400px;
+}
+
+.profile-form .form-group {
+  margin-bottom: 16px;
+}
+
+/* Activity List */
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f9f9f9;
+  border-radius: 8px;
+}
+
+.activity-icon {
+  font-size: 1.5rem;
+}
+
+.activity-content {
+  flex: 1;
+}
+
+.activity-content p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.activity-time {
+  font-size: 0.75rem;
+  color: #999;
+}
+
+.activity-score {
+  font-weight: 600;
+  color: #e91e63;
+}
+
+
+/* =============================================================================
    END OF STYLESHEET
    =============================================================================
 
@@ -1215,3 +1723,535 @@ html, body {
    - Grid Guide: https://css-tricks.com/snippets/css/complete-guide-grid/
 
    ============================================================================= */
+
+/* =============================================================================
+   DANGER ZONE & ACCOUNT ACTIONS
+   ============================================================================= */
+
+.danger-zone {
+  border: 2px solid #ffcdd2;
+  background: #ffebee;
+}
+
+.danger-zone h2 {
+  color: #c62828;
+}
+
+.account-actions {
+  display: flex;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.btn-secondary {
+  background: #757575;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.btn-secondary:hover {
+  background: #616161;
+}
+
+.btn-danger {
+  background: #c62828;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.btn-danger:hover {
+  background: #b71c1c;
+}
+
+/* Delete Account Modal */
+#deleteAccountModal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 3000;
+}
+
+#deleteAccountModal .modal-content {
+  background: white;
+  padding: 30px;
+  border-radius: 12px;
+  max-width: 450px;
+  text-align: left;
+}
+
+#deleteAccountModal h2 {
+  color: #c62828;
+  margin-bottom: 15px;
+}
+
+#deleteAccountModal ul {
+  margin: 15px 0;
+  padding-left: 20px;
+}
+
+#deleteAccountModal li {
+  margin: 8px 0;
+  color: #555;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 15px;
+  margin-top: 25px;
+  justify-content: flex-end;
+}
+
+/* =============================================================================
+   TEAM SEARCH PAGE STYLES
+   ============================================================================= */
+
+/* Search Section */
+.team-search-section {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  margin-bottom: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.search-input-wrapper {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+
+.search-input-wrapper input {
+  flex: 1;
+  padding: 15px 20px;
+  font-size: 1.2rem;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  transition: border-color 0.2s;
+}
+
+.search-input-wrapper input:focus {
+  outline: none;
+  border-color: #e91e63;
+}
+
+.search-hint {
+  margin-top: 10px;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+/* Search Results Container */
+.search-results-container {
+  margin-bottom: 30px;
+}
+
+.search-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px;
+  background: white;
+  border-radius: 12px;
+}
+
+.search-loading .spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #e91e63;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.search-error, .no-results-panel {
+  background: white;
+  border-radius: 12px;
+  padding: 40px;
+  text-align: center;
+}
+
+.search-error {
+  border: 2px solid #ffcdd2;
+  background: #ffebee;
+}
+
+.search-error h3 {
+  color: #c62828;
+}
+
+/* Combined Stats Panel (Top Half) */
+.combined-stats-panel {
+  background: linear-gradient(135deg, #e91e63 0%, #ad1457 100%);
+  color: white;
+  border-radius: 12px;
+  padding: 30px;
+  margin-bottom: 20px;
+}
+
+.combined-stats-panel h2 {
+  color: white;
+  margin-bottom: 5px;
+}
+
+.panel-subtitle {
+  opacity: 0.9;
+  margin-bottom: 25px;
+}
+
+.combined-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 20px;
+}
+
+.combined-stat-card {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+}
+
+.combined-stat-card.highlight {
+  background: rgba(255, 255, 255, 0.25);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+}
+
+.combined-stat-card .stat-value {
+  font-size: 2rem;
+  font-weight: bold;
+  display: block;
+}
+
+.combined-stat-card .stat-label {
+  font-size: 0.85rem;
+  opacity: 0.9;
+  margin-top: 5px;
+}
+
+.combined-stat-card .stat-source {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  margin-top: 5px;
+}
+
+/* Split Data Panels (Bottom Half) */
+.split-data-panels {
+  display: flex;
+  gap: 20px;
+  min-height: 400px;
+}
+
+.data-panel {
+  flex: 1;
+  background: white;
+  border-radius: 12px;
+  padding: 25px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.data-panel.expanded {
+  flex: 2;
+}
+
+.data-panel.collapsed {
+  flex: 0.5;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.panel-header h3 {
+  margin: 0;
+  color: #333;
+}
+
+.data-year, .match-count {
+  background: #e91e63;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+/* Team Info Row */
+.team-info-row {
+  margin-bottom: 20px;
+}
+
+.team-info-row h4 {
+  margin: 0 0 5px 0;
+  font-size: 1.2rem;
+  color: #333;
+}
+
+.team-info-row p {
+  margin: 0;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+/* Stats List */
+.stats-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.stat-row:last-child {
+  border-bottom: none;
+}
+
+.stat-row .stat-name {
+  color: #666;
+  font-size: 0.95rem;
+}
+
+.stat-row .stat-value {
+  font-weight: 600;
+  color: #333;
+  font-size: 1rem;
+}
+
+/* Notes Section */
+.notes-section {
+  margin-top: 25px;
+  padding-top: 20px;
+  border-top: 2px solid #f0f0f0;
+}
+
+.notes-section h4 {
+  margin: 0 0 15px 0;
+  color: #333;
+}
+
+.notes-content {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.note-item {
+  background: #f5f5f5;
+  padding: 12px 15px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  font-size: 0.9rem;
+  color: #555;
+  border-left: 3px solid #e91e63;
+}
+
+.no-notes {
+  color: #999;
+  font-style: italic;
+}
+
+/* No Data Message */
+.no-data-message {
+  text-align: center;
+  padding: 40px 20px;
+  color: #666;
+}
+
+.no-data-message p {
+  margin: 0 0 10px 0;
+}
+
+.no-data-message .hint {
+  font-size: 0.85rem;
+  color: #999;
+}
+
+.scout-now-btn {
+  margin-top: 20px;
+}
+
+/* Quick Stats Section */
+.quick-stats-section, .leaderboard-section {
+  background: white;
+  border-radius: 12px;
+  padding: 25px;
+  margin-bottom: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.quick-stats-section h2, .leaderboard-section h2 {
+  margin-top: 0;
+}
+
+/* Leaderboard Table */
+.leaderboard-table {
+  width: 100%;
+}
+
+.leaderboard-table tr.top-three {
+  background: linear-gradient(90deg, #fff8e1 0%, white 100%);
+}
+
+/* Responsive for Team Search */
+@media (max-width: 768px) {
+  .search-input-wrapper {
+    flex-direction: column;
+  }
+
+  .search-input-wrapper input {
+    width: 100%;
+  }
+
+  .split-data-panels {
+    flex-direction: column;
+  }
+
+  .data-panel.expanded, .data-panel.collapsed {
+    flex: none;
+  }
+
+  .combined-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* =============================================================================
+   MATCH PREDICTION TOGGLE
+   ============================================================================= */
+
+.schedule-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.schedule-header h3 {
+  margin: 0;
+}
+
+.prediction-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.prediction-toggle input {
+  display: none;
+}
+
+.toggle-slider {
+  width: 50px;
+  height: 26px;
+  background: #ccc;
+  border-radius: 26px;
+  position: relative;
+  transition: background 0.3s;
+}
+
+.toggle-slider::after {
+  content: '';
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  background: white;
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.3s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.prediction-toggle input:checked + .toggle-slider {
+  background: #e91e63;
+}
+
+.prediction-toggle input:checked + .toggle-slider::after {
+  transform: translateX(24px);
+}
+
+.toggle-label {
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.prediction-toggle input:checked ~ .toggle-label {
+  color: #e91e63;
+  font-weight: 500;
+}
+
+.prediction-banner {
+  background: #e3f2fd;
+  border: 1px solid #90caf9;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: #1565c0;
+}
+
+.info-icon {
+  font-size: 1.1rem;
+}
+
+/* =============================================================================
+   ADMIN UNAUTHORIZED ACCESS
+   ============================================================================= */
+
+.unauthorized-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  text-align: center;
+  padding: 40px;
+}
+
+.unauthorized-container h1 {
+  font-size: 2.5rem;
+  color: #c62828;
+  margin-bottom: 20px;
+}
+
+.unauthorized-container p {
+  font-size: 1.1rem;
+  color: #555;
+  margin: 10px 0;
+}

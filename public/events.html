@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Events - Pinkscout</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- ===== SIDEBAR NAVIGATION ===== -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h2>🤖 Pinkscout</h2>
+        <span>FRC Scouting App</span>
+      </div>
+      <nav class="sidebar-nav">
+        <ul>
+          <li><a href="index.html">🏠 Home</a></li>
+          <li><a href="newscounting.html">📝 Scouting</a></li>
+          <li><a href="teams.html">🏆 Teams</a></li>
+          <li><a href="events.html" class="active">📅 Events</a></li>
+          <li><a href="scouterProfile.html">👤 Profile</a></li>
+          <li><a href="admin.html">⚙️ Admin</a></li>
+        </ul>
+      </nav>
+      <div class="user-info" id="userInfo" style="display: none;">
+        <div class="user-email" id="userEmail"></div>
+        <button class="btn-logout" id="logoutBtn">Sign Out</button>
+      </div>
+    </aside>
+
+    <!-- ===== MAIN CONTENT ===== -->
+  <main class="main-content">
+    <!-- Top Navigation Bar -->
+    <header class="top-nav">
+      <h1>📅 Events</h1>
+      <div class="nav-actions">
+        <select id="year-select" class="year-select">
+          <option value="2026">2026</option>
+          <option value="2025">2025</option>
+          <option value="2024">2024</option>
+          <option value="2023">2023</option>
+        </select>
+        <button id="refresh-btn" class="btn btn-primary">🔄 Refresh</button>
+      </div>
+    </header>
+
+    <!-- Event Selection -->
+    <section class="card">
+      <h2>Select an Event</h2>
+      <div class="event-search">
+        <input type="text" id="event-search" placeholder="Search events..." class="search-input">
+      </div>
+      <div id="events-list" class="events-list">
+        <div class="loading-indicator">Loading events...</div>
+      </div>
+    </section>
+
+    <!-- Selected Event Details -->
+    <section class="card" id="event-details-section" style="display: none;">
+      <h2 id="event-name">Event Details</h2>
+      <div class="event-info">
+        <p><strong>Location:</strong> <span id="event-location">-</span></p>
+        <p><strong>Dates:</strong> <span id="event-dates">-</span></p>
+        <p><strong>Teams:</strong> <span id="event-team-count">-</span></p>
+      </div>
+      
+      <!-- Tab Navigation -->
+      <div class="tab-nav">
+        <button class="tab-btn active" data-tab="schedule">Schedule</button>
+        <button class="tab-btn" data-tab="teams">Teams</button>
+        <button class="tab-btn" data-tab="rankings">Rankings</button>
+      </div>
+
+      <!-- Schedule Tab -->
+      <div id="schedule-tab" class="tab-content active">
+        <div class="schedule-header">
+          <h3>Match Schedule</h3>
+
+          <!-- ================================================================
+               MATCH PREDICTION TOGGLE
+               ================================================================
+               Toggle switch to enable/disable match predictions.
+               Currently UI only - prediction logic will be added later.
+
+               TO IMPLEMENT PREDICTION LOGIC:
+               1. Listen for toggle change event
+               2. When enabled, fetch Statbotics predictions via getStatboticsMatches()
+               3. For each match, calculate win probability using EPA values
+               4. Display prediction indicators next to each match
+
+               PREDICTION ALGORITHM (placeholder):
+               - Red Win Prob = 1 / (1 + 10^((BlueEPA - RedEPA) / 400))
+               - Display as colored bar or percentage
+               ================================================================ -->
+          <label class="prediction-toggle">
+            <input type="checkbox" id="predictionToggle">
+            <span class="toggle-slider"></span>
+            <span class="toggle-label">Match Predictions (coming soon)</span>
+          </label>
+        </div>
+
+        <!-- Prediction Info Banner (shown when toggle is on) -->
+        <div id="predictionBanner" class="prediction-banner" style="display: none;">
+          <span class="info-icon">ℹ️</span>
+          <span>Match predictions are powered by Statbotics EPA data. Predictions are estimates only.</span>
+        </div>
+
+        <div id="match-schedule" class="match-schedule">
+          <div class="empty-state">Select an event to view schedule</div>
+        </div>
+      </div>
+
+      <!-- Teams Tab -->
+      <div id="teams-tab" class="tab-content" style="display: none;">
+        <h3>Attending Teams</h3>
+        <div id="event-teams" class="team-grid">
+          <div class="empty-state">No teams loaded</div>
+        </div>
+      </div>
+
+      <!-- Rankings Tab -->
+      <div id="rankings-tab" class="tab-content" style="display: none;">
+        <h3>Event Rankings</h3>
+        <div id="event-rankings" class="rankings-table">
+          <div class="empty-state">Rankings not available</div>
+        </div>
+      </div>
+    </section>
+  </main>
+  </div>
+
+  <!-- JavaScript Modules -->
+  <script type="module" src="js/events.js"></script>
+</body>
+</html>
+

@@ -874,6 +874,140 @@ async function saveScoutingQuestions(questions) {
 
 
 // =============================================================================
+// EXTERNAL DATA WRAPPERS
+// =============================================================================
+//
+// These functions provide safe wrappers for external API calls.
+// They handle errors gracefully and return null on failure.
+//
+// =============================================================================
+
+/**
+ * SAFE FETCH TBA
+ * --------------
+ * Wrapper to safely fetch data from The Blue Alliance.
+ * Returns null on error instead of throwing.
+ *
+ * @param {string} eventCode - The TBA event code (e.g., '2024txhou')
+ * @returns {Promise<Object|null>}
+ */
+async function safeFetchTBA(eventCode) {
+  try {
+    // Dynamic import to avoid loading external data module if not needed
+    const { getTBAEventDetails, getTBAEventTeams, getTBAEventMatches } =
+      await import('./externalData.js');
+
+    const [details, teams, matches] = await Promise.all([
+      getTBAEventDetails(eventCode),
+      getTBAEventTeams(eventCode),
+      getTBAEventMatches(eventCode)
+    ]);
+
+    return { details, teams, matches };
+  } catch (error) {
+    console.error('❌ Error fetching TBA data:', error);
+    return null;
+  }
+}
+
+/**
+ * SAFE FETCH STATBOTICS
+ * ---------------------
+ * Wrapper to safely fetch data from Statbotics.
+ *
+ * @param {number|string} teamNum - The team number
+ * @returns {Promise<Object|null>}
+ */
+async function safeFetchStatbotics(teamNum) {
+  try {
+    const { getStatboticsTeam } = await import('./externalData.js');
+    return await getStatboticsTeam(teamNum);
+  } catch (error) {
+    console.error('❌ Error fetching Statbotics data:', error);
+    return null;
+  }
+}
+
+/**
+ * SAFE FETCH NEXUS
+ * ----------------
+ * Wrapper to safely fetch data from FRC Nexus.
+ *
+ * @param {string} eventCode - The event code
+ * @returns {Promise<Object|null>}
+ */
+async function safeFetchNexus(eventCode) {
+  try {
+    const { getNexusEventStatus } = await import('./externalData.js');
+    return await getNexusEventStatus(eventCode);
+  } catch (error) {
+    console.error('❌ Error fetching Nexus data:', error);
+    return null;
+  }
+}
+
+/**
+ * SYNC ALL EXTERNAL DATA
+ * ----------------------
+ * Syncs all external data for an event.
+ * Used by the admin diagnostics panel.
+ *
+ * @param {string} eventCode - The TBA event code
+ * @returns {Promise<Object>}
+ */
+async function syncAllExternalData(eventCode) {
+  console.log(`🔄 Syncing all external data for ${eventCode}...`);
+
+  const results = {
+    tba: null,
+    statbotics: null,
+    nexus: null,
+    errors: []
+  };
+
+  try {
+    results.tba = await safeFetchTBA(eventCode);
+    if (!results.tba) results.errors.push('TBA fetch failed');
+  } catch (e) {
+    results.errors.push(`TBA: ${e.message}`);
+  }
+
+  try {
+    const { getStatboticsEventTeams } = await import('./externalData.js');
+    results.statbotics = await getStatboticsEventTeams(eventCode);
+    if (!results.statbotics) results.errors.push('Statbotics fetch failed');
+  } catch (e) {
+    results.errors.push(`Statbotics: ${e.message}`);
+  }
+
+  try {
+    results.nexus = await safeFetchNexus(eventCode);
+    if (!results.nexus) results.errors.push('Nexus fetch failed');
+  } catch (e) {
+    results.errors.push(`Nexus: ${e.message}`);
+  }
+
+  console.log('✅ External data sync complete', results);
+  return results;
+}
+
+/**
+ * CHECK API STATUS
+ * ----------------
+ * Checks the status of all external APIs.
+ * Returns object with boolean for each API.
+ */
+async function checkExternalAPIStatus() {
+  try {
+    const { checkAPIStatus } = await import('./externalData.js');
+    return await checkAPIStatus();
+  } catch (error) {
+    console.error('Error checking API status:', error);
+    return { tba: false, statbotics: false, nexus: false };
+  }
+}
+
+// =============================================================================
 // APP INITIALIZATION
 // =============================================================================
 
@@ -925,6 +1059,13 @@ export {
   // Question Management
   getScoutingQuestions,  // Get custom scouting questions
   saveScoutingQuestions, // Save custom scouting questions
+
+  // External Data Wrappers
+  safeFetchTBA,          // Safely fetch TBA event data
+  safeFetchStatbotics,   // Safely fetch Statbotics team data
+  safeFetchNexus,        // Safely fetch FRC Nexus data
+  syncAllExternalData,   // Sync all external data for an event
+  checkExternalAPIStatus, // Check status of external APIs
 
   // Diagnostics
   runDiagnostics

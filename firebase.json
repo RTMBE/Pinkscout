@@ -1,6 +1,5 @@
 {
   "hosting": {
-    "site": "pinkscout-470d1",
     "public": "public",
     "ignore": [
       "firebase.json",

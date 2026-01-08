@@ -1,16 +1,64 @@
+/**
+ * =============================================================================
+ * FIRESTORE SECURITY RULES
+ * =============================================================================
+ *
+ * WHAT ARE SECURITY RULES?
+ * Firestore Security Rules control who can read and write data in your database.
+ * They run on Firebase servers, so users cannot bypass them.
+ *
+ * RULE SYNTAX EXPLAINED:
+ * - match /path/{wildcard}: Matches documents at that path
+ * - allow read: Controls who can read data
+ * - allow write: Controls who can create, update, or delete data
+ * - request.auth: Contains info about the logged-in user (null if not logged in)
+ *
+ * AUTHENTICATION CHECK:
+ * request.auth != null means "user must be logged in"
+ *
+ * SAFE DEFAULTS:
+ * By default, no access is allowed. Only paths with explicit rules are accessible.
+ *
+ * =============================================================================
+ */
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Scouting collection - requires authentication
+
+    /**
+     * =========================================================================
+     * SCOUTING COLLECTION
+     * =========================================================================
+     * Only authenticated users can read/write scouting data.
+     * This ensures all scouting entries are from verified team members.
+     * =========================================================================
+     */
     match /scouting/{entryId} {
+      // READ: Only logged-in users can view scouting data
       allow read: if request.auth != null;
+
+      // WRITE: Only logged-in users can create/update/delete scouting entries
       allow write: if request.auth != null;
     }
 
-    // Diagnostics collection - for testing
+    /**
+     * =========================================================================
+     * DIAGNOSTICS COLLECTION
+     * =========================================================================
+     * Used by the Admin page Diagnostics button to test Firebase connectivity.
+     * Only authenticated users can run diagnostics (write and then delete test data).
+     *
+     * NOTE FOR BEGINNERS:
+     * This collection stores temporary test documents that are immediately deleted.
+     * It's used to verify that Firestore read/write operations work correctly.
+     * =========================================================================
+     */
     match /_diagnostics/{docId} {
+      // Allow authenticated users to read/write for diagnostics testing
       allow read, write: if request.auth != null;
     }
+
   }
 }

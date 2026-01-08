@@ -83,6 +83,49 @@ then implement the functionality later.
       Basic configuration options for the app.
       ======================================================================
       -->
+      <!--
+      ======================================================================
+      DIAGNOSTICS CARD
+      ======================================================================
+      Test Firebase connection with a 4-step checklist:
+      1. Firebase initialized
+      2. Firestore read works
+      3. Firestore write/delete works
+      4. Auth available
+      ======================================================================
+      -->
+      <div class="content-card">
+        <h2>🔍 Diagnostics</h2>
+        <p>Check Firebase connections and app status.</p>
+        <button type="button" class="btn btn-primary" id="runDiagnosticsBtn" style="margin-top: 15px;">
+          Run Diagnostics
+        </button>
+        <!--
+        DIAGNOSTICS CHECKLIST
+        =====================
+        This shows a 4-step checklist of Firebase connectivity tests.
+        Each item shows PASS/FAIL status after running diagnostics.
+        -->
+        <div id="diagnosticsResults" style="margin-top: 20px; display: none;">
+          <h3>Diagnostics Results</h3>
+          <ul id="diagnosticsChecklist" class="diagnostics-checklist" style="list-style: none; padding: 0;">
+            <li id="check1" style="padding: 8px 0; border-bottom: 1px solid #eee;">
+              <span class="status">⏳</span> Firebase Initialized
+            </li>
+            <li id="check2" style="padding: 8px 0; border-bottom: 1px solid #eee;">
+              <span class="status">⏳</span> Firestore Read
+            </li>
+            <li id="check3" style="padding: 8px 0; border-bottom: 1px solid #eee;">
+              <span class="status">⏳</span> Firestore Write/Delete
+            </li>
+            <li id="check4" style="padding: 8px 0;">
+              <span class="status">⏳</span> Auth Available
+            </li>
+          </ul>
+          <p id="diagnosticsSummary" style="margin-top: 15px; font-weight: bold;"></p>
+        </div>
+      </div>
+
       <div class="content-card">
         <h2>App Configuration</h2>
         <p>Configure event settings, team information, and scouting form fields.</p>
@@ -155,6 +198,7 @@ then implement the functionality later.
 
   <script type="module">
     import { requireAuth, signOut, setupAuthListener } from './js/firebase.js';
+    import { runDiagnostics } from './js/app.js';
 
     /*
      * REQUIRE AUTHENTICATION
@@ -181,6 +225,53 @@ then implement the functionality later.
      * LOGOUT BUTTON HANDLER
      */
     document.getElementById('logoutBtn').addEventListener('click', signOut);
+
+    /*
+     * DIAGNOSTICS BUTTON HANDLER
+     * ==========================
+     * When clicked, runs the 4-step Firebase diagnostics and updates the checklist.
+     * The runDiagnostics function tests:
+     * 1. Firebase initialization
+     * 2. Firestore read capability
+     * 3. Firestore write/delete capability
+     * 4. Auth availability
+     */
+    document.getElementById('runDiagnosticsBtn').addEventListener('click', async () => {
+      // Show the results container
+      document.getElementById('diagnosticsResults').style.display = 'block';
+
+      // Reset checklist to pending state
+      const checks = ['check1', 'check2', 'check3', 'check4'];
+      checks.forEach(id => {
+        document.getElementById(id).querySelector('.status').textContent = '⏳';
+      });
+      document.getElementById('diagnosticsSummary').textContent = 'Running diagnostics...';
+
+      try {
+        // Run all diagnostics tests
+        const results = await runDiagnostics();
+
+        // Update each checklist item based on results
+        results.tests.forEach((test, index) => {
+          const checkItem = document.getElementById(`check${index + 1}`);
+          const status = checkItem.querySelector('.status');
+          if (test.status === 'PASS') {
+            status.textContent = '✅';
+            checkItem.style.color = '#2e7d32'; // Green
+          } else {
+            status.textContent = '❌';
+            checkItem.style.color = '#c62828'; // Red
+          }
+        });
+
+        // Update summary
+        document.getElementById('diagnosticsSummary').textContent = results.summary;
+        console.log('Diagnostics complete:', results);
+      } catch (error) {
+        console.error('Diagnostics error:', error);
+        document.getElementById('diagnosticsSummary').textContent = 'Error running diagnostics: ' + error.message;
+      }
+    });
   </script>
 
 </body>

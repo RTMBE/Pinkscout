@@ -16,11 +16,8 @@ AUTHENTICATION FLOW:
 3. On success: redirect to dashboard
 4. On error: show friendly error message
 
-NO SIDEBAR:
-This page doesn't have the sidebar because:
-- It's a standalone auth page
-- User isn't logged in yet
-- Simple, focused design for login
+SIDEBAR:
+All pages include the same sidebar for consistent navigation.
 
 ================================================================================
 -->
@@ -33,16 +30,50 @@ This page doesn't have the sidebar because:
 </head>
 
 <body>
-  <!--
-  ============================================================================
-  AUTHENTICATION CONTAINER
-  ============================================================================
-  Centered container for the login card.
-  Uses flexbox to center vertically and horizontally.
-  ============================================================================
-  -->
-  <div class="auth-container">
-    <div class="auth-card">
+  <!-- Main App Container -->
+  <div class="app-container">
+
+    <!--
+    ========================================================================
+    SIDEBAR NAVIGATION
+    ========================================================================
+    Same sidebar structure as other pages.
+    The sidebar is fixed on the left side of the screen.
+    It contains:
+    1. Header with app branding
+    2. Navigation links (Home, Dashboard, Admin, Scouting)
+    3. User info (shown when logged in)
+    ========================================================================
+    -->
+    <aside class="sidebar">
+      <!-- Sidebar Header - App branding -->
+      <div class="sidebar-header">
+        <h2>🤖 Pinkscout</h2>
+        <span>FRC Scouting App</span>
+      </div>
+      <!-- Navigation Links -->
+      <nav class="sidebar-nav">
+        <ul>
+          <li><a href="index.html">🏠 Home</a></li>
+          <li><a href="dashboard.html">📊 Dashboard</a></li>
+          <li><a href="admin.html">⚙️ Admin</a></li>
+          <li><a href="newscounting.html">📝 Scouting</a></li>
+        </ul>
+      </nav>
+      <!-- User Info - shown when logged in -->
+      <div class="user-info" id="userInfo" style="display: none;">
+        <div class="user-email" id="userEmail"></div>
+        <button class="btn-logout" id="logoutBtn">Sign Out</button>
+      </div>
+    </aside>
+
+    <!--
+    ========================================================================
+    MAIN CONTENT AREA
+    ========================================================================
+    -->
+    <main class="main-content">
+      <div class="auth-card">
 
       <!-- Header with app branding -->
       <div class="auth-header">
@@ -88,7 +119,13 @@ This page doesn't have the sidebar because:
         <a href="#" id="authSwitchLink">Create one</a>
       </div>
 
+      <!-- User status display -->
+      <div id="userStatus" class="user-status" style="display: none; margin-top: 20px; padding: 10px; background: #e8f5e9; border-radius: 4px; text-align: center;">
+        <span id="statusText"></span>
+      </div>
+
     </div>
+    </main>
   </div>
 
   <!--
@@ -96,6 +133,8 @@ This page doesn't have the sidebar because:
   JAVASCRIPT - Authentication Logic
   ============================================================================
   -->
+  <script type="module" src="js/firebase.js"></script>
+  <script type="module" src="js/app.js"></script>
   <script type="module">
     /*
      * IMPORTS
@@ -139,13 +178,27 @@ This page doesn't have the sidebar because:
      * - User signs in
      * - User signs out
      *
-     * If user is already logged in, redirect to dashboard.
+     * If user is already logged in, show status and update sidebar.
      */
     onAuthStateChanged(auth, (user) => {
       if (user) {
-        // User is signed in - redirect to dashboard
-        window.location.href = 'dashboard.html';
+        // User is signed in - show user status
+        document.getElementById('userInfo').style.display = 'block';
+        document.getElementById('userEmail').textContent = user.email;
+        document.getElementById('userStatus').style.display = 'block';
+        document.getElementById('statusText').textContent = 'Signed in as: ' + user.email;
+        // Redirect to dashboard after short delay to show status
+        setTimeout(() => window.location.href = 'dashboard.html', 1000);
+      } else {
+        document.getElementById('userInfo').style.display = 'none';
+        document.getElementById('userStatus').style.display = 'none';
       }
+    });
+
+    // Logout button handler
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      const { signOut } = await import('./js/firebase.js');
+      signOut();
     });
 
     /*

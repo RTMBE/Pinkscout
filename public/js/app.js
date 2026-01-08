@@ -45,8 +45,8 @@
 //
 // =============================================================================
 
-// Import our initialized Firestore database
-import { db } from './firebase.js';
+// Import our initialized Firestore database and auth
+import { db, auth } from './firebase.js';
 
 // Import Firestore functions we need for database operations
 // Each function has a specific purpose:
@@ -283,13 +283,11 @@ async function deleteScoutingData(docId) {
 /**
  * RUN FIREBASE DIAGNOSTICS
  * ------------------------
- * Tests the Firebase connection by performing a series of operations.
- * Useful for debugging when things aren't working.
- *
- * WHAT IT TESTS:
- * 1. Can we write to Firestore? (Create)
- * 2. Can we read from Firestore? (Read)
- * 3. Can we delete from Firestore? (Delete)
+ * Tests the Firebase connection with a 4-step checklist:
+ * 1. Firebase initialized
+ * 2. Firestore read works
+ * 3. Firestore write/delete works
+ * 4. Auth available
  *
  * @returns {Promise<Object>} - Results of each diagnostic test
  */
@@ -300,80 +298,112 @@ async function runDiagnostics() {
     tests: []
   };
 
-  // Test 1: Write to Firestore
+  // Test 1: Firebase Initialized
   try {
-    console.log('📝 Test 1: Writing to Firestore...');
-    const testData = {
-      _diagnostic: true,
-      message: 'Diagnostic test',
-      timestamp: new Date().toISOString()
-    };
-    const docRef = await addDoc(collection(db, '_diagnostics'), testData);
-    results.tests.push({
-      name: 'Write to Firestore',
-      status: 'PASS',
-      docId: docRef.id
-    });
-    console.log('✅ Write test passed');
-
-    // Test 2: Read from Firestore
-    try {
-      console.log('📖 Test 2: Reading from Firestore...');
-      const readDoc = await getDoc(doc(db, '_diagnostics', docRef.id));
-      if (readDoc.exists()) {
-        results.tests.push({
-          name: 'Read from Firestore',
-          status: 'PASS',
-          data: readDoc.data()
-        });
-        console.log('✅ Read test passed');
-      } else {
-        throw new Error('Document not found');
-      }
-    } catch (error) {
-      results.tests.push({
-        name: 'Read from Firestore',
-        status: 'FAIL',
-        error: error.message
-      });
-      console.error('❌ Read test failed:', error);
+    console.log('📝 Test 1: Checking Firebase initialization...');
+    if (db) {
+      results.tests.push({ name: 'Firebase Initialized', status: 'PASS' });
+      console.log('✅ Firebase initialized');
+    } else {
+      throw new Error('Firebase not initialized');
     }
-
-    // Test 3: Delete from Firestore (cleanup)
-    try {
-      console.log('🗑️ Test 3: Deleting from Firestore...');
-      await deleteDoc(doc(db, '_diagnostics', docRef.id));
-      results.tests.push({
-        name: 'Delete from Firestore',
-        status: 'PASS'
-      });
-      console.log('✅ Delete test passed');
-    } catch (error) {
-      results.tests.push({
-        name: 'Delete from Firestore',
-        status: 'FAIL',
-        error: error.message
-      });
-      console.error('❌ Delete test failed:', error);
-    }
-
   } catch (error) {
-    results.tests.push({
-      name: 'Write to Firestore',
-      status: 'FAIL',
-      error: error.message
-    });
-    console.error('❌ Write test failed:', error);
+    results.tests.push({ name: 'Firebase Initialized', status: 'FAIL', error: error.message });
+    console.error('❌ Firebase init failed:', error);
+  }
+
+  // Test 2: Firestore Read
+  let testDocId = null;
+  try {
+    console.log('📖 Test 2: Testing Firestore read...');
+    const testData = { _diagnostic: true, timestamp: new Date().toISOString() };
+    const docRef = await addDoc(collection(db, '_diagnostics'), testData);
+    testDocId = docRef.id;
+    const readDoc = await getDoc(doc(db, '_diagnostics', docRef.id));
+    if (readDoc.exists()) {
+      results.tests.push({ name: 'Firestore Read', status: 'PASS' });
+      console.log('✅ Firestore read works');
+    } else {
+      throw new Error('Document not found');
+    }
+  } catch (error) {
+    results.tests.push({ name: 'Firestore Read', status: 'FAIL', error: error.message });
+    console.error('❌ Firestore read failed:', error);
+  }
+
+  // Test 3: Firestore Write/Delete
+  try {
+    console.log('🗑️ Test 3: Testing Firestore write/delete...');
+    if (testDocId) {
+      await deleteDoc(doc(db, '_diagnostics', testDocId));
+      results.tests.push({ name: 'Firestore Write/Delete', status: 'PASS' });
+      console.log('✅ Firestore write/delete works');
+    } else {
+      throw new Error('No test doc to delete');
+    }
+  } catch (error) {
+    results.tests.push({ name: 'Firestore Write/Delete', status: 'FAIL', error: error.message });
+    console.error('❌ Firestore write/delete failed:', error);
+  }
+
+  // Test 4: Auth Available
+  try {
+    console.log('🔐 Test 4: Checking Auth availability...');
+    if (auth) {
+      const user = auth.currentUser;
+      results.tests.push({
+        name: 'Auth Available',
+        status: 'PASS',
+        user: user ? user.email : 'No user signed in'
+      });
+      console.log('✅ Auth available, user:', user ? user.email : 'none');
+    } else {
+      throw new Error('Auth not available');
+    }
+  } catch (error) {
+    results.tests.push({ name: 'Auth Available', status: 'FAIL', error: error.message });
+    console.error('❌ Auth check failed:', error);
   }
 
   // Summary
   const passed = results.tests.filter(t => t.status === 'PASS').length;
-  const total = results.tests.length;
-  results.summary = `${passed}/${total} tests passed`;
-
+  results.summary = `${passed}/4 tests passed`;
   console.log('🔍 Diagnostics complete:', results.summary);
   return results;
 }
+
+/**
+ * READ RECENT SCOUTING
+ * --------------------
+ * Alias for getAllScoutingData with a limit parameter.
+ * Returns the most recent scouting entries.
+ *
+ * @param {number} limit - Maximum number of entries to return (default: 10)
+ * @returns {Promise<Array>} - Array of recent scouting records
+ */
+async function readRecentScouting(limit = 10) {
+  try {
+    const scoutingRef = collection(db, 'scouting');
+    const q = query(scoutingRef, orderBy('createdAt', 'desc'));
+    const querySnapshot = await getDocs(q);
+    const records = [];
+    querySnapshot.forEach((docSnap) => {
+      if (records.length < limit) {
+        records.push({ id: docSnap.id, ...docSnap.data() });
+      }
+    });
+    console.log('✅ Retrieved', records.length, 'recent scouting records');
+    return records;
+  } catch (error) {
+    console.error('❌ Error reading recent scouting:', error);
+    throw error;
+  }
+}
+
+// Aliases for required function names
+const createScoutingEntry = saveScoutingData;
+const updateScoutingEntry = updateScoutingData;
+const deleteScoutingEntry = deleteScoutingData;
 
 
 // =============================================================================
@@ -404,12 +434,18 @@ document.addEventListener('DOMContentLoaded', initApp);
 // =============================================================================
 
 export {
-  // CRUD Operations
+  // CRUD Operations (original names)
   saveScoutingData,
   getAllScoutingData,
   getTeamScoutingData,
   updateScoutingData,
   deleteScoutingData,
+
+  // CRUD Operations (required names per spec)
+  createScoutingEntry,
+  readRecentScouting,
+  updateScoutingEntry,
+  deleteScoutingEntry,
 
   // Diagnostics
   runDiagnostics

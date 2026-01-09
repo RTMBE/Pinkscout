@@ -1,337 +1,178 @@
 /**
- * =============================================================================
- * USER MODULE - FRC Scouting App (Pinkscout)
- * =============================================================================
- *
- * This module handles user profile management:
- * - Creating/updating user profiles in Firestore
- * - Auto-filling scouter name in forms
- * - Managing user roles (scouter, analyst, admin)
- * - Tracking scouting statistics
- *
- * USER PROFILE STRUCTURE:
- * users/{uid}
- *   - displayName: string (the scouter's name)
- *   - email: string
- *   - role: string ('scouter' | 'analyst' | 'admin')
- *   - createdAt: timestamp
- *   - updatedAt: timestamp
- *   - scoutingCount: number (how many entries submitted)
- *   - photoURL: string (optional)
- *
- * =============================================================================
+ * USER.JS - User Profile Management
+ * 
+ * This module handles user profile operations:
+ * - Creating user profiles on signup
+ * - Updating user profiles
+ * - Getting user statistics
+ * - Managing user preferences
  */
 
-// =============================================================================
-// IMPORTS
-// =============================================================================
-
-import { db, auth } from './firebase.js';
-import {
-  doc, getDoc, setDoc, updateDoc, increment, serverTimestamp, onSnapshot
+import { auth, db } from './firebase.js';
+import { 
+  doc, 
+  getDoc, 
+  setDoc, 
+  updateDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  orderBy,
+  limit
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
-import { onAuthStateChanged, updateProfile } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
-
-// =============================================================================
-// CURRENT USER STATE
-// =============================================================================
-
-// Cache the current user's profile
-let currentUserProfile = null;
-let profileUnsubscribe = null;
-
-// =============================================================================
-// PROFILE MANAGEMENT
-// =============================================================================
-
-/**
- * GET USER PROFILE
- * ----------------
- * Fetches the user's profile from Firestore.
- * Creates a new profile if one doesn't exist.
- *
- * @param {string} uid - The user's Firebase Auth UID
- * @returns {Promise<Object>} - The user profile
- */
-export async function getUserProfile(uid) {
-  try {
-    const userRef = doc(db, 'users', uid);
-    const userSnap = await getDoc(userRef);
-
-    if (userSnap.exists()) {
-      return { uid, ...userSnap.data() };
-    }
-
-    // Profile doesn't exist - create default one
-    return null;
-  } catch (error) {
-    console.error('Error fetching user profile:', error);
-    return null;
-  }
-}
 
 /**
  * CREATE USER PROFILE
- * -------------------
- * Creates a new user profile when they first sign up.
- *
- * @param {Object} user - Firebase Auth user object
- * @param {Object} additionalData - Extra data to store
- * @returns {Promise<Object>} - The created profile
+ * Creates a new user profile document in Firestore
+ * Called after successful signup
+ * 
+ * @param {string} uid - Firebase user ID
+ * @param {Object} profileData - Initial profile data
+ * @returns {Promise<void>}
  */
-export async function createUserProfile(user, additionalData = {}) {
-  try {
-    const userRef = doc(db, 'users', user.uid);
+export async function createUserProfile(uid, profileData) {
+  const userRef = doc(db, 'users', uid);
+  const profile = {
+    email: profileData.email || '',
+    displayName: profileData.displayName || '',
+    teamNumber: profileData.teamNumber || null,
+    role: 'scouter', // Default role
+    createdAt: new Date().toISOString(),
+    lastLogin: new Date().toISOString(),
+    scoutingCount: 0,
+    preferences: {
+      theme: 'light',
+      notifications: true
+    }
+  };
+  await setDoc(userRef, profile);
+  console.log('👤 User profile created:', uid);
+  return profile;
+}
 
-    const profileData = {
-      displayName: additionalData.displayName || user.displayName || user.email.split('@')[0],
-      email: user.email,
-      role: 'scouter', // Default role - admins upgrade manually
-      scoutingCount: 0,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      ...additionalData
-    };
-
-    await setDoc(userRef, profileData);
-    console.log('✅ User profile created:', user.uid);
-
-    return { uid: user.uid, ...profileData };
-  } catch (error) {
-    console.error('Error creating user profile:', error);
-    throw error;
+/**
+ * GET USER PROFILE
+ * Retrieves user profile from Firestore
+ * 
+ * @param {string} uid - Firebase user ID
+ * @returns {Promise<Object|null>} User profile or null
+ */
+export async function getUserProfile(uid) {
+  const userRef = doc(db, 'users', uid);
+  const snapshot = await getDoc(userRef);
+  if (snapshot.exists()) {
+    return { id: snapshot.id, ...snapshot.data() };
   }
+  return null;
 }
 
 /**
  * UPDATE USER PROFILE
- * -------------------
- * Updates specific fields in the user's profile.
+ * Updates specific fields in user profile
+ * Creates the profile if it doesn't exist (upsert)
  *
- * @param {string} uid - The user's UID
+ * @param {string} uid - Firebase user ID
  * @param {Object} updates - Fields to update
+ * @returns {Promise<void>}
  */
 export async function updateUserProfile(uid, updates) {
-  try {
-    const userRef = doc(db, 'users', uid);
+  const userRef = doc(db, 'users', uid);
+
+  // Check if profile exists first
+  const snapshot = await getDoc(userRef);
+
+  if (snapshot.exists()) {
+    // Update existing profile
     await updateDoc(userRef, {
       ...updates,
-      updatedAt: serverTimestamp()
+      updatedAt: new Date().toISOString()
     });
-    console.log('✅ User profile updated:', uid);
-  } catch (error) {
-    console.error('Error updating user profile:', error);
-    throw error;
-  }
-}
-
-/**
- * INCREMENT SCOUTING COUNT
- * ------------------------
- * Increments the user's scouting entry count by 1.
- * Called whenever they submit a new scouting entry.
- *
- * @param {string} uid - The user's UID
- */
-export async function incrementScoutingCount(uid) {
-  try {
-    const userRef = doc(db, 'users', uid);
-    await updateDoc(userRef, {
-      scoutingCount: increment(1),
-      updatedAt: serverTimestamp()
-    });
-  } catch (error) {
-    console.error('Error incrementing scouting count:', error);
-  }
-}
-
-/**
- * INITIALIZE USER PROFILE LISTENER
- * ---------------------------------
- * Sets up a real-time listener for the current user's profile.
- * Automatically updates the cached profile when it changes.
- *
- * @param {Function} onChange - Callback when profile changes
- */
-export function initUserProfileListener(onChange) {
-  // Unsubscribe from previous listener if exists
-  if (profileUnsubscribe) {
-    profileUnsubscribe();
-    profileUnsubscribe = null;
-  }
-
-  return onAuthStateChanged(auth, async (user) => {
-    if (!user) {
-      currentUserProfile = null;
-      if (onChange) onChange(null);
-      return;
-    }
-
-    // Get or create profile
-    let profile = await getUserProfile(user.uid);
-    if (!profile) {
-      profile = await createUserProfile(user);
-    }
-    currentUserProfile = profile;
-
-    // Set up real-time listener
-    const userRef = doc(db, 'users', user.uid);
-    profileUnsubscribe = onSnapshot(userRef, (snap) => {
-      if (snap.exists()) {
-        currentUserProfile = { uid: user.uid, ...snap.data() };
-        if (onChange) onChange(currentUserProfile);
+  } else {
+    // Create new profile with defaults
+    await setDoc(userRef, {
+      displayName: updates.displayName || '',
+      teamNumber: updates.teamNumber || null,
+      role: 'scouter',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      scoutingCount: 0,
+      preferences: {
+        theme: 'light',
+        notifications: true
       }
     });
+  }
+  console.log('👤 User profile updated:', uid);
+}
 
-    if (onChange) onChange(currentUserProfile);
+/**
+ * UPDATE LAST LOGIN
+ * Updates the lastLogin timestamp
+ * 
+ * @param {string} uid - Firebase user ID
+ * @returns {Promise<void>}
+ */
+export async function updateLastLogin(uid) {
+  const userRef = doc(db, 'users', uid);
+  await updateDoc(userRef, {
+    lastLogin: new Date().toISOString()
   });
 }
 
 /**
- * AUTO-FILL SCOUTER NAME
- * ----------------------
- * Automatically fills in the scouter name field in forms.
- * Looks for input with name="scouterName" or id="scouterName".
+ * GET USER SCOUTING STATS
+ * Calculates statistics for a specific user's scouting entries
+ * 
+ * @param {string} scouterName - Name of the scouter
+ * @returns {Promise<Object>} Scouting statistics
  */
-export function autoFillScouterName() {
-  const profile = getCurrentProfile();
-  if (!profile) return;
-
-  // Find scouter name input
-  const inputs = document.querySelectorAll('input[name="scouterName"], input#scouterName, #scouter-name');
-  inputs.forEach(input => {
-    if (input && !input.value) {
-      input.value = profile.displayName || '';
-    }
-  });
-}
-
-/**
- * CHECK USER ROLE
- * ---------------
- * Checks if the current user has a specific role.
- *
- * @param {string} role - The role to check ('scouter', 'analyst', 'admin')
- * @returns {boolean}
- */
-export function hasRole(role) {
-  if (!currentUserProfile) return false;
-
-  // Admins have all permissions
-  if (currentUserProfile.role === 'admin') return true;
-
-  // Analysts have analyst and scouter permissions
-  if (currentUserProfile.role === 'analyst' && role === 'scouter') return true;
-
-  return currentUserProfile.role === role;
-}
-
-/**
- * CHECK IF ADMIN
- * --------------
- * Quick check if current user is an admin.
- */
-export function isAdmin() {
-  return hasRole('admin');
-}
-
-/**
- * CHECK IF ANALYST OR ADMIN
- * -------------------------
- * Quick check if current user has analyst-level permissions.
- */
-export function isAnalyst() {
-  return hasRole('analyst');
-}
-
-/**
- * GET USER STATS
- * --------------
- * Gets statistics about the user's scouting activity.
- * Returns data for the scouter profile page.
- */
-export async function getUserStats(uid) {
-  const profile = await getUserProfile(uid);
-  if (!profile) return null;
-
-  // Query their scouting entries for more detailed stats
-  // This is a simplified version - expand as needed
+export async function getUserScoutingStats(scouterName) {
+  const scoutingRef = collection(db, 'scouting');
+  const q = query(
+    scoutingRef,
+    where('scouterName', '==', scouterName),
+    orderBy('timestamp', 'desc')
+  );
+  
+  const snapshot = await getDocs(q);
+  const entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  
+  if (entries.length === 0) {
+    return {
+      totalEntries: 0,
+      teamsScounted: 0,
+      matchesScounted: 0,
+      recentEntries: []
+    };
+  }
+  
+  const uniqueTeams = new Set(entries.map(e => e.teamNumber));
+  const uniqueMatches = new Set(entries.map(e => e.matchNumber));
+  
   return {
-    displayName: profile.displayName,
-    email: profile.email,
-    role: profile.role,
-    scoutingCount: profile.scoutingCount || 0,
-    memberSince: profile.createdAt,
-    lastActive: profile.updatedAt
+    totalEntries: entries.length,
+    teamsScounted: uniqueTeams.size,
+    matchesScounted: uniqueMatches.size,
+    recentEntries: entries.slice(0, 5)
   };
 }
 
 /**
- * SETUP USER NAV
- * --------------
- * Populates the navigation bar with user info and sign-out button.
- * Call this on every page to show the logged-in user.
+ * INCREMENT SCOUTING COUNT
+ * Increments the user's scouting count after successful submission
+ * 
+ * @param {string} uid - Firebase user ID
+ * @returns {Promise<void>}
  */
-export function setupUserNav() {
-  const profile = getCurrentProfile();
-
-  // Find user display elements (check multiple selectors for compatibility)
-  const userNameEl = document.querySelector('.user-name, #user-name, .username, #userEmail');
-  const userEmailEl = document.querySelector('.user-email, #user-email, #userEmail');
-  const userInfoEl = document.querySelector('.user-info, #userInfo');
-  const signOutBtn = document.querySelector('.sign-out-btn, #sign-out-btn, #logoutBtn, [data-action="sign-out"]');
-
-  // Show user info container if it exists
-  if (userInfoEl) {
-    userInfoEl.style.display = 'block';
-  }
-
-  if (userNameEl && profile) {
-    userNameEl.textContent = profile.displayName || 'User';
-  }
-
-  if (userEmailEl && profile) {
-    userEmailEl.textContent = profile.email || '';
-  }
-
-  if (signOutBtn) {
-    signOutBtn.addEventListener('click', async () => {
-      try {
-        const { signOut } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js');
-        await signOut(auth);
-        window.location.href = 'login.html';
-      } catch (error) {
-        console.error('Sign out error:', error);
-      }
+export async function incrementScoutingCount(uid) {
+  const profile = await getUserProfile(uid);
+  if (profile) {
+    await updateUserProfile(uid, {
+      scoutingCount: (profile.scoutingCount || 0) + 1
     });
   }
 }
 
-/**
- * GET CURRENT USER PROFILE
- * ------------------------
- * Returns the cached current user profile.
- * Call initUserProfileListener first to populate this.
- */
-export function getCurrentProfile() {
-  return currentUserProfile;
-}
-
-/**
- * UPDATE DISPLAY NAME
- * -------------------
- * Updates the user's display name in both Firestore and Firebase Auth.
- *
- * @param {string} newName - The new display name
- */
-export async function updateDisplayName(newName) {
-  const user = auth.currentUser;
-  if (!user) throw new Error('Not authenticated');
-
-  // Update Firebase Auth profile
-  await updateProfile(user, { displayName: newName });
-
-  // Update Firestore profile
-  await updateUserProfile(user.uid, { displayName: newName });
-}
+console.log('👤 User module loaded');
 

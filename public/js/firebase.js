@@ -1,35 +1,53 @@
 /**
  * =============================================================================
- * FIREBASE.JS - Firebase Configuration and Initialization
+ * FIREBASE.JS - Firebase Configuration, API Keys, and Initialization
  * =============================================================================
  *
  * WHAT IS THIS FILE?
- * This is the central Firebase configuration file. It initializes Firebase
- * services and exports them for use throughout the application.
- *
- * WHAT IS FIREBASE?
- * Firebase is a Backend-as-a-Service (BaaS) platform by Google that provides:
- * - Authentication (user login/signup)
- * - Firestore (NoSQL database)
- * - Hosting (deploy your website)
- * - And many more services
- *
- * WHY USE FIREBASE?
- * - No need to build your own server
- * - Real-time data synchronization
- * - Built-in security rules
- * - Free tier is generous for small projects
+ * This is the central configuration file for Firebase and external APIs.
+ * It initializes Firebase services and stores API keys for:
+ * - The Blue Alliance (TBA) - FRC event and match data
+ * - Statbotics - EPA ratings and team statistics
+ * - FRC Nexus - Additional FRC data
  *
  * SERVICES USED IN THIS APP:
  * 1. Firebase Auth - User authentication (login/signup)
  * 2. Firestore - Database for storing scouting data
+ * 3. The Blue Alliance API - Event schedules, team lists, match results
+ * 4. Statbotics API - EPA ratings and rankings
+ * 5. FRC Nexus API - Additional team data
  *
- * HOW TO GET YOUR FIREBASE CONFIG:
- * 1. Go to https://console.firebase.google.com/
- * 2. Create a new project (or select existing)
- * 3. Click the gear icon → Project settings
- * 4. Scroll down to "Your apps" → Click web icon (</>)
- * 5. Register your app and copy the config object
+ * FIRESTORE SCHEMA:
+ * -----------------
+ * users/{uid}
+ *   - email: string
+ *   - displayName: string
+ *   - role: "scouter" | "admin"
+ *   - createdAt: timestamp
+ *
+ * scouting/{docId}
+ *   - teamNumber: string
+ *   - matchNumber: string
+ *   - eventKey: string
+ *   - scouterName: string
+ *   - autoPoints: number
+ *   - teleopPoints: number
+ *   - notes: string
+ *   - createdAt: timestamp
+ *
+ * questions/{docId}
+ *   - text: string
+ *   - category: "Auto" | "Teleop" | "Endgame" | "Notes"
+ *   - type: "number" | "text" | "toggle"
+ *   - order: number
+ *
+ * settings/admins
+ *   - emails: string[] (array of admin email addresses)
+ *
+ * settings/apiKeys (optional - for dynamic key storage)
+ *   - tba: string
+ *   - statbotics: string (not required - public API)
+ *   - nexus: string
  *
  * =============================================================================
  */
@@ -55,37 +73,7 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
 
 // Firestore database - for storing and retrieving scouting data
-// We import many Firestore functions for our scouting operations:
-// - getFirestore: Get database reference
-// - collection: Reference a collection (like a folder)
-// - addDoc: Add a new document with auto-generated ID
-// - getDocs: Get multiple documents from a query
-// - doc: Reference a specific document by ID
-// - getDoc: Get a single document
-// - setDoc: Create or overwrite a document
-// - updateDoc: Update specific fields in a document
-// - deleteDoc: Delete a document
-// - query: Create a query with conditions
-// - where: Filter documents (where field == value)
-// - orderBy: Sort results (orderBy('field', 'desc'))
-// - limit: Limit number of results
-// - serverTimestamp: Get server's current time
-import {
-  getFirestore,
-  collection,
-  addDoc,
-  getDocs,
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  orderBy,
-  limit,
-  serverTimestamp
-} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
 // Firebase Authentication - for user login/signup
 // Note: We rename 'signOut' to 'firebaseSignOut' to avoid naming conflicts
@@ -118,8 +106,62 @@ const firebaseConfig = {
   projectId: "pinkscout-470d1",
   storageBucket: "pinkscout-470d1.firebasestorage.app",
   messagingSenderId: "386591970958",
-  appId: "1:386591970958:web:a7a9483684c3418cea1bdf"
+  appId: "1:386591970958:web:a7a9483684c3418cea1bdf",
+  measurementId: "G-HM5D0Z7L6N"
 };
+
+
+// =============================================================================
+// EXTERNAL API KEYS CONFIGURATION
+// =============================================================================
+//
+// These are the API keys for external FRC data services.
+//
+// HOW TO GET THESE KEYS:
+// ----------------------
+// 1. THE BLUE ALLIANCE (TBA):
+//    - Go to: https://www.thebluealliance.com/account
+//    - Sign in with Google
+//    - Click "Read API Keys" → "Add New Key"
+//    - Copy the key and paste it below
+//
+// 2. STATBOTICS:
+//    - No API key required! It's a public API.
+//    - Endpoint: https://api.statbotics.io/v3/
+//
+// 3. FRC NEXUS:
+//    - Contact FRC Nexus for an API key
+//    - Endpoint varies by use case
+//
+// SECURITY NOTE:
+// These keys are visible in client-side code. For production apps with
+// sensitive keys, consider using Firebase Functions as a proxy.
+//
+// =============================================================================
+
+const API_KEYS = {
+  // The Blue Alliance API Key
+  // Used for: event lists, team lists, match schedules, match results
+  TBA: 'bGxLkGYmh9cBfFpmYIe2M09qv2wiV86KzjxiUi26VivhkyguchrZkWkNFEDXPrYU',
+
+  // Statbotics - No key needed (public API)
+  // Used for: EPA ratings, team rankings, historical stats
+  STATBOTICS: null,
+
+  // FRC Nexus API Key
+  // Used for: Additional team data, scouting integrations
+  NEXUS: 'RWxNTz7HLOYxRPwWdwVND193vyk'
+};
+
+// API Base URLs
+const API_URLS = {
+  TBA: 'https://www.thebluealliance.com/api/v3',
+  STATBOTICS: 'https://api.statbotics.io/v3',
+  NEXUS: 'https://frc.nexus/api/v1'
+};
+
+// Primary admin email (always has access)
+const PRIMARY_ADMIN_EMAIL = 'rtmbe20@gmail.com';
 
 
 // =============================================================================
@@ -131,22 +173,23 @@ const firebaseConfig = {
 // =============================================================================
 
 // Step 1: Initialize the Firebase app with our config
-// This creates the connection to Firebase
 const app = initializeApp(firebaseConfig);
 
 // Step 2: Initialize Firestore (database)
-// 'db' is the database reference we'll use for all data operations
 const db = getFirestore(app);
 
 // Step 3: Initialize Authentication
-// 'auth' is the auth reference we'll use for login/logout operations
 const auth = getAuth(app);
 
-// Log to console so we know Firebase loaded correctly
-// Open browser DevTools (F12) → Console to see these messages
+// Log initialization
 console.log('🔥 Firebase initialized successfully');
 console.log('📦 Firestore database ready');
 console.log('🔐 Firebase Auth ready');
+console.log('🔑 API Keys configured:', {
+  TBA: API_KEYS.TBA ? '✓ Set' : '✗ Missing',
+  Statbotics: 'Public API',
+  Nexus: API_KEYS.NEXUS ? '✓ Set' : '✗ Missing'
+});
 
 
 // =============================================================================
@@ -295,6 +338,9 @@ function setupAuthListener(onUserSignedIn, onUserSignedOut) {
 // - db: Firestore database reference (for data operations)
 // - auth: Firebase Auth reference (for auth operations)
 // - app: Firebase app instance (rarely needed directly)
+// - API_KEYS: External API keys object
+// - API_URLS: External API base URLs
+// - PRIMARY_ADMIN_EMAIL: The primary admin email address
 // - signOut: Function to sign out the current user
 // - getCurrentUser: Function to get the current user
 // - requireAuth: Function to require authentication on a page
@@ -303,30 +349,14 @@ function setupAuthListener(onUserSignedIn, onUserSignedOut) {
 // =============================================================================
 
 export {
-  // Firebase instances
-  db,           // Firestore database reference
-  auth,         // Authentication reference
-  app,          // Firebase app instance
-
-  // Auth helper functions
+  db,
+  auth,
+  app,
+  API_KEYS,
+  API_URLS,
+  PRIMARY_ADMIN_EMAIL,
   signOut,
   getCurrentUser,
   requireAuth,
-  setupAuthListener,
-
-  // Firestore functions (re-exported for convenience)
-  // These can be imported directly from firebase.js instead of the SDK
-  collection,   // Reference a collection: collection(db, 'scouting')
-  addDoc,       // Add document: addDoc(collection(db, 'scouting'), data)
-  getDocs,      // Get documents: getDocs(query)
-  doc,          // Reference document: doc(db, 'teams', '1234')
-  getDoc,       // Get single doc: getDoc(docRef)
-  setDoc,       // Set/overwrite: setDoc(docRef, data)
-  updateDoc,    // Update fields: updateDoc(docRef, { field: value })
-  deleteDoc,    // Delete: deleteDoc(docRef)
-  query,        // Create query: query(collection, where(...), orderBy(...))
-  where,        // Filter: where('teamNumber', '==', 1234)
-  orderBy,      // Sort: orderBy('totalPoints', 'desc')
-  limit,        // Limit results: limit(10)
-  serverTimestamp  // Server time: serverTimestamp()
+  setupAuthListener
 };

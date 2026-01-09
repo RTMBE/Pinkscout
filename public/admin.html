@@ -1,24 +1,37 @@
 <!DOCTYPE html>
 <!--
 ================================================================================
-ADMIN.HTML - Administration Panel
+ADMIN.HTML - Administration Panel (PinkScout FRC Scouting App)
 ================================================================================
 
 WHAT IS THIS PAGE?
 The admin page provides administrative functions for the app:
-- App configuration
-- User management (placeholder)
-- Data management (placeholder)
-- Event settings (placeholder)
 
-AUTHENTICATION:
-This page requires authentication. Users who aren't logged in
-will be redirected to the login page.
+1. ADMIN ACCESS CONTROL
+   - Only users with admin rights can access this page
+   - Admin check: email === "rtmbe20@gmail.com" OR email in settings/admins.emails[]
+   - Non-admins are redirected to dashboard.html
 
-PLACEHOLDER CONTENT:
-Many sections show "Coming soon" placeholders. This is a common
-pattern in development - you create the UI structure first,
-then implement the functionality later.
+2. SCOUTING QUESTIONS MANAGEMENT
+   - View all scouting form questions
+   - Add new questions (text, category, type, order)
+   - Edit existing questions
+   - Delete questions
+   - Reorder questions
+
+3. API KEY CONFIGURATION
+   - Configure The Blue Alliance API key
+   - Configure FRC Nexus API key
+   - View API connection status
+
+4. DATA MANAGEMENT
+   - Export scouting data to CSV
+   - View data statistics
+   - Bulk delete options
+
+5. USER MANAGEMENT
+   - View registered users
+   - Add/remove admin emails
 
 ================================================================================
 -->
@@ -28,16 +41,6 @@ then implement the functionality later.
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin - Pinkscout</title>
   <link rel="stylesheet" href="css/style.css">
-  <!-- Chart.js for analytics -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <style>
-    /* Blur effect when password modal is shown */
-    .app-container.blurred {
-      filter: blur(8px);
-      pointer-events: none;
-      user-select: none;
-    }
-  </style>
 </head>
 
 <body>
@@ -48,26 +51,23 @@ then implement the functionality later.
     ========================================================================
     SIDEBAR NAVIGATION
     ========================================================================
-    Same sidebar structure as other pages.
-    class="active" is on the Admin link for this page.
-    ========================================================================
     -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <h2>🤖 Pinkscout</h2>
+        <h2>🩷 PinkScout</h2>
         <span>FRC Scouting App</span>
       </div>
       <nav class="sidebar-nav">
         <ul>
           <li><a href="index.html">🏠 Home</a></li>
-          <li><a href="newscounting.html">📝 Scouting</a></li>
-          <li><a href="teams.html">🏆 Teams</a></li>
-          <li><a href="events.html">📅 Events</a></li>
+          <li><a href="newscounting.html">📝 Scout</a></li>
+          <li><a href="teams.html">🤖 Teams</a></li>
+          <li><a href="events.html">🏆 Events</a></li>
+          <li><a href="analytics.html">📊 Analytics</a></li>
           <li><a href="scouterProfile.html">👤 Profile</a></li>
           <li><a href="admin.html" class="active">⚙️ Admin</a></li>
         </ul>
       </nav>
-      <!-- User Info - shown when logged in -->
       <div class="user-info" id="userInfo" style="display: none;">
         <div class="user-email" id="userEmail"></div>
         <button class="btn-logout" id="logoutBtn">Sign Out</button>
@@ -83,873 +83,555 @@ then implement the functionality later.
 
       <!-- Page Header -->
       <header class="page-header">
-        <h1>Admin Panel</h1>
-        <p>Manage app settings, users, and scouting configurations.</p>
+        <h1>⚙️ Admin Panel</h1>
+        <p>Manage scouting questions, API keys, and app settings.</p>
       </header>
 
-      <!--
-      ======================================================================
-      APP CONFIGURATION CARD
-      ======================================================================
-      Basic configuration options for the app.
-      ======================================================================
-      -->
-      <!--
-      ======================================================================
-      DIAGNOSTICS CARD
-      ======================================================================
-      Test Firebase connection with a 4-step checklist:
-      1. Firebase initialized
-      2. Firestore read works
-      3. Firestore write/delete works
-      4. Auth available
-      ======================================================================
-      -->
-      <div class="content-card">
-        <h2>🔍 Diagnostics</h2>
-        <p>Check Firebase connections and app status.</p>
-        <button type="button" class="btn btn-primary" id="runDiagnosticsBtn" style="margin-top: 15px;">
-          Run Diagnostics
-        </button>
+      <!-- Loading State -->
+      <div id="loadingState" class="content-card">
+        <div class="loading-spinner"></div>
+        <p>Checking admin access...</p>
+      </div>
+
+      <!-- Access Denied Message (hidden by default) -->
+      <div id="accessDenied" class="content-card" style="display: none;">
+        <div class="placeholder-content">
+          <div class="icon">🚫</div>
+          <h2>Access Denied</h2>
+          <p>You don't have admin privileges to access this page.</p>
+          <p class="mt-20">Contact your team lead if you need admin access.</p>
+          <a href="dashboard.html" class="btn btn-primary mt-20">Go to Dashboard</a>
+        </div>
+      </div>
+
+      <!-- Admin Content (hidden until verified) -->
+      <div id="adminContent" style="display: none;">
+
         <!--
-        DIAGNOSTICS CHECKLIST
-        =====================
-        This shows a 4-step checklist of Firebase connectivity tests.
-        Each item shows PASS/FAIL status after running diagnostics.
+        ======================================================================
+        SCOUTING QUESTIONS MANAGEMENT
+        ======================================================================
         -->
-        <div id="diagnosticsResults" style="margin-top: 20px; display: none;">
-          <h3>Diagnostics Results</h3>
-          <ul id="diagnosticsChecklist" class="diagnostics-checklist" style="list-style: none; padding: 0;">
-            <li id="check1" style="padding: 8px 0; border-bottom: 1px solid #eee;">
-              <span class="status">⏳</span> Firebase Initialized
-            </li>
-            <li id="check2" style="padding: 8px 0; border-bottom: 1px solid #eee;">
-              <span class="status">⏳</span> Firestore Read
-            </li>
-            <li id="check3" style="padding: 8px 0; border-bottom: 1px solid #eee;">
-              <span class="status">⏳</span> Firestore Write/Delete
-            </li>
-            <li id="check4" style="padding: 8px 0;">
-              <span class="status">⏳</span> Auth Available
-            </li>
-          </ul>
-          <p id="diagnosticsSummary" style="margin-top: 15px; font-weight: bold;"></p>
-        </div>
-      </div>
+        <div class="content-card">
+          <div class="card-header-flex">
+            <h2>📋 Scouting Questions</h2>
+            <button class="btn btn-primary" id="addQuestionBtn">+ Add Question</button>
+          </div>
+          <p class="mb-20">Manage the questions that appear on the scouting form.</p>
 
-      <!--
-      ======================================================================
-      QUESTION MANAGEMENT
-      ======================================================================
-      Manage scouting form questions - add, edit, remove questions.
-      ======================================================================
-      -->
-      <div class="content-card">
-        <h2>📝 Scouting Questions</h2>
-        <p>Manage the questions displayed on the scouting form.</p>
-
-        <div id="questionsList" style="margin-top: 20px;">
-          <!-- Questions will be loaded here by JavaScript -->
-          <p class="loading">Loading questions...</p>
+          <!-- Questions List -->
+          <div id="questionsList" class="questions-list">
+            <div class="loading-spinner"></div>
+          </div>
         </div>
 
-        <div style="margin-top: 20px; padding-top: 20px; border-top: 2px solid #eee;">
-          <h3>Add New Question</h3>
-          <div class="form-grid" style="margin-top: 15px;">
+        <!--
+        ======================================================================
+        ADD/EDIT QUESTION MODAL
+        ======================================================================
+        -->
+        <div id="questionModal" class="modal" style="display: none;">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="modalTitle">Add Question</h3>
+              <button class="modal-close" id="closeModal">&times;</button>
+            </div>
+            <form id="questionForm">
+              <input type="hidden" id="questionId">
+              <div class="form-group">
+                <label for="questionText">Question Text</label>
+                <input type="text" id="questionText" required placeholder="e.g., How many notes scored in speaker?">
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="questionCategory">Category</label>
+                  <select id="questionCategory" required>
+                    <option value="Auto">Auto</option>
+                    <option value="Teleop">Teleop</option>
+                    <option value="Endgame">Endgame</option>
+                    <option value="Notes">Notes</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="questionType">Input Type</label>
+                  <select id="questionType" required>
+                    <option value="number">Number</option>
+                    <option value="text">Text</option>
+                    <option value="toggle">Toggle (Yes/No)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="questionOrder">Display Order</label>
+                <input type="number" id="questionOrder" required min="1" value="1">
+              </div>
+              <div class="form-actions">
+                <button type="button" class="btn btn-secondary" id="cancelQuestion">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Question</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!--
+        ======================================================================
+        API KEY CONFIGURATION
+        ======================================================================
+        -->
+        <div class="content-card">
+          <h2>🔑 API Configuration</h2>
+          <p class="mb-20">Configure external API connections for enhanced data.</p>
+
+          <!-- API Status Display -->
+          <div id="apiStatus" class="api-status-grid">
+            <div class="api-status-item">
+              <span class="api-name">Statbotics</span>
+              <span class="api-status-badge" id="statboticsStatus">Checking...</span>
+            </div>
+            <div class="api-status-item">
+              <span class="api-name">The Blue Alliance</span>
+              <span class="api-status-badge" id="tbaStatus">Checking...</span>
+            </div>
+            <div class="api-status-item">
+              <span class="api-name">FRC Nexus</span>
+              <span class="api-status-badge" id="nexusStatus">Checking...</span>
+            </div>
+          </div>
+
+          <!-- API Key Form -->
+          <form id="apiKeyForm" class="mt-20">
             <div class="form-group">
-              <label for="newQuestionLabel">Question Label</label>
-              <input type="text" id="newQuestionLabel" placeholder="e.g., Speaker Scored">
+              <label for="tbaKey">The Blue Alliance API Key</label>
+              <input type="password" id="tbaKey" placeholder="Enter TBA API key">
+              <small class="form-hint">Get your key at <a href="https://www.thebluealliance.com/account" target="_blank">thebluealliance.com/account</a></small>
             </div>
             <div class="form-group">
-              <label for="newQuestionType">Question Type</label>
-              <select id="newQuestionType">
-                <option value="counter">Counter (+/-)</option>
-                <option value="checkbox">Checkbox (Yes/No)</option>
-                <option value="select">Dropdown Select</option>
-                <option value="text">Text Input</option>
-                <option value="number">Number Input</option>
-                <option value="rating">Rating (1-5)</option>
-              </select>
+              <label for="nexusKey">FRC Nexus API Key</label>
+              <input type="password" id="nexusKey" placeholder="Enter FRC Nexus API key">
             </div>
-            <div class="form-group">
-              <label for="newQuestionSection">Section</label>
-              <select id="newQuestionSection">
-                <option value="auto">Autonomous</option>
-                <option value="teleop">Teleop</option>
-                <option value="endgame">Endgame</option>
-                <option value="notes">Notes & Ratings</option>
-              </select>
+            <button type="submit" class="btn btn-primary">Save API Keys</button>
+          </form>
+        </div>
+
+        <!--
+        ======================================================================
+        DATA MANAGEMENT
+        ======================================================================
+        -->
+        <div class="content-card">
+          <h2>🗄️ Data Management</h2>
+          <p class="mb-20">Export and manage scouting data.</p>
+
+          <div class="data-stats" id="dataStats">
+            <div class="stat-item">
+              <span class="stat-value" id="totalEntries">--</span>
+              <span class="stat-label">Total Entries</span>
             </div>
-            <div class="form-group" id="selectOptionsGroup" style="display: none;">
-              <label for="newQuestionOptions">Options (comma-separated)</label>
-              <input type="text" id="newQuestionOptions" placeholder="e.g., Left, Center, Right">
+            <div class="stat-item">
+              <span class="stat-value" id="totalTeams">--</span>
+              <span class="stat-label">Teams Scouted</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value" id="totalMatches">--</span>
+              <span class="stat-label">Matches</span>
             </div>
           </div>
-          <button type="button" class="btn btn-primary" id="addQuestionBtn" style="margin-top: 15px;">
-            Add Question
-          </button>
-          <button type="button" class="btn" id="resetQuestionsBtn" style="margin-top: 15px; margin-left: 10px; background: #ff9800;">
-            Reset to Defaults
-          </button>
-        </div>
-      </div>
 
-      <!--
-      ======================================================================
-      DATA MANAGEMENT
-      ======================================================================
-      -->
-      <div class="content-card">
-        <h2>🗄️ Data Management</h2>
-        <p>Export and manage scouting data.</p>
-        <button type="button" class="btn btn-primary" id="exportDataBtn" style="margin-top: 15px;">
-          Export Data (CSV)
-        </button>
-      </div>
-
-      <!--
-      ======================================================================
-      ANALYTICS SECTION
-      ======================================================================
-      Charts and data visualization from the analytics page.
-      ======================================================================
-      -->
-      <div class="content-card">
-        <h2>📈 Analytics</h2>
-        <p>View scouting data charts and statistics.</p>
-        <button id="refresh-analytics-btn" class="btn btn-primary" style="margin-top: 15px;">🔄 Refresh Analytics</button>
-
-        <!-- Summary Stats -->
-        <div class="stats-grid" style="margin-top: 20px;">
-          <div class="stat-card">
-            <span class="stat-value" id="total-entries">-</span>
-            <span class="stat-label">Scouting Entries</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-value" id="total-teams">-</span>
-            <span class="stat-label">Teams Scouted</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-value" id="avg-score">-</span>
-            <span class="stat-label">Avg Score</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-value" id="max-score">-</span>
-            <span class="stat-label">Max Score</span>
+          <div class="button-group mt-20">
+            <button class="btn btn-primary" id="exportCsvBtn">📥 Export to CSV</button>
+            <button class="btn btn-secondary" id="refreshStatsBtn">🔄 Refresh Stats</button>
           </div>
         </div>
 
-        <!-- Charts Row 1 -->
-        <div class="charts-row" style="margin-top: 20px;">
-          <div class="chart-card" style="flex: 1; min-width: 300px; padding: 15px; background: #f9f9f9; border-radius: 8px; margin-right: 10px;">
-            <h3>Score Distribution</h3>
-            <canvas id="score-distribution-chart"></canvas>
+        <!--
+        ======================================================================
+        ADMIN MANAGEMENT
+        ======================================================================
+        -->
+        <div class="content-card">
+          <h2>👥 Admin Management</h2>
+          <p class="mb-20">Manage admin access for other users.</p>
+
+          <div id="adminList" class="admin-list">
+            <!-- Admin emails will be loaded here -->
           </div>
-          <div class="chart-card" style="flex: 1; min-width: 300px; padding: 15px; background: #f9f9f9; border-radius: 8px;">
-            <h3>Auto vs Teleop Points</h3>
-            <canvas id="auto-teleop-chart"></canvas>
-          </div>
+
+          <form id="addAdminForm" class="mt-20">
+            <div class="form-row">
+              <div class="form-group" style="flex: 3;">
+                <input type="email" id="newAdminEmail" placeholder="Enter email to add as admin" required>
+              </div>
+              <div class="form-group" style="flex: 1;">
+                <button type="submit" class="btn btn-primary btn-full">Add Admin</button>
+              </div>
+            </div>
+          </form>
         </div>
 
-        <!-- Charts Row 2 -->
-        <div class="charts-row" style="margin-top: 20px;">
-          <div class="chart-card" style="flex: 1; min-width: 300px; padding: 15px; background: #f9f9f9; border-radius: 8px; margin-right: 10px;">
-            <h3>Top Teams by Average Score</h3>
-            <canvas id="top-teams-chart"></canvas>
-          </div>
-          <div class="chart-card" style="flex: 1; min-width: 300px; padding: 15px; background: #f9f9f9; border-radius: 8px;">
-            <h3>Performance Over Time</h3>
-            <canvas id="performance-trend-chart"></canvas>
-          </div>
-        </div>
-      </div>
-
-      <!-- External API Comparison -->
-      <div class="content-card">
-        <h2>🌐 External API Data</h2>
-        <p>Compare scouting data with external sources.</p>
-
-        <div class="api-status" style="margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
-          <span class="api-badge" id="tba-status" style="padding: 5px 12px; border-radius: 20px; background: #666; color: white;">TBA: --</span>
-          <span class="api-badge" id="statbotics-status" style="padding: 5px 12px; border-radius: 20px; background: #666; color: white;">Statbotics: --</span>
-          <span class="api-badge" id="nexus-status" style="padding: 5px 12px; border-radius: 20px; background: #666; color: white;">Nexus: --</span>
-        </div>
-
-        <div style="margin-top: 20px;">
-          <h3>Compare Team Data</h3>
-          <div style="display: flex; gap: 10px; margin-top: 10px;">
-            <input type="number" id="compare-team" placeholder="Enter team #" style="padding: 10px; border: 2px solid #ddd; border-radius: 5px; width: 150px;">
-            <button id="compare-btn" class="btn btn-primary">Compare</button>
-          </div>
-        </div>
-
-        <div id="comparison-results" style="margin-top: 20px;">
-          <div class="empty-state" style="padding: 20px; text-align: center; color: #666; background: #f5f5f5; border-radius: 8px;">
-            Enter a team number to compare scouting data with Statbotics
-          </div>
-        </div>
-      </div>
+      </div><!-- End adminContent -->
 
     </main>
   </div>
 
   <!--
   ============================================================================
-  ADMIN PASSWORD MODAL
-  ============================================================================
-  This modal requires users to enter a secret password to access admin.
+  JAVASCRIPT - Admin Panel Logic
   ============================================================================
   -->
-  <div id="adminPasswordModal" class="modal" style="display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; z-index: 1000;">
-    <div class="modal-content" style="background: white; padding: 30px; border-radius: 10px; max-width: 400px; text-align: center;">
-      <h2>🔐 Admin Access</h2>
-      <p style="margin: 15px 0;">Enter the admin password to continue:</p>
-      <input type="password" id="adminPassword" placeholder="Enter password" style="width: 100%; padding: 12px; margin: 10px 0; border: 2px solid #ddd; border-radius: 5px; font-size: 16px;">
-      <p id="adminPasswordError" style="color: #c62828; display: none; margin: 10px 0;">Incorrect password. Try again.</p>
-      <button type="button" id="adminPasswordSubmit" class="btn btn-primary" style="width: 100%; margin-top: 10px;">Access Admin</button>
-      <button type="button" id="adminPasswordCancel" class="btn" style="width: 100%; margin-top: 10px; background: #666;">Go Back</button>
-    </div>
-  </div>
-
-  <!--
-  ============================================================================
-  JAVASCRIPT SECTION
-  ============================================================================
-  -->
-  <script type="module" src="js/firebase.js"></script>
-  <script type="module" src="js/app.js"></script>
-
   <script type="module">
-    import { requireAuth, signOut, setupAuthListener, db } from './js/firebase.js';
-    import { runDiagnostics, getScoutingQuestions, saveScoutingQuestions, readRecentScouting } from './js/app.js';
-    import { fetchTBATeam, fetchStatboticsTeam, fetchNexusTeam } from './js/externalData.js';
-    import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    // =========================================================================
+    // IMPORTS
+    // =========================================================================
+    import { auth, db } from './js/firebase.js';
+    import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+    import {
+      doc, getDoc, setDoc, updateDoc, deleteDoc,
+      collection, getDocs, addDoc, query, orderBy, arrayUnion, arrayRemove
+    } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    import {
+      checkAdminRights,
+      signOutUser,
+      getAllQuestions,
+      addQuestion,
+      updateQuestion,
+      deleteQuestion,
+      getAPIKeyStatus,
+      getAllScoutingData
+    } from './js/app.js';
 
-    // ===========================================================================
-    // ADMIN ACCESS CONTROL
-    // ===========================================================================
-    //
-    // This page uses TWO levels of access control:
-    // 1. EMAIL WHITELIST - Only certain emails can access the admin page
-    // 2. PASSWORD VERIFICATION - Additional password required for access
-    //
-    // ALLOWED EMAILS:
-    // - rtmbe20@gmail.com (default, always allowed)
-    // - Additional emails stored in Firestore: settings/admins.emails[]
-    //
-    // HOW TO ADD NEW ADMINS TO FIRESTORE:
-    // 1. Go to Firebase Console > Firestore Database
-    // 2. Navigate to 'settings' collection
-    // 3. Find or create the 'admins' document
-    // 4. Add the field 'emails' as an array type
-    // 5. Add authorized email addresses to the array
-    //
-    // Example Firestore structure:
-    // settings/
-    //   admins/
-    //     emails: ["rtmbe20@gmail.com", "admin2@example.com"]
-    //
-    // ===========================================================================
+    // =========================================================================
+    // DOM REFERENCES
+    // =========================================================================
+    const loadingState = document.getElementById('loadingState');
+    const accessDenied = document.getElementById('accessDenied');
+    const adminContent = document.getElementById('adminContent');
+    const userInfo = document.getElementById('userInfo');
+    const userEmail = document.getElementById('userEmail');
+    const logoutBtn = document.getElementById('logoutBtn');
 
-    // Default admin email (always allowed)
-    const DEFAULT_ADMIN_EMAIL = 'rtmbe20@gmail.com';
+    // Questions
+    const questionsList = document.getElementById('questionsList');
+    const addQuestionBtn = document.getElementById('addQuestionBtn');
+    const questionModal = document.getElementById('questionModal');
+    const questionForm = document.getElementById('questionForm');
+    const modalTitle = document.getElementById('modalTitle');
+    const closeModal = document.getElementById('closeModal');
+    const cancelQuestion = document.getElementById('cancelQuestion');
 
-    // Secret admin password (additional security layer)
-    const ADMIN_PASSWORD = '1551APinkout';
+    // API
+    const apiKeyForm = document.getElementById('apiKeyForm');
+    const tbaKeyInput = document.getElementById('tbaKey');
+    const nexusKeyInput = document.getElementById('nexusKey');
 
-    // Chart instances for cleanup
-    let scoreDistChart = null;
-    let autoTeleopChart = null;
-    let topTeamsChart = null;
-    let trendChart = null;
+    // Data
+    const exportCsvBtn = document.getElementById('exportCsvBtn');
+    const refreshStatsBtn = document.getElementById('refreshStatsBtn');
 
-    // DOM elements
-    const appContainer = document.querySelector('.app-container');
-    const passwordModal = document.getElementById('adminPasswordModal');
-    const passwordInput = document.getElementById('adminPassword');
-    const passwordSubmit = document.getElementById('adminPasswordSubmit');
-    const passwordCancel = document.getElementById('adminPasswordCancel');
-    const passwordError = document.getElementById('adminPasswordError');
+    // Admin
+    const adminList = document.getElementById('adminList');
+    const addAdminForm = document.getElementById('addAdminForm');
+    const newAdminEmail = document.getElementById('newAdminEmail');
 
-    /**
-     * Check if a user email is authorized for admin access
-     *
-     * @param {string} email - The user's email address
-     * @returns {Promise<boolean>} - True if authorized, false otherwise
-     */
-    async function isEmailAuthorized(email) {
-      if (!email) return false;
-
-      // Always allow default admin email
-      if (email.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase()) {
-        return true;
-      }
-
-      try {
-        // Check Firestore for additional authorized emails
-        const adminsDoc = await getDoc(doc(db, 'settings', 'admins'));
-
-        if (adminsDoc.exists()) {
-          const data = adminsDoc.data();
-          const authorizedEmails = data.emails || [];
-
-          // Check if user's email is in the authorized list
-          return authorizedEmails.some(
-            adminEmail => adminEmail.toLowerCase() === email.toLowerCase()
-          );
-        }
-      } catch (error) {
-        console.error('Error checking admin authorization:', error);
-        // On error, only allow default admin
-      }
-
-      return false;
-    }
-
-    /**
-     * Show unauthorized access message
-     */
-    function showUnauthorizedAccess() {
-      // Hide password modal
-      passwordModal.style.display = 'none';
-
-      // Replace content with unauthorized message
-      document.querySelector('.main-content').innerHTML = `
-        <div class="unauthorized-container">
-          <h1>🚫 Access Denied</h1>
-          <p>You are not authorized to access the Admin page.</p>
-          <p>Only approved administrators can view this content.</p>
-          <p style="margin-top: 20px; color: #666; font-size: 0.9rem;">
-            If you believe you should have access, please contact the team lead.
-          </p>
-          <div style="margin-top: 30px;">
-            <a href="teams.html" class="btn btn-primary">Go to Teams</a>
-            <a href="index.html" class="btn" style="margin-left: 10px;">Go Home</a>
-          </div>
-        </div>
-      `;
-
-      appContainer.classList.remove('blurred');
-    }
-
-    /*
-     * INITIALIZE ADMIN PAGE
-     * ---------------------
-     * 1. Wait for auth
-     * 2. Check if email is authorized
-     * 3. If authorized, show password modal (if needed)
-     * 4. If not authorized, show access denied message
-     */
-    async function initAdminPage() {
-      // First check authentication
-      const user = await requireAuth();
-
+    // =========================================================================
+    // AUTH STATE & ADMIN CHECK
+    // =========================================================================
+    onAuthStateChanged(auth, async (user) => {
       if (!user) {
-        // User not logged in, requireAuth will redirect
+        window.location.href = 'login.html';
         return;
       }
 
-      // Check if user's email is authorized for admin access
-      const isAuthorized = await isEmailAuthorized(user.email);
+      // Show user info
+      userInfo.style.display = 'block';
+      userEmail.textContent = user.email;
 
-      if (!isAuthorized) {
-        console.log('❌ User not authorized for admin access:', user.email);
-        showUnauthorizedAccess();
-        return;
-      }
+      // Check admin rights
+      const isAdmin = await checkAdminRights(user);
 
-      console.log('✅ User authorized for admin access:', user.email);
+      loadingState.style.display = 'none';
 
-      // Check if admin password was already entered this session
-      const adminVerified = sessionStorage.getItem('adminVerified');
-
-      if (adminVerified === 'true') {
-        passwordModal.style.display = 'none';
-        appContainer.classList.remove('blurred');
-        // Load analytics
-        loadAnalytics();
+      if (isAdmin) {
+        adminContent.style.display = 'block';
+        initAdminPanel();
       } else {
-        // Show password modal
-        passwordModal.style.display = 'flex';
-        appContainer.classList.add('blurred');
-        passwordInput.focus();
+        accessDenied.style.display = 'block';
       }
+    });
+
+    // Logout handler
+    logoutBtn.addEventListener('click', signOutUser);
+
+    // =========================================================================
+    // INITIALIZE ADMIN PANEL
+    // =========================================================================
+    async function initAdminPanel() {
+      console.log('🔧 Initializing admin panel...');
+
+      // Load all data in parallel
+      await Promise.all([
+        loadQuestions(),
+        loadAPIStatus(),
+        loadDataStats(),
+        loadAdminList()
+      ]);
     }
 
-    // Start initialization
-    initAdminPage();
-
-    // Handle password submission
-    passwordSubmit.addEventListener('click', () => {
-      const password = passwordInput.value;
-      if (password === ADMIN_PASSWORD) {
-        sessionStorage.setItem('adminVerified', 'true');
-        passwordModal.style.display = 'none';
-        appContainer.classList.remove('blurred');
-        // Load analytics after password verified
-        loadAnalytics();
-      } else {
-        passwordError.style.display = 'block';
-        passwordInput.value = '';
-        passwordInput.focus();
-      }
-    });
-
-    // Handle Enter key in password field
-    passwordInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        passwordSubmit.click();
-      }
-    });
-
-    // Handle cancel - go back to previous page or home
-    passwordCancel.addEventListener('click', () => {
-      window.history.back();
-    });
-
-    /*
-     * SETUP AUTH STATE LISTENER
-     * -------------------------
-     * When user is confirmed logged in, show their email.
-     */
-    setupAuthListener(
-      (user) => {
-        document.getElementById('userInfo').style.display = 'block';
-        document.getElementById('userEmail').textContent = user.email;
-      }
-    );
-
-    /*
-     * LOGOUT BUTTON HANDLER
-     */
-    document.getElementById('logoutBtn').addEventListener('click', signOut);
-
-    /*
-     * DIAGNOSTICS BUTTON HANDLER
-     * ==========================
-     * When clicked, runs the 4-step Firebase diagnostics and updates the checklist.
-     * The runDiagnostics function tests:
-     * 1. Firebase initialization
-     * 2. Firestore read capability
-     * 3. Firestore write/delete capability
-     * 4. Auth availability
-     */
-    document.getElementById('runDiagnosticsBtn').addEventListener('click', async () => {
-      // Show the results container
-      document.getElementById('diagnosticsResults').style.display = 'block';
-
-      // Reset checklist to pending state
-      const checks = ['check1', 'check2', 'check3', 'check4'];
-      checks.forEach(id => {
-        document.getElementById(id).querySelector('.status').textContent = '⏳';
-      });
-      document.getElementById('diagnosticsSummary').textContent = 'Running diagnostics...';
-
-      try {
-        // Run all diagnostics tests
-        const results = await runDiagnostics();
-
-        // Update each checklist item based on results
-        results.tests.forEach((test, index) => {
-          const checkItem = document.getElementById(`check${index + 1}`);
-          const status = checkItem.querySelector('.status');
-          if (test.status === 'PASS') {
-            status.textContent = '✅';
-            checkItem.style.color = '#2e7d32'; // Green
-          } else {
-            status.textContent = '❌';
-            checkItem.style.color = '#c62828'; // Red
-          }
-        });
-
-        // Update summary
-        document.getElementById('diagnosticsSummary').textContent = results.summary;
-        console.log('Diagnostics complete:', results);
-      } catch (error) {
-        console.error('Diagnostics error:', error);
-        document.getElementById('diagnosticsSummary').textContent = 'Error running diagnostics: ' + error.message;
-      }
-    });
-
-    /*
-     * QUESTION MANAGEMENT
-     * ===================
-     */
-
-    // Show/hide options field based on question type
-    document.getElementById('newQuestionType').addEventListener('change', (e) => {
-      const optionsGroup = document.getElementById('selectOptionsGroup');
-      optionsGroup.style.display = e.target.value === 'select' ? 'block' : 'none';
-    });
-
-    // Load questions on page load
+    // =========================================================================
+    // QUESTIONS MANAGEMENT
+    // =========================================================================
     async function loadQuestions() {
-      const container = document.getElementById('questionsList');
       try {
-        const questions = await getScoutingQuestions();
-        if (!questions || questions.length === 0) {
-          container.innerHTML = '<p>No custom questions configured. Using default form.</p>';
-          return;
-        }
+        const questions = await getAllQuestions();
 
-        let html = '<div class="questions-grid">';
-        questions.forEach((q, index) => {
-          html += `
-            <div class="question-item" style="padding: 12px; margin: 8px 0; background: #f5f5f5; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <strong>${q.label}</strong>
-                <span style="color: #666; margin-left: 10px;">(${q.type})</span>
-                <span style="color: #888; margin-left: 10px; font-size: 12px;">${q.section}</span>
-              </div>
-              <button class="btn" style="background: #c62828; padding: 5px 10px;" onclick="deleteQuestion(${index})">Delete</button>
+        if (questions.length === 0) {
+          questionsList.innerHTML = `
+            <div class="empty-state">
+              <p>No questions configured yet.</p>
+              <p>Click "Add Question" to create your first scouting question.</p>
             </div>
           `;
-        });
-        html += '</div>';
-        container.innerHTML = html;
-      } catch (error) {
-        console.error('Error loading questions:', error);
-        container.innerHTML = '<p class="error">Error loading questions.</p>';
-      }
-    }
-
-    // Add new question
-    document.getElementById('addQuestionBtn').addEventListener('click', async () => {
-      const label = document.getElementById('newQuestionLabel').value.trim();
-      const type = document.getElementById('newQuestionType').value;
-      const section = document.getElementById('newQuestionSection').value;
-      const options = document.getElementById('newQuestionOptions').value;
-
-      if (!label) {
-        alert('Please enter a question label.');
-        return;
-      }
-
-      try {
-        const questions = await getScoutingQuestions() || [];
-        const newQuestion = {
-          id: 'custom_' + Date.now(),
-          label,
-          type,
-          section,
-          options: type === 'select' ? options.split(',').map(o => o.trim()) : null
-        };
-        questions.push(newQuestion);
-        await saveScoutingQuestions(questions);
-
-        // Clear form
-        document.getElementById('newQuestionLabel').value = '';
-        document.getElementById('newQuestionOptions').value = '';
-
-        // Reload questions
-        loadQuestions();
-        alert('Question added successfully!');
-      } catch (error) {
-        console.error('Error adding question:', error);
-        alert('Error adding question: ' + error.message);
-      }
-    });
-
-    // Delete question (global function for onclick)
-    window.deleteQuestion = async (index) => {
-      if (!confirm('Are you sure you want to delete this question?')) return;
-
-      try {
-        const questions = await getScoutingQuestions() || [];
-        questions.splice(index, 1);
-        await saveScoutingQuestions(questions);
-        loadQuestions();
-      } catch (error) {
-        console.error('Error deleting question:', error);
-        alert('Error deleting question: ' + error.message);
-      }
-    };
-
-    // Reset to default questions
-    document.getElementById('resetQuestionsBtn').addEventListener('click', async () => {
-      if (!confirm('This will remove all custom questions and restore defaults. Continue?')) return;
-
-      try {
-        await saveScoutingQuestions([]);
-        loadQuestions();
-        alert('Questions reset to defaults.');
-      } catch (error) {
-        console.error('Error resetting questions:', error);
-        alert('Error resetting questions: ' + error.message);
-      }
-    });
-
-    // Load questions when page loads (after password verified)
-    const checkAndLoad = setInterval(() => {
-      if (sessionStorage.getItem('adminVerified') === 'true') {
-        clearInterval(checkAndLoad);
-        loadQuestions();
-        loadAnalytics();
-      }
-    }, 500);
-
-    /*
-     * ========================================================================
-     * ANALYTICS FUNCTIONS
-     * ========================================================================
-     */
-
-    // Refresh analytics button
-    document.getElementById('refresh-analytics-btn').addEventListener('click', loadAnalytics);
-
-    // Compare team button
-    document.getElementById('compare-btn').addEventListener('click', compareTeam);
-
-    // Enter key for compare input
-    document.getElementById('compare-team').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') compareTeam();
-    });
-
-    async function loadAnalytics() {
-      try {
-        const entries = await readRecentScouting(500);
-        if (!entries || entries.length === 0) {
-          document.getElementById('total-entries').textContent = '0';
-          document.getElementById('total-teams').textContent = '0';
-          document.getElementById('avg-score').textContent = '-';
-          document.getElementById('max-score').textContent = '-';
           return;
         }
 
-        // Calculate stats
-        const teams = new Set(entries.map(e => e.teamNumber));
-        const scores = entries.map(e => (e.autoPoints || 0) + (e.teleopPoints || 0) + (e.endgamePoints || 0));
-        const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
-        const maxScore = Math.max(...scores);
-
-        document.getElementById('total-entries').textContent = entries.length;
-        document.getElementById('total-teams').textContent = teams.size;
-        document.getElementById('avg-score').textContent = avgScore.toFixed(1);
-        document.getElementById('max-score').textContent = maxScore;
-
-        // Build charts
-        buildScoreDistributionChart(scores);
-        buildAutoTeleopChart(entries);
-        buildTopTeamsChart(entries);
-        buildTrendChart(entries);
-
-        // Check API status
-        checkAPIStatus();
-      } catch (error) {
-        console.error('Error loading analytics:', error);
-      }
-    }
-
-    function buildScoreDistributionChart(scores) {
-      const ctx = document.getElementById('score-distribution-chart');
-      if (!ctx) return;
-
-      // Destroy old chart
-      if (scoreDistChart) scoreDistChart.destroy();
-
-      // Create bins
-      const bins = [0, 20, 40, 60, 80, 100, 120, 140, 160];
-      const counts = new Array(bins.length).fill(0);
-      scores.forEach(score => {
-        for (let i = bins.length - 1; i >= 0; i--) {
-          if (score >= bins[i]) {
-            counts[i]++;
-            break;
-          }
-        }
-      });
-
-      scoreDistChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: bins.map((b, i) => i < bins.length - 1 ? `${b}-${bins[i+1]-1}` : `${b}+`),
-          datasets: [{
-            label: 'Matches',
-            data: counts,
-            backgroundColor: '#e91e63'
-          }]
-        },
-        options: { responsive: true, plugins: { legend: { display: false } } }
-      });
-    }
-
-    function buildAutoTeleopChart(entries) {
-      const ctx = document.getElementById('auto-teleop-chart');
-      if (!ctx) return;
-
-      if (autoTeleopChart) autoTeleopChart.destroy();
-
-      const autoTotal = entries.reduce((sum, e) => sum + (e.autoPoints || 0), 0);
-      const teleopTotal = entries.reduce((sum, e) => sum + (e.teleopPoints || 0), 0);
-      const endgameTotal = entries.reduce((sum, e) => sum + (e.endgamePoints || 0), 0);
-
-      autoTeleopChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-          labels: ['Auto', 'Teleop', 'Endgame'],
-          datasets: [{
-            data: [autoTotal, teleopTotal, endgameTotal],
-            backgroundColor: ['#2196f3', '#4caf50', '#ff9800']
-          }]
-        },
-        options: { responsive: true }
-      });
-    }
-
-    function buildTopTeamsChart(entries) {
-      const ctx = document.getElementById('top-teams-chart');
-      if (!ctx) return;
-
-      if (topTeamsChart) topTeamsChart.destroy();
-
-      // Calculate average by team
-      const teamStats = {};
-      entries.forEach(e => {
-        const team = e.teamNumber;
-        const score = (e.autoPoints || 0) + (e.teleopPoints || 0) + (e.endgamePoints || 0);
-        if (!teamStats[team]) teamStats[team] = { total: 0, count: 0 };
-        teamStats[team].total += score;
-        teamStats[team].count++;
-      });
-
-      const sorted = Object.entries(teamStats)
-        .map(([team, stats]) => ({ team, avg: stats.total / stats.count }))
-        .sort((a, b) => b.avg - a.avg)
-        .slice(0, 10);
-
-      topTeamsChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: sorted.map(t => t.team),
-          datasets: [{
-            label: 'Avg Score',
-            data: sorted.map(t => t.avg.toFixed(1)),
-            backgroundColor: '#9c27b0'
-          }]
-        },
-        options: { responsive: true, indexAxis: 'y' }
-      });
-    }
-
-    function buildTrendChart(entries) {
-      const ctx = document.getElementById('performance-trend-chart');
-      if (!ctx) return;
-
-      if (trendChart) trendChart.destroy();
-
-      // Group by match number
-      const matchData = {};
-      entries.forEach(e => {
-        const match = e.matchNumber || 0;
-        const score = (e.autoPoints || 0) + (e.teleopPoints || 0) + (e.endgamePoints || 0);
-        if (!matchData[match]) matchData[match] = [];
-        matchData[match].push(score);
-      });
-
-      const sorted = Object.entries(matchData)
-        .map(([match, scores]) => ({ match: parseInt(match), avg: scores.reduce((a,b) => a+b, 0) / scores.length }))
-        .sort((a, b) => a.match - b.match);
-
-      trendChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: sorted.map(m => `Match ${m.match}`),
-          datasets: [{
-            label: 'Avg Score',
-            data: sorted.map(m => m.avg.toFixed(1)),
-            borderColor: '#00bcd4',
-            fill: false,
-            tension: 0.3
-          }]
-        },
-        options: { responsive: true }
-      });
-    }
-
-    async function checkAPIStatus() {
-      // TBA status
-      try {
-        await fetchTBATeam(1551);
-        document.getElementById('tba-status').textContent = 'TBA: ✓';
-        document.getElementById('tba-status').style.background = '#4caf50';
-      } catch {
-        document.getElementById('tba-status').textContent = 'TBA: ✗';
-        document.getElementById('tba-status').style.background = '#f44336';
-      }
-
-      // Statbotics status
-      try {
-        await fetchStatboticsTeam(1551);
-        document.getElementById('statbotics-status').textContent = 'Statbotics: ✓';
-        document.getElementById('statbotics-status').style.background = '#4caf50';
-      } catch {
-        document.getElementById('statbotics-status').textContent = 'Statbotics: ✗';
-        document.getElementById('statbotics-status').style.background = '#f44336';
-      }
-
-      // Nexus status
-      try {
-        await fetchNexusTeam(1551);
-        document.getElementById('nexus-status').textContent = 'Nexus: ✓';
-        document.getElementById('nexus-status').style.background = '#4caf50';
-      } catch {
-        document.getElementById('nexus-status').textContent = 'Nexus: ✗';
-        document.getElementById('nexus-status').style.background = '#f44336';
-      }
-    }
-
-    async function compareTeam() {
-      const teamNum = document.getElementById('compare-team').value;
-      const resultsDiv = document.getElementById('comparison-results');
-
-      if (!teamNum) {
-        resultsDiv.innerHTML = '<div class="empty-state" style="padding: 20px; text-align: center; color: #666; background: #f5f5f5; border-radius: 8px;">Please enter a team number</div>';
-        return;
-      }
-
-      resultsDiv.innerHTML = '<div style="padding: 20px; text-align: center;">Loading...</div>';
-
-      try {
-        // Get scouting data
-        const entries = await readRecentScouting(500);
-        const teamEntries = entries.filter(e => e.teamNumber == teamNum);
-
-        let scoutingAvg = 0;
-        if (teamEntries.length > 0) {
-          const scores = teamEntries.map(e => (e.autoPoints || 0) + (e.teleopPoints || 0) + (e.endgamePoints || 0));
-          scoutingAvg = scores.reduce((a, b) => a + b, 0) / scores.length;
-        }
-
-        // Get external data
-        let statboticsData = null;
-        try {
-          statboticsData = await fetchStatboticsTeam(teamNum);
-        } catch (e) {
-          console.log('Statbotics fetch failed:', e);
-        }
-
-        // Build comparison HTML
-        let html = `
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 10px;">
-            <div style="padding: 15px; background: #e3f2fd; border-radius: 8px; text-align: center;">
-              <h4 style="margin: 0 0 10px;">Your Scouting</h4>
-              <p style="font-size: 24px; font-weight: bold; margin: 0;">${teamEntries.length > 0 ? scoutingAvg.toFixed(1) : 'No data'}</p>
-              <p style="color: #666; margin: 5px 0 0;">Avg Score (${teamEntries.length} matches)</p>
+        questionsList.innerHTML = questions.map(q => `
+          <div class="question-item" data-id="${q.id}">
+            <div class="question-info">
+              <span class="question-order">#${q.order}</span>
+              <span class="question-text">${q.text}</span>
+              <span class="question-badge badge-${q.category.toLowerCase()}">${q.category}</span>
+              <span class="question-type">${q.type}</span>
             </div>
-            <div style="padding: 15px; background: #f3e5f5; border-radius: 8px; text-align: center;">
-              <h4 style="margin: 0 0 10px;">Statbotics EPA</h4>
-              <p style="font-size: 24px; font-weight: bold; margin: 0;">${statboticsData?.epa?.total?.toFixed(1) || 'N/A'}</p>
-              <p style="color: #666; margin: 5px 0 0;">Expected Points Added</p>
+            <div class="question-actions">
+              <button class="btn btn-sm btn-secondary edit-question" data-id="${q.id}">Edit</button>
+              <button class="btn btn-sm btn-danger delete-question" data-id="${q.id}">Delete</button>
             </div>
           </div>
-        `;
+        `).join('');
 
-        resultsDiv.innerHTML = html;
+        // Add event listeners
+        document.querySelectorAll('.edit-question').forEach(btn => {
+          btn.addEventListener('click', () => editQuestion(btn.dataset.id));
+        });
+        document.querySelectorAll('.delete-question').forEach(btn => {
+          btn.addEventListener('click', () => confirmDeleteQuestion(btn.dataset.id));
+        });
+
       } catch (error) {
-        console.error('Comparison error:', error);
-        resultsDiv.innerHTML = '<div style="padding: 20px; text-align: center; color: #c62828;">Error loading comparison data</div>';
+        console.error('Error loading questions:', error);
+        questionsList.innerHTML = '<p class="error">Error loading questions</p>';
       }
     }
+
+    // Add Question Button
+    addQuestionBtn.addEventListener('click', () => {
+      modalTitle.textContent = 'Add Question';
+      questionForm.reset();
+      document.getElementById('questionId').value = '';
+      questionModal.style.display = 'flex';
+    });
+
+    // Close Modal
+    closeModal.addEventListener('click', () => questionModal.style.display = 'none');
+    cancelQuestion.addEventListener('click', () => questionModal.style.display = 'none');
+
+    // Edit Question
+    async function editQuestion(id) {
+      const questions = await getAllQuestions();
+      const question = questions.find(q => q.id === id);
+      if (!question) return;
+
+      modalTitle.textContent = 'Edit Question';
+      document.getElementById('questionId').value = id;
+      document.getElementById('questionText').value = question.text;
+      document.getElementById('questionCategory').value = question.category;
+      document.getElementById('questionType').value = question.type;
+      document.getElementById('questionOrder').value = question.order;
+      questionModal.style.display = 'flex';
+    }
+
+    // Delete Question
+    async function confirmDeleteQuestion(id) {
+      if (confirm('Are you sure you want to delete this question?')) {
+        await deleteQuestion(id);
+        await loadQuestions();
+      }
+    }
+
+    // Save Question Form
+    questionForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const id = document.getElementById('questionId').value;
+      const data = {
+        text: document.getElementById('questionText').value,
+        category: document.getElementById('questionCategory').value,
+        type: document.getElementById('questionType').value,
+        order: parseInt(document.getElementById('questionOrder').value)
+      };
+
+      if (id) {
+        await updateQuestion(id, data);
+      } else {
+        await addQuestion(data);
+      }
+
+      questionModal.style.display = 'none';
+      await loadQuestions();
+    });
+
+    // =========================================================================
+    // API STATUS
+    // =========================================================================
+    async function loadAPIStatus() {
+      const status = await getAPIKeyStatus();
+
+      updateStatusBadge('statboticsStatus', status.statbotics);
+      updateStatusBadge('tbaStatus', status.tba);
+      updateStatusBadge('nexusStatus', status.frcNexus);
+    }
+
+    function updateStatusBadge(elementId, statusObj) {
+      const el = document.getElementById(elementId);
+      el.textContent = statusObj.status === 'connected' ? '✓ Connected' : '✗ ' + statusObj.message;
+      el.className = 'api-status-badge ' + (statusObj.status === 'connected' ? 'status-connected' : 'status-failed');
+    }
+
+    // Save API Keys
+    apiKeyForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      try {
+        await setDoc(doc(db, 'settings', 'apiKeys'), {
+          tbaKey: tbaKeyInput.value,
+          nexusKey: nexusKeyInput.value
+        }, { merge: true });
+
+        alert('API keys saved successfully!');
+        await loadAPIStatus();
+      } catch (error) {
+        console.error('Error saving API keys:', error);
+        alert('Error saving API keys: ' + error.message);
+      }
+    });
+
+    // =========================================================================
+    // DATA STATS
+    // =========================================================================
+    async function loadDataStats() {
+      try {
+        const data = await getAllScoutingData();
+
+        const teams = new Set(data.map(d => d.teamNumber));
+        const matches = new Set(data.map(d => d.matchNumber));
+
+        document.getElementById('totalEntries').textContent = data.length;
+        document.getElementById('totalTeams').textContent = teams.size;
+        document.getElementById('totalMatches').textContent = matches.size;
+      } catch (error) {
+        console.error('Error loading stats:', error);
+      }
+    }
+
+    refreshStatsBtn.addEventListener('click', loadDataStats);
+
+    // Export to CSV
+    exportCsvBtn.addEventListener('click', async () => {
+      try {
+        const data = await getAllScoutingData();
+        if (data.length === 0) {
+          alert('No data to export');
+          return;
+        }
+
+        // Get all unique keys
+        const keys = [...new Set(data.flatMap(Object.keys))];
+
+        // Build CSV
+        const csv = [
+          keys.join(','),
+          ...data.map(row => keys.map(k => JSON.stringify(row[k] || '')).join(','))
+        ].join('\n');
+
+        // Download
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `pinkscout-export-${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+      } catch (error) {
+        console.error('Error exporting:', error);
+        alert('Error exporting data: ' + error.message);
+      }
+    });
+
+    // =========================================================================
+    // ADMIN MANAGEMENT
+    // =========================================================================
+    async function loadAdminList() {
+      try {
+        const adminsDoc = await getDoc(doc(db, 'settings', 'admins'));
+        const emails = adminsDoc.exists() ? (adminsDoc.data().emails || []) : [];
+
+        // Always include primary admin
+        const allAdmins = ['rtmbe20@gmail.com', ...emails.filter(e => e !== 'rtmbe20@gmail.com')];
+
+        adminList.innerHTML = allAdmins.map((email, i) => `
+          <div class="admin-item">
+            <span>${email}</span>
+            ${i === 0 ? '<span class="badge">Primary</span>' :
+              `<button class="btn btn-sm btn-danger remove-admin" data-email="${email}">Remove</button>`}
+          </div>
+        `).join('');
+
+        // Add remove handlers
+        document.querySelectorAll('.remove-admin').forEach(btn => {
+          btn.addEventListener('click', () => removeAdmin(btn.dataset.email));
+        });
+
+      } catch (error) {
+        console.error('Error loading admins:', error);
+      }
+    }
+
+    // Add Admin
+    addAdminForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = newAdminEmail.value.trim().toLowerCase();
+
+      if (!email) return;
+
+      try {
+        await setDoc(doc(db, 'settings', 'admins'), {
+          emails: arrayUnion(email)
+        }, { merge: true });
+
+        newAdminEmail.value = '';
+        await loadAdminList();
+      } catch (error) {
+        console.error('Error adding admin:', error);
+        alert('Error adding admin: ' + error.message);
+      }
+    });
+
+    // Remove Admin
+    async function removeAdmin(email) {
+      if (!confirm(`Remove admin access for ${email}?`)) return;
+
+      try {
+        await updateDoc(doc(db, 'settings', 'admins'), {
+          emails: arrayRemove(email)
+        });
+        await loadAdminList();
+      } catch (error) {
+        console.error('Error removing admin:', error);
+        alert('Error removing admin: ' + error.message);
+      }
+    }
+
+    console.log('🔧 Admin page loaded');
   </script>
 
 </body>

@@ -26,10 +26,36 @@
 // IMPORTS
 // =============================================================================
 
-// Import functions from app.js
-// saveScoutingData: Saves the scouting entry to Firestore
-// recalculateTeamStats: Updates the team's aggregated statistics
-import { saveScoutingData, recalculateTeamStats } from './app.js';
+// Import the save function from app.js
+// This function handles the actual Firestore write operation
+import { auth, db } from './firebase.js';
+import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+import { saveScoutingData, signOutUser } from './app.js';
+
+// =============================================================================
+// AUTH STATE
+// =============================================================================
+const userInfo = document.getElementById('userInfo');
+const userEmail = document.getElementById('userEmail');
+const logoutBtn = document.getElementById('logoutBtn');
+
+onAuthStateChanged(auth, (user) => {
+  if (!user) {
+    window.location.href = 'login.html';
+    return;
+  }
+  if (userInfo) userInfo.style.display = 'block';
+  if (userEmail) userEmail.textContent = user.email;
+
+  // Auto-fill scouter name if available
+  const scouterNameInput = document.getElementById('scouterName');
+  if (scouterNameInput && !scouterNameInput.value) {
+    // Try to get display name or use email prefix
+    scouterNameInput.value = user.displayName || user.email.split('@')[0];
+  }
+});
+
+if (logoutBtn) logoutBtn.addEventListener('click', signOutUser);
 
 
 // =============================================================================
@@ -229,6 +255,7 @@ async function handleFormSubmit(e) {
   // Get references to UI elements we'll update
   const statusDiv = document.getElementById('submitStatus');
   const submitBtn = e.target.querySelector('button[type="submit"]');
+  const successOverlay = document.getElementById('successOverlay');
 
   try {
     // =========================================
@@ -236,43 +263,61 @@ async function handleFormSubmit(e) {
     // =========================================
     submitBtn.disabled = true;                    // Prevent double-submit
     submitBtn.textContent = 'Submitting...';      // Update button text
-    statusDiv.className = 'submit-status loading'; // Blue loading style
-    statusDiv.textContent = 'Saving scouting data...';
+    if (statusDiv) {
+      statusDiv.className = 'submit-status loading'; // Blue loading style
+      statusDiv.textContent = 'Saving scouting data...';
+    }
 
     // =========================================
     // STEP 2: Collect and save data
     // =========================================
     const scoutingData = collectFormData();       // Gather all form values
-    const docId = await saveScoutingData(scoutingData);  // Save to Firestore
 
-    // =========================================
-    // STEP 2.5: Update team statistics
-    // =========================================
-    // After saving the scouting entry, recalculate the team's stats
-    // This updates the leaderboard and team stats pages
-    await recalculateTeamStats(scoutingData.teamNumber);
+    // Validate required fields
+    if (!scoutingData.teamNumber || !scoutingData.matchNumber) {
+      throw new Error('Team number and match number are required');
+    }
+
+    const docId = await saveScoutingData(scoutingData);  // Save to Firestore
 
     // =========================================
     // STEP 3: Show success message
     // =========================================
-    statusDiv.className = 'submit-status success'; // Green success style
-    statusDiv.textContent = `✅ Scouting data saved successfully! (ID: ${docId})`;
+    console.log('✅ Scouting data saved:', docId);
 
-    // =========================================
-    // STEP 4: Reset form after delay
-    // =========================================
-    setTimeout(() => {
-      resetForm();                                // Clear the form
-      statusDiv.textContent = '';                 // Clear status message
-      statusDiv.className = 'submit-status';      // Reset status style
-    }, 2000);  // Wait 2 seconds so user can see success message
+    // Show success overlay if it exists
+    if (successOverlay) {
+      successOverlay.style.display = 'flex';
+      successOverlay.innerHTML = `
+        <div class="success-content">
+          <div class="success-icon">✅</div>
+          <h2>Scouting Data Saved!</h2>
+          <p>Team ${scoutingData.teamNumber} - Match ${scoutingData.matchNumber}</p>
+          <button class="btn btn-primary" onclick="document.getElementById('successOverlay').style.display='none'; window.resetForm();">
+            Scout Another Match
+          </button>
+        </div>
+      `;
+    } else if (statusDiv) {
+      statusDiv.className = 'submit-status success'; // Green success style
+      statusDiv.textContent = `✅ Saved! Team ${scoutingData.teamNumber} - Match ${scoutingData.matchNumber}`;
+
+      // Reset form after delay
+      setTimeout(() => {
+        resetForm();
+        statusDiv.textContent = '';
+        statusDiv.className = 'submit-status';
+      }, 3000);
+    }
 
   } catch (error) {
     // =========================================
     // ERROR HANDLING
     // =========================================
-    statusDiv.className = 'submit-status error';  // Red error style
-    statusDiv.textContent = `❌ Error saving data: ${error.message}`;
+    if (statusDiv) {
+      statusDiv.className = 'submit-status error';  // Red error style
+      statusDiv.textContent = `❌ Error: ${error.message}`;
+    }
     console.error('Form submission error:', error);
 
   } finally {

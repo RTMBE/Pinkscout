@@ -1,274 +1,69 @@
-/**
- * =============================================================================
- * FIRESTORE SECURITY RULES - FRC Scouting App (Pinkscout)
- * =============================================================================
- *
- * WHAT ARE SECURITY RULES?
- * -------------------------
- * Firestore Security Rules control who can read and write data in your database.
- * They run on Firebase servers, so users cannot bypass them - even if they
- * modify the JavaScript in their browser!
- *
- * RULE SYNTAX EXPLAINED:
- * ----------------------
- * - match /path/{wildcard}: Matches documents at that path
- *   - {wildcard} captures the document ID as a variable
- * - allow read: Controls who can read (get, list) data
- * - allow write: Controls who can create, update, or delete data
- * - request.auth: Contains info about the logged-in user (null if not logged in)
- * - request.auth.uid: The unique ID of the logged-in user
- * - resource.data: The existing document data (for reads/updates)
- * - request.resource.data: The incoming document data (for writes)
- *
- * AUTHENTICATION CHECK:
- * ---------------------
- * request.auth != null means "user must be logged in"
- *
- * SAFE DEFAULTS:
- * --------------
- * By default, no access is allowed. Only paths with explicit rules are accessible.
- * This is the most secure approach - you must explicitly allow each operation.
- *
- * CUSTOM FUNCTIONS:
- * -----------------
- * We define helper functions to check user roles stored in their profile.
- * This makes rules more readable and maintainable.
- *
- * =============================================================================
- */
-
 rules_version = '2';
+
+/**
+ * FIRESTORE SECURITY RULES
+ * ========================
+ *
+ * These rules control who can read/write data in Firestore.
+ * All collections require authentication (user must be logged in).
+ *
+ * COLLECTIONS:
+ * - scouting: Match scouting entries (all authenticated users)
+ * - teams: Team statistics (all authenticated users)
+ * - users: User profiles (users can only access their own)
+ * - questions: Scouting form questions (read: all, write: admins)
+ * - _diagnostics: Testing collection (all authenticated users)
+ */
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // =========================================================================
-    // HELPER FUNCTIONS
-    // =========================================================================
-    // These functions help us check user permissions more easily.
-    // They read the user's profile document to check their role.
-    // =========================================================================
-
-    /**
-     * Check if the current user is authenticated
-     */
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-
-    /**
-     * Check if the current user has admin role
-     * Reads the user's profile document to check their role field
-     */
-    function isAdmin() {
-      return isAuthenticated() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-
-    /**
-     * Check if the current user is an analyst or admin
-     * Analysts have elevated read permissions for analytics data
-     */
-    function isAnalystOrAdmin() {
-      let userRole = get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
-      return isAuthenticated() && (userRole == 'analyst' || userRole == 'admin');
-    }
-
-
-    // =========================================================================
-    // USERS COLLECTION
-    // =========================================================================
-    // Stores user profiles including display name, role, and preferences.
-    //
-    // STRUCTURE:
-    // users/{uid}
-    //   - displayName: string (the scouter's name)
-    //   - email: string
-    //   - role: string ('scouter' | 'analyst' | 'admin')
-    //   - createdAt: timestamp
-    //   - updatedAt: timestamp
-    //   - scoutingCount: number (how many entries they've submitted)
-    //
-    // PERMISSIONS:
-    // - Users can read their own profile
-    // - Users can update their own profile (except role)
-    // - Admins can read/write any profile
-    // =========================================================================
-    match /users/{userId} {
-      // READ: Users can read their own profile, admins can read any
-      allow read: if isAuthenticated() &&
-        (request.auth.uid == userId || isAdmin());
-
-      // CREATE: Users can create their own profile
-      allow create: if isAuthenticated() &&
-        request.auth.uid == userId &&
-        // Prevent users from giving themselves admin role on creation
-        request.resource.data.role in ['scouter', 'analyst'];
-
-      // UPDATE: Users can update own profile, but can't change role
-      // Admins can change any field including role
-      allow update: if isAuthenticated() && (
-        // User updating their own profile
-        (request.auth.uid == userId &&
-          // Can't change their own role (unless they're admin)
-          (!('role' in request.resource.data) ||
-           request.resource.data.role == resource.data.role))
-        // Or admin updating any profile
-        || isAdmin()
-      );
-
-      // DELETE: Only admins can delete user profiles
-      allow delete: if isAdmin();
-    }
-
-
-    // =========================================================================
+    // ===========================================
     // SCOUTING COLLECTION
-    // =========================================================================
-    // Stores individual scouting entries from matches.
-    //
-    // STRUCTURE:
-    // scouting/{entryId}
-    //   - scouterName: string
-    //   - scouterUid: string (the user who created this entry)
-    //   - matchNumber: number
-    //   - teamNumber: number
-    //   - allianceColor: string ('red' | 'blue')
-    //   - autoSpeaker, autoAmp, teleopSpeaker, etc.: number
-    //   - totalPoints: number (auto-calculated)
-    //   - notes: string
-    //   - createdAt: timestamp
-    //
-    // PERMISSIONS:
-    // - All authenticated users can read scouting data
-    // - All authenticated users can create entries
-    // - Users can update/delete their own entries
-    // - Admins can update/delete any entry
-    // =========================================================================
+    // All authenticated users can read/write
+    // ===========================================
     match /scouting/{entryId} {
-      // READ: Any logged-in user can view scouting data
-      // This enables team collaboration
-      allow read: if isAuthenticated();
-
-      // CREATE: Any logged-in user can create scouting entries
-      allow create: if isAuthenticated();
-
-      // UPDATE: Only the creator or admin can update
-      allow update: if isAuthenticated() &&
-        (resource.data.scouterUid == request.auth.uid || isAdmin());
-
-      // DELETE: Only the creator or admin can delete
-      allow delete: if isAuthenticated() &&
-        (resource.data.scouterUid == request.auth.uid || isAdmin());
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null;
     }
 
-
-    // =========================================================================
+    // ===========================================
     // TEAMS COLLECTION
-    // =========================================================================
-    // Stores aggregated team statistics calculated from scouting entries.
-    //
-    // STRUCTURE:
-    // teams/{teamNumber}
-    //   - teamNumber: number
-    //   - matchesPlayed: number
-    //   - avgAuto, avgTeleop, avgTotal: number
-    //   - maxScore: number
-    //   - lastUpdated: timestamp
-    //
-    // PERMISSIONS:
-    // - All authenticated users can read team stats
-    // - All authenticated users can write (stats are auto-calculated)
-    // =========================================================================
-    match /teams/{teamNumber} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+    // All authenticated users can read
+    // Write requires authentication
+    // ===========================================
+    match /teams/{teamId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
     }
 
-
-    // =========================================================================
-    // EXTERNAL DATA COLLECTIONS
-    // =========================================================================
-    // Stores cached data from external APIs (TBA, Statbotics, FRC Nexus).
-    // This reduces API calls and improves performance.
-    //
-    // STRUCTURE:
-    // external/{source}/cache/{key}
-    //   - data: object (the cached API response)
-    //   - fetchedAt: timestamp
-    //   - expiresAt: timestamp
-    //
-    // PERMISSIONS:
-    // - All authenticated users can READ external data
-    // - Only analysts and admins can WRITE (trigger syncs)
-    // - This prevents regular users from spamming external APIs
-    // =========================================================================
-    match /external/{source}/cache/{cacheKey} {
-      // Anyone authenticated can read cached external data
-      allow read: if isAuthenticated();
-
-      // Only analysts and admins can write (cache new data)
-      allow write: if isAnalystOrAdmin();
+    // ===========================================
+    // USERS COLLECTION
+    // Users can only read/write their own profile
+    // ===========================================
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Also allow reading/writing to the source document itself
-    match /external/{source} {
-      allow read: if isAuthenticated();
-      allow write: if isAnalystOrAdmin();
+    // ===========================================
+    // QUESTIONS COLLECTION
+    // All authenticated users can read
+    // Only admins can write (checked in app code)
+    // ===========================================
+    match /questions/{questionId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
     }
 
-
-    // =========================================================================
-    // EVENTS COLLECTION
-    // =========================================================================
-    // Stores event information and schedules from TBA.
-    //
-    // STRUCTURE:
-    // events/{eventKey}
-    //   - eventKey: string (e.g., '2024txhou')
-    //   - name: string
-    //   - startDate, endDate: timestamp
-    //   - teams: array of team numbers
-    //   - matches: array of match objects
-    //   - cachedAt: timestamp
-    //
-    // PERMISSIONS:
-    // - All authenticated users can read events
-    // - Analysts and admins can write (sync from TBA)
-    // =========================================================================
-    match /events/{eventKey} {
-      allow read: if isAuthenticated();
-      allow write: if isAnalystOrAdmin();
-    }
-
-
-    // =========================================================================
-    // APP SETTINGS COLLECTION
-    // =========================================================================
-    // Stores app-wide settings like current event, scouting questions, etc.
-    //
-    // PERMISSIONS:
-    // - All authenticated users can read settings
-    // - Only admins can write settings
-    // =========================================================================
-    match /settings/{settingId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
-
-
-    // =========================================================================
+    // ===========================================
     // DIAGNOSTICS COLLECTION
-    // =========================================================================
-    // Used by the Admin page Diagnostics button to test Firebase connectivity.
-    // Stores temporary test documents that are immediately deleted.
-    //
-    // PERMISSIONS:
-    // - Only admins can run diagnostics
-    // =========================================================================
+    // For testing - all authenticated users
+    // ===========================================
     match /_diagnostics/{docId} {
-      allow read, write: if isAuthenticated();
+      allow read, write: if request.auth != null;
     }
-
   }
 }

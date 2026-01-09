@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <!--
 ================================================================================
 DASHBOARD.HTML - Data Visualization Page
@@ -19,21 +19,21 @@ Charts are drawn on <canvas> elements. Canvas is an HTML5 element
 that allows JavaScript to draw graphics programmatically.
 
 PAGE LAYOUT:
-┌─────────────────────────────────────────────────────────────┐
-│ .app-container                                              │
-│ ┌──────────────┬──────────────────────────────────────────┐ │
-│ │ .sidebar     │ .main-content                            │ │
-│ │              │ ┌──────────────────────────────────────┐ │ │
-│ │              │ │ .stats-grid (4 stat cards)           │ │ │
-│ │              │ ├──────────────────────────────────────┤ │ │
-│ │              │ │ Scoring Chart (doughnut)             │ │ │
-│ │              │ ├──────────────────────────────────────┤ │ │
-│ │              │ │ Performance Chart (bar)              │ │ │
-│ │              │ ├──────────────────────────────────────┤ │ │
-│ │              │ │ Recent Entries Table                 │ │ │
-│ │              │ └──────────────────────────────────────┘ │ │
-│ └──────────────┴──────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚ .app-container                                              â”‚
+â”‚ â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â” â”‚
+â”‚ â”‚ .sidebar     â”‚ .main-content                            â”‚ â”‚
+â”‚ â”‚              â”‚ â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â” â”‚ â”‚
+â”‚ â”‚              â”‚ â”‚ .stats-grid (4 stat cards)           â”‚ â”‚ â”‚
+â”‚ â”‚              â”‚ â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤ â”‚ â”‚
+â”‚ â”‚              â”‚ â”‚ Scoring Chart (doughnut)             â”‚ â”‚ â”‚
+â”‚ â”‚              â”‚ â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤ â”‚ â”‚
+â”‚ â”‚              â”‚ â”‚ Performance Chart (bar)              â”‚ â”‚ â”‚
+â”‚ â”‚              â”‚ â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤ â”‚ â”‚
+â”‚ â”‚              â”‚ â”‚ Recent Entries Table                 â”‚ â”‚ â”‚
+â”‚ â”‚              â”‚ â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜ â”‚ â”‚
+â”‚ â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜ â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 
 ================================================================================
 -->
@@ -76,20 +76,20 @@ PAGE LAYOUT:
     -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <h2>🤖 Pinkscout</h2>
+        <h2>ï¿½ PinkScout</h2>
         <span>FRC Scouting App</span>
       </div>
       <nav class="sidebar-nav">
         <ul>
-          <li><a href="index.html">🏠 Home</a></li>
-          <li><a href="newscounting.html">📝 Scouting</a></li>
-          <!-- class="active" highlights current page -->
-          <li><a href="dashboard.html" class="active">📊 Dashboard</a></li>
-          <li><a href="teams.html">🏆 Teams</a></li>
-          <li><a href="admin.html">⚙️ Admin</a></li>
+          <li><a href="index.html">ðŸ  Home</a></li>
+          <li><a href="newscounting.html">ðŸ“ Scout</a></li>
+          <li><a href="teams.html">ðŸ¤– Teams</a></li>
+          <li><a href="events.html">ðŸ† Events</a></li>
+          <li><a href="analytics.html">ï¿½ Analytics</a></li>
+          <li><a href="scouterProfile.html">ï¿½ Profile</a></li>
+          <li><a href="admin.html">âš™ï¸ Admin</a></li>
         </ul>
       </nav>
-      <!-- User Info - shown when logged in -->
       <div class="user-info" id="userInfo" style="display: none;">
         <div class="user-email" id="userEmail"></div>
         <button class="btn-logout" id="logoutBtn">Sign Out</button>
@@ -164,7 +164,7 @@ PAGE LAYOUT:
       ======================================================================
       -->
       <div class="content-card">
-        <h2>📊 Scoring Distribution</h2>
+        <h2>ðŸ“Š Scoring Distribution</h2>
         <div class="chart-container">
           <!-- Chart.js will draw the chart on this canvas -->
           <canvas id="scoringChart"></canvas>
@@ -180,7 +180,8 @@ PAGE LAYOUT:
       ======================================================================
       -->
       <div class="content-card">
-        <h2>📈 Team Performance Comparison</h2>
+        <h2>ðŸ“ˆ Team Performance Comparison</h2>
+        <h2>ðŸ“ˆ Team Performance Comparison</h2>
         <div class="chart-container">
           <canvas id="performanceChart"></canvas>
         </div>
@@ -196,7 +197,7 @@ PAGE LAYOUT:
       ======================================================================
       -->
       <div class="content-card">
-        <h2>📋 Recent Scouting Entries</h2>
+        <h2>ðŸ“‹ Recent Scouting Entries</h2>
         <div id="recentEntries">
           <!-- This content is replaced by JavaScript -->
           <p class="text-center" style="color: #888; padding: 20px;">Loading scouting data...</p>
@@ -228,3 +229,4 @@ PAGE LAYOUT:
 
 </body>
 </html>
+

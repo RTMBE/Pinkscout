@@ -4,33 +4,44 @@
  * =============================================================================
  *
  * WHAT IS THIS FILE?
- * This is the main application logic file. It contains functions for:
- * - CRUD operations (Create, Read, Update, Delete) for scouting data
- * - Firebase diagnostics to test your connection
- * - Shared utility functions used across the app
+ * This is the main application logic file. It contains:
  *
- * WHAT IS CRUD?
- * CRUD is an acronym for the four basic database operations:
- * - Create: Add new data (saveScoutingData)
- * - Read: Retrieve data (getAllScoutingData, getTeamScoutingData)
- * - Update: Modify existing data (updateScoutingData)
- * - Delete: Remove data (deleteScoutingData)
+ * 1. AUTHENTICATION HELPERS
+ *    - loginUser(email, password) - Sign in existing user
+ *    - signUpUser(email, password, username, signupCode) - Create new user
+ *    - checkAdminRights(user) - Check if user has admin access
+ *    - signOutUser() - Sign out current user
  *
- * WHAT IS FIRESTORE?
- * Firestore is a NoSQL document database. Data is organized as:
- * - Collections: Groups of documents (like folders)
- * - Documents: Individual records (like files)
- * - Fields: Key-value pairs within documents
+ * 2. SCOUTING DATA CRUD
+ *    - saveScoutingData(data) - Create new scouting entry
+ *    - getAllScoutingData() - Read all scouting entries
+ *    - getTeamScoutingData(teamNumber) - Read entries for a specific team
+ *    - updateScoutingData(docId, data) - Update existing entry
+ *    - deleteScoutingData(docId) - Delete entry
  *
- * Example structure:
- *   scouting (collection)
- *   ├── abc123 (document)
- *   │   ├── teamNumber: "254"
- *   │   ├── matchNumber: "1"
- *   │   └── autoPoints: 15
- *   └── def456 (document)
- *       ├── teamNumber: "1678"
- *       └── ...
+ * 3. QUESTION MANAGEMENT (Admin)
+ *    - getAllQuestions() - Get all scouting questions
+ *    - addQuestion(question) - Add new question
+ *    - updateQuestion(docId, data) - Update question
+ *    - deleteQuestion(docId) - Delete question
+ *
+ * 4. API STATUS
+ *    - getAPIKeyStatus() - Check status of external API connections
+ *
+ * 5. TEAM STATS
+ *    - getTeamAverages() - Get computed averages for all teams
+ *    - getStatboticsData(teamNumber) - Fetch data from Statbotics API
+ *
+ * 6. DIAGNOSTICS
+ *    - runDiagnostics() - Test Firebase connection
+ *
+ * FIRESTORE SCHEMA:
+ * -----------------
+ * users/{uid} - User profiles
+ * scouting/{docId} - Scouting entries
+ * questions/{docId} - Scouting form questions
+ * settings/admins - Admin email list
+ * settings/apiKeys - API key configuration
  *
  * =============================================================================
  */
@@ -39,17 +50,9 @@
 // =============================================================================
 // IMPORTS
 // =============================================================================
-//
-// We import the database reference from our firebase.js file,
-// and Firestore functions from the Firebase CDN.
-//
-// =============================================================================
 
-// Import our initialized Firestore database and auth
 import { db, auth } from './firebase.js';
 
-// Import Firestore functions from our firebase.js file
-// We re-export them there for convenience
 import {
   collection,
   addDoc,
@@ -62,9 +65,17 @@ import {
   query,
   orderBy,
   where,
-  limit as firestoreLimit,
+  limit,
+  startAfter,
   serverTimestamp
-} from './firebase.js';
+} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile,
+  signOut as firebaseSignOut
+} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
 
 
 // =============================================================================
@@ -174,34 +185,36 @@ async function getAllScoutingData() {
  * GET TEAM SCOUTING DATA
  * ----------------------
  * Retrieves all scouting records for a specific team.
+ * Queries BOTH string and number versions of teamNumber since
+ * scouting entries may store it as either type.
  *
- * WHERE CLAUSE EXPLAINED:
- * where('teamNumber', '==', teamNumber) filters documents where
- * the 'teamNumber' field equals the provided value.
- *
- * Other comparison operators:
- * - '==' : equals
- * - '!=' : not equals
- * - '<'  : less than
- * - '<=' : less than or equal
- * - '>'  : greater than
- * - '>=' : greater than or equal
- *
- * @param {string} teamNumber - The FRC team number to search for
+ * @param {string|number} teamNumber - The FRC team number to search for
  * @returns {Promise<Array>} - Array of scouting records for that team
  */
 async function getTeamScoutingData(teamNumber) {
   try {
     const scoutingRef = collection(db, 'scouting');
-
-    // Query for documents where teamNumber matches
-    const q = query(scoutingRef, where('teamNumber', '==', teamNumber));
-    const querySnapshot = await getDocs(q);
-
     const records = [];
-    querySnapshot.forEach((doc) => {
+
+    // Query with teamNumber as STRING
+    const teamStr = String(teamNumber);
+    const q1 = query(scoutingRef, where('teamNumber', '==', teamStr));
+    const snapshot1 = await getDocs(q1);
+    snapshot1.forEach((doc) => {
       records.push({ id: doc.id, ...doc.data() });
     });
+
+    // Query with teamNumber as NUMBER (avoid duplicates)
+    const teamNum = parseInt(teamNumber, 10);
+    if (!isNaN(teamNum)) {
+      const q2 = query(scoutingRef, where('teamNumber', '==', teamNum));
+      const snapshot2 = await getDocs(q2);
+      snapshot2.forEach((doc) => {
+        if (!records.find(r => r.id === doc.id)) {
+          records.push({ id: doc.id, ...doc.data() });
+        }
+      });
+    }
 
     console.log('✅ Retrieved', records.length, 'records for team', teamNumber);
     return records;
@@ -286,11 +299,13 @@ async function deleteScoutingData(docId) {
 /**
  * RUN FIREBASE DIAGNOSTICS
  * ------------------------
- * Tests the Firebase connection with a 4-step checklist:
- * 1. Firebase initialized
- * 2. Firestore read works
- * 3. Firestore write/delete works
- * 4. Auth available
+ * Tests the Firebase connection by performing a series of operations.
+ * Useful for debugging when things aren't working.
+ *
+ * WHAT IT TESTS:
+ * 1. Can we write to Firestore? (Create)
+ * 2. Can we read from Firestore? (Read)
+ * 3. Can we delete from Firestore? (Delete)
  *
  * @returns {Promise<Object>} - Results of each diagnostic test
  */
@@ -301,627 +316,880 @@ async function runDiagnostics() {
     tests: []
   };
 
-  // Test 1: Firebase Initialized
+  // Test 1: Write to Firestore
   try {
-    console.log('📝 Test 1: Checking Firebase initialization...');
-    if (db) {
-      results.tests.push({ name: 'Firebase Initialized', status: 'PASS' });
-      console.log('✅ Firebase initialized');
-    } else {
-      throw new Error('Firebase not initialized');
-    }
-  } catch (error) {
-    results.tests.push({ name: 'Firebase Initialized', status: 'FAIL', error: error.message });
-    console.error('❌ Firebase init failed:', error);
-  }
-
-  // Test 2: Firestore Read
-  let testDocId = null;
-  try {
-    console.log('📖 Test 2: Testing Firestore read...');
-    const testData = { _diagnostic: true, timestamp: new Date().toISOString() };
+    console.log('📝 Test 1: Writing to Firestore...');
+    const testData = {
+      _diagnostic: true,
+      message: 'Diagnostic test',
+      timestamp: new Date().toISOString()
+    };
     const docRef = await addDoc(collection(db, '_diagnostics'), testData);
-    testDocId = docRef.id;
-    const readDoc = await getDoc(doc(db, '_diagnostics', docRef.id));
-    if (readDoc.exists()) {
-      results.tests.push({ name: 'Firestore Read', status: 'PASS' });
-      console.log('✅ Firestore read works');
-    } else {
-      throw new Error('Document not found');
-    }
-  } catch (error) {
-    results.tests.push({ name: 'Firestore Read', status: 'FAIL', error: error.message });
-    console.error('❌ Firestore read failed:', error);
-  }
+    results.tests.push({
+      name: 'Write to Firestore',
+      status: 'PASS',
+      docId: docRef.id
+    });
+    console.log('✅ Write test passed');
 
-  // Test 3: Firestore Write/Delete
-  try {
-    console.log('🗑️ Test 3: Testing Firestore write/delete...');
-    if (testDocId) {
-      await deleteDoc(doc(db, '_diagnostics', testDocId));
-      results.tests.push({ name: 'Firestore Write/Delete', status: 'PASS' });
-      console.log('✅ Firestore write/delete works');
-    } else {
-      throw new Error('No test doc to delete');
-    }
-  } catch (error) {
-    results.tests.push({ name: 'Firestore Write/Delete', status: 'FAIL', error: error.message });
-    console.error('❌ Firestore write/delete failed:', error);
-  }
-
-  // Test 4: Auth Available
-  try {
-    console.log('🔐 Test 4: Checking Auth availability...');
-    if (auth) {
-      const user = auth.currentUser;
+    // Test 2: Read from Firestore
+    try {
+      console.log('📖 Test 2: Reading from Firestore...');
+      const readDoc = await getDoc(doc(db, '_diagnostics', docRef.id));
+      if (readDoc.exists()) {
+        results.tests.push({
+          name: 'Read from Firestore',
+          status: 'PASS',
+          data: readDoc.data()
+        });
+        console.log('✅ Read test passed');
+      } else {
+        throw new Error('Document not found');
+      }
+    } catch (error) {
       results.tests.push({
-        name: 'Auth Available',
-        status: 'PASS',
-        user: user ? user.email : 'No user signed in'
+        name: 'Read from Firestore',
+        status: 'FAIL',
+        error: error.message
       });
-      console.log('✅ Auth available, user:', user ? user.email : 'none');
-    } else {
-      throw new Error('Auth not available');
+      console.error('❌ Read test failed:', error);
     }
+
+    // Test 3: Delete from Firestore (cleanup)
+    try {
+      console.log('🗑️ Test 3: Deleting from Firestore...');
+      await deleteDoc(doc(db, '_diagnostics', docRef.id));
+      results.tests.push({
+        name: 'Delete from Firestore',
+        status: 'PASS'
+      });
+      console.log('✅ Delete test passed');
+    } catch (error) {
+      results.tests.push({
+        name: 'Delete from Firestore',
+        status: 'FAIL',
+        error: error.message
+      });
+      console.error('❌ Delete test failed:', error);
+    }
+
   } catch (error) {
-    results.tests.push({ name: 'Auth Available', status: 'FAIL', error: error.message });
-    console.error('❌ Auth check failed:', error);
+    results.tests.push({
+      name: 'Write to Firestore',
+      status: 'FAIL',
+      error: error.message
+    });
+    console.error('❌ Write test failed:', error);
   }
 
   // Summary
   const passed = results.tests.filter(t => t.status === 'PASS').length;
-  results.summary = `${passed}/4 tests passed`;
+  const total = results.tests.length;
+  results.summary = `${passed}/${total} tests passed`;
+
   console.log('🔍 Diagnostics complete:', results.summary);
   return results;
 }
 
-/**
- * READ RECENT SCOUTING
- * --------------------
- * Returns the most recent scouting entries, with optional limit.
- *
- * @param {number} limitCount - Maximum number of entries to return (default: 10)
- * @returns {Promise<Array>} - Array of recent scouting records
- */
-async function readRecentScouting(limitCount = 10) {
-  try {
-    console.log('📖 Reading recent scouting entries (limit:', limitCount, ')');
-    const scoutingRef = collection(db, 'scouting');
-    // Order by createdAt descending (newest first) and limit results
-    const q = query(scoutingRef, orderBy('createdAt', 'desc'), firestoreLimit(limitCount));
-    const querySnapshot = await getDocs(q);
 
-    const records = [];
-    querySnapshot.forEach((docSnap) => {
-      records.push({ id: docSnap.id, ...docSnap.data() });
+// =============================================================================
+// AUTHENTICATION HELPERS
+// =============================================================================
+
+/**
+ * LOGIN USER
+ * ----------
+ * Signs in an existing user with email and password.
+ *
+ * @param {string} email - User's email address
+ * @param {string} password - User's password
+ * @returns {Promise<Object>} - The user credential object
+ */
+async function loginUser(email, password) {
+  try {
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    console.log('✅ User logged in:', userCredential.user.email);
+    return userCredential;
+  } catch (error) {
+    console.error('❌ Login error:', error);
+    throw error;
+  }
+}
+
+/**
+ * SIGN UP USER
+ * ------------
+ * Creates a new user account with validation.
+ *
+ * @param {string} email - User's email address
+ * @param {string} password - User's password
+ * @param {string} username - User's display name
+ * @param {string} signupCode - Team signup code (must be "1551")
+ * @returns {Promise<Object>} - The user credential object
+ */
+async function signUpUser(email, password, username, signupCode) {
+  // Validate signup code
+  if (signupCode !== '1551') {
+    throw new Error('Invalid signup code');
+  }
+
+  try {
+    // Create the user
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+
+    // Update display name
+    await updateProfile(user, { displayName: username });
+
+    // Create user profile in Firestore
+    await setDoc(doc(db, 'users', user.uid), {
+      email: user.email,
+      displayName: username,
+      role: 'scouter',
+      createdAt: serverTimestamp()
     });
 
-    console.log('✅ Retrieved', records.length, 'recent scouting records');
-    return records;
+    console.log('✅ User created:', user.email);
+    return userCredential;
   } catch (error) {
-    console.error('❌ Error reading recent scouting:', error);
+    console.error('❌ Signup error:', error);
+    throw error;
+  }
+}
+
+/**
+ * CHECK ADMIN RIGHTS
+ * ------------------
+ * Checks if the current user has admin access.
+ *
+ * Admin access is granted if:
+ * 1. User email is "rtmbe20@gmail.com" (hardcoded admin)
+ * 2. User email is in settings/admins.emails[] array
+ *
+ * @param {Object} user - Firebase user object
+ * @returns {Promise<boolean>} - True if user is admin
+ */
+async function checkAdminRights(user) {
+  if (!user || !user.email) return false;
+
+  const email = user.email.toLowerCase();
+
+  // Hardcoded primary admin
+  if (email === 'rtmbe20@gmail.com') {
+    console.log('✅ Primary admin access granted');
+    return true;
+  }
+
+  try {
+    // Check Firestore for additional admins
+    const adminsDoc = await getDoc(doc(db, 'settings', 'admins'));
+    if (adminsDoc.exists()) {
+      const data = adminsDoc.data();
+      const adminEmails = (data.emails || []).map(e => e.toLowerCase());
+
+      if (adminEmails.includes(email)) {
+        console.log('✅ Admin access granted via Firestore');
+        return true;
+      }
+    }
+  } catch (error) {
+    console.error('Error checking admin rights:', error);
+  }
+
+  console.log('❌ User is not an admin');
+  return false;
+}
+
+/**
+ * SIGN OUT USER
+ * -------------
+ * Signs out the current user.
+ */
+async function signOutUser() {
+  try {
+    await firebaseSignOut(auth);
+    console.log('✅ User signed out');
+    window.location.href = 'login.html';
+  } catch (error) {
+    console.error('❌ Sign out error:', error);
     throw error;
   }
 }
 
 
 // =============================================================================
-// TEAM STATS ENGINE (CRITICAL FEATURE)
-// =============================================================================
-//
-// This section handles aggregating scouting data into team statistics.
-//
-// HOW IT WORKS:
-// 1. When a scouting entry is submitted, we recalculate that team's stats
-// 2. We query all scouting entries for the team
-// 3. We compute averages and find the max score
-// 4. We store the aggregated stats in the 'teams' collection
-//
-// DATA STRUCTURE:
-//   teams/{teamNumber}
-//     matchesPlayed: number
-//     avgAuto: number
-//     avgTeleop: number
-//     avgTotal: number
-//     maxScore: number
-//     lastUpdated: timestamp
-//
+// QUESTION MANAGEMENT (Admin)
 // =============================================================================
 
 /**
- * RECALCULATE TEAM STATS
- * ----------------------
- * Recalculates and updates the aggregated statistics for a team.
- * This should be called after every new scouting entry is added.
+ * GET ALL QUESTIONS
+ * -----------------
+ * Retrieves all scouting form questions.
  *
- * AGGREGATION LOGIC:
- * - matchesPlayed: Count of all scouting entries for this team
- * - avgAuto: Sum of autoPoints / matchesPlayed
- * - avgTeleop: Sum of teleopPoints / matchesPlayed
- * - avgTotal: Sum of totalPoints / matchesPlayed
- * - maxScore: Maximum totalPoints across all matches
- *
- * @param {number|string} teamNumber - The FRC team number
- * @returns {Promise<Object>} - The calculated team stats
- *
- * @example
- * // After saving a scouting entry:
- * await saveScoutingData(formData);
- * await recalculateTeamStats(formData.teamNumber);
+ * @returns {Promise<Array>} - Array of question objects
  */
-async function recalculateTeamStats(teamNumber) {
+async function getAllQuestions() {
   try {
-    console.log('📊 Recalculating stats for team', teamNumber);
-
-    // Step 1: Get all scouting entries for this team
-    const scoutingRef = collection(db, 'scouting');
-    const q = query(scoutingRef, where('teamNumber', '==', Number(teamNumber)));
+    const questionsRef = collection(db, 'questions');
+    const q = query(questionsRef, orderBy('order', 'asc'));
     const snapshot = await getDocs(q);
 
-    // If no entries exist, remove team from stats
-    if (snapshot.empty) {
-      console.log('⚠️ No scouting data found for team', teamNumber);
-      return null;
-    }
-
-    // Step 2: Calculate aggregated statistics
-    let totalAuto = 0;
-    let totalTeleop = 0;
-    let totalPoints = 0;
-    let maxScore = 0;
-    let matchCount = 0;
-
-    snapshot.forEach((docSnap) => {
-      const data = docSnap.data();
-
-      // Calculate auto score from component fields (2024 FRC scoring)
-      const autoSpeaker = Number(data.autoSpeaker) || 0;
-      const autoAmp = Number(data.autoAmp) || 0;
-      const auto = autoSpeaker * 5 + autoAmp * 2;
-
-      // Calculate teleop score from component fields
-      const teleopSpeaker = Number(data.teleopSpeaker) || 0;
-      const teleopAmp = Number(data.teleopAmp) || 0;
-      const amplifiedScored = Number(data.amplifiedScored) || 0;
-      const teleop = teleopSpeaker * 2 + teleopAmp + amplifiedScored * 5;
-
-      const total = auto + teleop;
-
-      // Add to running totals
-      totalAuto += auto;
-      totalTeleop += teleop;
-      totalPoints += total;
-      matchCount++;
-
-      // Track max score
-      if (total > maxScore) {
-        maxScore = total;
-      }
+    const questions = [];
+    snapshot.forEach(doc => {
+      questions.push({ id: doc.id, ...doc.data() });
     });
 
-    // Step 3: Compute averages (round to 2 decimal places)
-    const stats = {
-      teamNumber: Number(teamNumber),
-      matchesPlayed: matchCount,
-      avgAuto: Math.round((totalAuto / matchCount) * 100) / 100,
-      avgTeleop: Math.round((totalTeleop / matchCount) * 100) / 100,
-      avgTotal: Math.round((totalPoints / matchCount) * 100) / 100,
-      maxScore: maxScore,
-      lastUpdated: serverTimestamp()
-    };
-
-    console.log('📊 Calculated stats:', stats);
-
-    // Step 4: Save stats to teams collection
-    // We use setDoc with the team number as the document ID
-    // This allows easy lookup and prevents duplicates
-    const teamDocRef = doc(db, 'teams', String(teamNumber));
-    await setDoc(teamDocRef, stats);
-
-    console.log('✅ Team stats updated for team', teamNumber);
-    return stats;
-
+    console.log('✅ Retrieved', questions.length, 'questions');
+    return questions;
   } catch (error) {
-    console.error('❌ Error recalculating team stats:', error);
-    throw error;
-  }
-}
-
-
-/**
- * READ TOP TEAMS (LEADERBOARD)
- * ----------------------------
- * Returns the top N teams ranked by average total points.
- * This powers the leaderboard feature on Dashboard and Teams pages.
- *
- * RANKING LOGIC:
- * - Primary sort: avgTotal (descending) - higher average is better
- * - Tiebreaker: maxScore (descending) - higher best match is better
- *
- * CACHING:
- * For performance, callers should cache results in sessionStorage
- * and refresh periodically (e.g., every 5 minutes).
- *
- * @param {number} limitCount - Number of teams to return (default: 10)
- * @returns {Promise<Array>} - Array of team stats, sorted by ranking
- *
- * @example
- * const topTeams = await readTopTeams(10);
- * topTeams.forEach((team, index) => {
- *   console.log(`#${index + 1}: Team ${team.teamNumber} - ${team.avgTotal} avg`);
- * });
- */
-async function readTopTeams(limitCount = 10) {
-  try {
-    console.log('🏆 Reading top', limitCount, 'teams');
-
-    // First try to get from teams collection
-    const teamsRef = collection(db, 'teams');
-    let teams = [];
-
-    try {
-      // Try ordered query (requires index)
-      const q = query(teamsRef, orderBy('avgTotal', 'desc'), firestoreLimit(limitCount));
-      const snapshot = await getDocs(q);
-      snapshot.forEach((docSnap) => {
-        teams.push({ id: docSnap.id, ...docSnap.data() });
-      });
-    } catch (indexError) {
-      // If index doesn't exist, fetch all and sort client-side
-      console.log('⚠️ Index not available, fetching all teams...');
-      const snapshot = await getDocs(teamsRef);
-      snapshot.forEach((docSnap) => {
-        teams.push({ id: docSnap.id, ...docSnap.data() });
-      });
-    }
-
-    // If no teams in collection, calculate from scouting data
-    if (teams.length === 0) {
-      console.log('📊 No team stats found, calculating from scouting data...');
-      teams = await calculateLeaderboardFromScouting();
-    }
-
-    // Sort by avgTotal descending, then by maxScore for tiebreaker
-    teams.sort((a, b) => {
-      if ((b.avgTotal || 0) !== (a.avgTotal || 0)) {
-        return (b.avgTotal || 0) - (a.avgTotal || 0);
-      }
-      return (b.maxScore || 0) - (a.maxScore || 0);
-    });
-
-    // Limit results
-    teams = teams.slice(0, limitCount);
-
-    console.log('✅ Retrieved', teams.length, 'top teams');
-    return teams;
-
-  } catch (error) {
-    console.error('❌ Error reading top teams:', error);
-    // Return empty array instead of throwing to prevent UI errors
+    console.error('❌ Error getting questions:', error);
     return [];
   }
 }
 
 /**
- * CALCULATE LEADERBOARD FROM SCOUTING
- * ------------------------------------
- * Fallback function to calculate team stats from raw scouting data
- * when the teams collection is empty.
- */
-async function calculateLeaderboardFromScouting() {
-  const scoutingRef = collection(db, 'scouting');
-  const snapshot = await getDocs(scoutingRef);
-
-  const teamStats = {};
-
-  snapshot.forEach((docSnap) => {
-    const data = docSnap.data();
-    const teamNum = String(data.teamNumber);
-
-    if (!teamNum) return;
-
-    // Calculate scores
-    const autoSpeaker = Number(data.autoSpeaker) || 0;
-    const autoAmp = Number(data.autoAmp) || 0;
-    const auto = autoSpeaker * 5 + autoAmp * 2;
-
-    const teleopSpeaker = Number(data.teleopSpeaker) || 0;
-    const teleopAmp = Number(data.teleopAmp) || 0;
-    const amplifiedScored = Number(data.amplifiedScored) || 0;
-    const teleop = teleopSpeaker * 2 + teleopAmp + amplifiedScored * 5;
-
-    const total = auto + teleop;
-
-    // Aggregate stats
-    if (!teamStats[teamNum]) {
-      teamStats[teamNum] = {
-        teamNumber: Number(teamNum),
-        totalAuto: 0,
-        totalTeleop: 0,
-        totalPoints: 0,
-        maxScore: 0,
-        matchesPlayed: 0
-      };
-    }
-
-    teamStats[teamNum].totalAuto += auto;
-    teamStats[teamNum].totalTeleop += teleop;
-    teamStats[teamNum].totalPoints += total;
-    teamStats[teamNum].matchesPlayed++;
-    if (total > teamStats[teamNum].maxScore) {
-      teamStats[teamNum].maxScore = total;
-    }
-  });
-
-  // Convert to array with averages
-  return Object.values(teamStats).map(team => ({
-    teamNumber: team.teamNumber,
-    avgAuto: team.matchesPlayed > 0 ? Math.round((team.totalAuto / team.matchesPlayed) * 100) / 100 : 0,
-    avgTeleop: team.matchesPlayed > 0 ? Math.round((team.totalTeleop / team.matchesPlayed) * 100) / 100 : 0,
-    avgTotal: team.matchesPlayed > 0 ? Math.round((team.totalPoints / team.matchesPlayed) * 100) / 100 : 0,
-    maxScore: team.maxScore,
-    matchesPlayed: team.matchesPlayed
-  }));
-}
-
-
-/**
- * SEARCH TEAMS
+ * ADD QUESTION
  * ------------
- * Searches for teams by team number (supports partial matching).
- * Returns team stats for matching teams.
+ * Adds a new scouting form question.
  *
- * HOW PARTIAL MATCHING WORKS:
- * - Firestore doesn't support LIKE queries natively
- * - For small datasets, we fetch all teams and filter client-side
- * - For exact matches, we query directly by document ID
- *
- * @param {string|number} searchQuery - The team number to search for
- * @returns {Promise<Array>} - Array of matching team stats
- *
- * @example
- * const results = await searchTeams('125');
- * // Returns teams: 125, 1250, 1251, 2125, etc.
+ * @param {Object} question - Question data
+ *   - text: string (question text)
+ *   - category: "Auto" | "Teleop" | "Endgame" | "Notes"
+ *   - type: "number" | "text" | "toggle"
+ *   - order: number
+ * @returns {Promise<string>} - Document ID
  */
-async function searchTeams(searchQuery) {
+async function addQuestion(question) {
   try {
-    const queryStr = String(searchQuery).trim();
-    console.log('🔍 Searching teams for:', queryStr);
-
-    if (!queryStr) {
-      console.log('⚠️ Empty search query');
-      return [];
-    }
-
-    // First, try to search in the teams collection (aggregated stats)
-    const teamsRef = collection(db, 'teams');
-    const teamsSnapshot = await getDocs(teamsRef);
-
-    const results = [];
-    const foundTeamNumbers = new Set();
-
-    teamsSnapshot.forEach((docSnap) => {
-      const teamNum = String(docSnap.id);
-      // Partial match: team number contains the search query
-      if (teamNum.includes(queryStr)) {
-        results.push({ id: docSnap.id, ...docSnap.data() });
-        foundTeamNumbers.add(teamNum);
-      }
+    const docRef = await addDoc(collection(db, 'questions'), {
+      ...question,
+      createdAt: serverTimestamp()
     });
-
-    // If no results in teams collection, search scouting data directly
-    if (results.length === 0) {
-      console.log('🔍 No team stats found, searching scouting data...');
-      const scoutingRef = collection(db, 'scouting');
-      const scoutingSnapshot = await getDocs(scoutingRef);
-
-      // Aggregate stats for matching teams
-      const teamStats = {};
-
-      scoutingSnapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        const teamNum = String(data.teamNumber);
-
-        // Partial match and not already found in teams collection
-        if (teamNum.includes(queryStr) && !foundTeamNumbers.has(teamNum)) {
-          // Calculate scores
-          const autoScore = (Number(data.autoSpeaker) || 0) * 5 + (Number(data.autoAmp) || 0) * 2;
-          const teleopScore = (Number(data.teleopSpeaker) || 0) * 2 + (Number(data.teleopAmp) || 0) + (Number(data.amplifiedScored) || 0) * 5;
-          const total = autoScore + teleopScore;
-
-          if (!teamStats[teamNum]) {
-            teamStats[teamNum] = { totalAuto: 0, totalTeleop: 0, totalPoints: 0, maxScore: 0, matchesPlayed: 0 };
-          }
-          teamStats[teamNum].totalAuto += autoScore;
-          teamStats[teamNum].totalTeleop += teleopScore;
-          teamStats[teamNum].totalPoints += total;
-          teamStats[teamNum].matchesPlayed++;
-          if (total > teamStats[teamNum].maxScore) teamStats[teamNum].maxScore = total;
-        }
-      });
-
-      // Convert to results array with calculated averages
-      for (const [teamNum, stats] of Object.entries(teamStats)) {
-        results.push({
-          id: teamNum,
-          teamNumber: parseInt(teamNum),
-          avgAuto: stats.matchesPlayed > 0 ? stats.totalAuto / stats.matchesPlayed : 0,
-          avgTeleop: stats.matchesPlayed > 0 ? stats.totalTeleop / stats.matchesPlayed : 0,
-          avgTotal: stats.matchesPlayed > 0 ? stats.totalPoints / stats.matchesPlayed : 0,
-          maxScore: stats.maxScore,
-          matchesPlayed: stats.matchesPlayed
-        });
-        foundTeamNumbers.add(teamNum);
-      }
-    }
-
-    // Sort by best match (exact match first, then by team number)
-    results.sort((a, b) => {
-      const aExact = String(a.teamNumber) === queryStr;
-      const bExact = String(b.teamNumber) === queryStr;
-      if (aExact && !bExact) return -1;
-      if (!aExact && bExact) return 1;
-      return Number(a.teamNumber) - Number(b.teamNumber);
-    });
-
-    console.log('✅ Found', results.length, 'matching teams');
-    return results;
-
+    console.log('✅ Question added:', docRef.id);
+    return docRef.id;
   } catch (error) {
-    console.error('❌ Error searching teams:', error);
+    console.error('❌ Error adding question:', error);
     throw error;
   }
 }
 
-
 /**
- * GET TEAM STATS
- * --------------
- * Gets the aggregated statistics for a single team.
+ * UPDATE QUESTION
+ * ---------------
+ * Updates an existing question.
  *
- * @param {number|string} teamNumber - The FRC team number
- * @returns {Promise<Object|null>} - Team stats or null if not found
+ * @param {string} docId - Question document ID
+ * @param {Object} data - Fields to update
  */
-async function getTeamStats(teamNumber) {
+async function updateQuestion(docId, data) {
   try {
-    console.log('📊 Getting stats for team', teamNumber);
-
-    const teamDocRef = doc(db, 'teams', String(teamNumber));
-    const docSnap = await getDoc(teamDocRef);
-
-    if (docSnap.exists()) {
-      console.log('✅ Found stats for team', teamNumber);
-      return { id: docSnap.id, ...docSnap.data() };
-    } else {
-      console.log('⚠️ No stats found for team', teamNumber);
-      return null;
-    }
-
-  } catch (error) {
-    console.error('❌ Error getting team stats:', error);
-    throw error;
-  }
-}
-
-
-// Aliases for required function names
-const createScoutingEntry = saveScoutingData;
-const updateScoutingEntry = updateScoutingData;
-const deleteScoutingEntry = deleteScoutingData;
-
-
-// =============================================================================
-// QUESTION MANAGEMENT
-// =============================================================================
-//
-// These functions allow admins to manage scouting form questions.
-// Questions are stored in Firestore in a 'settings' collection.
-//
-// =============================================================================
-
-/**
- * GET SCOUTING QUESTIONS
- * ----------------------
- * Retrieves the custom scouting questions from Firestore.
- *
- * @returns {Promise<Array>} Array of question objects
- */
-async function getScoutingQuestions() {
-  try {
-    console.log('📋 Loading scouting questions...');
-    const settingsRef = doc(db, 'settings', 'scoutingQuestions');
-    const docSnap = await getDoc(settingsRef);
-
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      console.log('✅ Loaded', data.questions?.length || 0, 'questions');
-      return data.questions || [];
-    } else {
-      console.log('⚠️ No custom questions found, using defaults');
-      return [];
-    }
-
-  } catch (error) {
-    console.error('❌ Error loading questions:', error);
-    throw error;
-  }
-}
-
-
-/**
- * SAVE SCOUTING QUESTIONS
- * -----------------------
- * Saves the scouting questions to Firestore.
- *
- * @param {Array} questions - Array of question objects
- * @returns {Promise<void>}
- */
-async function saveScoutingQuestions(questions) {
-  try {
-    console.log('💾 Saving scouting questions...');
-    const settingsRef = doc(db, 'settings', 'scoutingQuestions');
-    await setDoc(settingsRef, {
-      questions: questions,
+    await updateDoc(doc(db, 'questions', docId), {
+      ...data,
       updatedAt: serverTimestamp()
     });
-    console.log('✅ Questions saved successfully');
-
+    console.log('✅ Question updated:', docId);
   } catch (error) {
-    console.error('❌ Error saving questions:', error);
+    console.error('❌ Error updating question:', error);
+    throw error;
+  }
+}
+
+/**
+ * DELETE QUESTION
+ * ---------------
+ * Deletes a question.
+ *
+ * @param {string} docId - Question document ID
+ */
+async function deleteQuestion(docId) {
+  try {
+    await deleteDoc(doc(db, 'questions', docId));
+    console.log('✅ Question deleted:', docId);
+  } catch (error) {
+    console.error('❌ Error deleting question:', error);
     throw error;
   }
 }
 
 
 // =============================================================================
-// EXTERNAL DATA WRAPPERS
+// API STATUS
+// =============================================================================
+
+/**
+ * GET API KEY STATUS
+ * ------------------
+ * Checks the status of external API connections.
+ * Tests connectivity to Statbotics, The Blue Alliance, and FRC Nexus.
+ *
+ * @returns {Promise<Object>} - Status of each API
+ */
+async function getAPIKeyStatus() {
+  const status = {
+    statbotics: { name: 'Statbotics', status: 'unknown', message: '' },
+    tba: { name: 'The Blue Alliance', status: 'unknown', message: '' },
+    frcNexus: { name: 'FRC Nexus', status: 'unknown', message: '' }
+  };
+
+  // Test Statbotics (no API key required)
+  try {
+    const response = await fetch('https://api.statbotics.io/v3/team/254', {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' }
+    });
+    if (response.ok) {
+      status.statbotics.status = 'connected';
+      status.statbotics.message = 'API is accessible';
+    } else {
+      status.statbotics.status = 'failed';
+      status.statbotics.message = `HTTP ${response.status}`;
+    }
+  } catch (error) {
+    status.statbotics.status = 'failed';
+    status.statbotics.message = error.message;
+  }
+
+  // Check if TBA API key is configured
+  try {
+    const settingsDoc = await getDoc(doc(db, 'settings', 'apiKeys'));
+    if (settingsDoc.exists()) {
+      const keys = settingsDoc.data();
+
+      if (keys.tbaKey) {
+        // Test TBA with the key
+        const response = await fetch('https://www.thebluealliance.com/api/v3/status', {
+          headers: { 'X-TBA-Auth-Key': keys.tbaKey }
+        });
+        if (response.ok) {
+          status.tba.status = 'connected';
+          status.tba.message = 'API key valid';
+        } else {
+          status.tba.status = 'failed';
+          status.tba.message = 'Invalid API key';
+        }
+      } else {
+        status.tba.status = 'failed';
+        status.tba.message = 'No API key provided';
+      }
+
+      if (keys.nexusKey) {
+        status.frcNexus.status = 'connected';
+        status.frcNexus.message = 'API key configured';
+      } else {
+        status.frcNexus.status = 'failed';
+        status.frcNexus.message = 'No API key provided';
+      }
+    } else {
+      status.tba.status = 'failed';
+      status.tba.message = 'No API keys configured';
+      status.frcNexus.status = 'failed';
+      status.frcNexus.message = 'No API keys configured';
+    }
+  } catch (error) {
+    console.error('Error checking API keys:', error);
+  }
+
+  return status;
+}
+
+
+// =============================================================================
+// EPA SCALING & CLASSIFICATION
 // =============================================================================
 //
-// These functions provide safe wrappers for external API calls.
-// They handle errors gracefully and return null on failure.
+// WHAT IS EPA?
+// EPA (Expected Points Added) is a metric from Statbotics that measures
+// how many points a team contributes to their alliance per match.
+//
+// RAW EPA VALUES:
+// Statbotics returns raw EPA values that can range from negative to 1000+.
+// These are NOT normalized and vary by season. For example:
+// - 2024 season: EPA values typically range from ~5 to ~80
+// - Raw "total EPA" can be much higher (cumulative)
+//
+// SCALING FORMULA:
+// We scale the normalized EPA (norm_epa) to a more readable range.
+// The norm_epa is already percentile-based (0-100) but we present it
+// on a scale more intuitive to users.
+//
+// CLASSIFICATION THRESHOLDS:
+// - Elite: Top 10% of teams (percentile >= 90)
+// - Top Tier: Next 25% (percentile >= 65)
+// - Normal: Middle 45% (percentile >= 20)
+// - Below Average: Bottom 20% (percentile < 20)
 //
 // =============================================================================
 
 /**
- * SAFE FETCH TBA
- * --------------
- * Wrapper to safely fetch data from The Blue Alliance.
- * Returns null on error instead of throwing.
+ * SCALE STATBOTICS EPA
+ * --------------------
+ * Returns the actual EPA points value from Statbotics data.
  *
- * @param {string} eventCode - The TBA event code (e.g., '2024txhou')
- * @returns {Promise<Object|null>}
+ * EPA (Expected Points Added) represents a team's expected contribution
+ * to their alliance score per match. This is the actual meaningful value.
+ *
+ * @param {Object|number} statboticsData - The Statbotics data object or percentile
+ * @returns {number} - EPA points value
  */
-async function safeFetchTBA(eventCode) {
-  try {
-    // Dynamic import to avoid loading external data module if not needed
-    const { getTBAEventDetails, getTBAEventTeams, getTBAEventMatches } =
-      await import('./externalData.js');
+function scaleStatboticsEPA(statboticsData) {
+  if (!statboticsData) return 0;
 
-    const [details, teams, matches] = await Promise.all([
-      getTBAEventDetails(eventCode),
-      getTBAEventTeams(eventCode),
-      getTBAEventMatches(eventCode)
+  // If it's a number (percentile), return it as-is for backwards compatibility
+  if (typeof statboticsData === 'number') {
+    return statboticsData;
+  }
+
+  // Get actual EPA total points (expected contribution per match)
+  if (statboticsData.epa?.total_points?.mean) {
+    return statboticsData.epa.total_points.mean;
+  }
+
+  // Fallback to older API format
+  if (typeof statboticsData.epa_end === 'number') {
+    return statboticsData.epa_end;
+  }
+
+  return 0;
+}
+
+/**
+ * CLASSIFY EPA
+ * ------------
+ * Classifies a team based on their EPA percentile.
+ *
+ * CLASSIFICATION LOGIC:
+ * Uses percentile-based classification where:
+ * - Elite: >= 90th percentile (top 10%)
+ * - Top Tier: >= 65th percentile (next 25%)
+ * - Normal: >= 20th percentile (middle 45%)
+ * - Below Average: < 20th percentile (bottom 20%)
+ *
+ * If you have a list of all team EPAs, you can calculate actual percentiles.
+ * Otherwise, we use the norm_epa from Statbotics which is already a percentile.
+ *
+ * @param {number} epaPercentile - Team's EPA percentile (0-100)
+ * @param {Array} allTeamEPAs - Optional: Array of all team EPAs for relative ranking
+ * @returns {Object} - { classification: string, color: string, emoji: string }
+ */
+function classifyEPA(epaPercentile, allTeamEPAs = null) {
+  // If allTeamEPAs provided, calculate actual percentile
+  let percentile = epaPercentile;
+
+  if (allTeamEPAs && allTeamEPAs.length > 0 && typeof epaPercentile === 'number') {
+    // Calculate what percentile this EPA falls into
+    const sorted = [...allTeamEPAs].sort((a, b) => a - b);
+    const rank = sorted.findIndex(epa => epa >= epaPercentile);
+    percentile = ((rank === -1 ? sorted.length : rank) / sorted.length) * 100;
+  }
+
+  // Classification thresholds
+  if (percentile >= 90) {
+    return {
+      classification: 'Elite',
+      color: '#FFD700',  // Gold
+      emoji: '🏆',
+      description: 'Top 10% of teams'
+    };
+  } else if (percentile >= 65) {
+    return {
+      classification: 'Top Tier',
+      color: '#4CAF50',  // Green
+      emoji: '⭐',
+      description: 'Top 35% of teams'
+    };
+  } else if (percentile >= 20) {
+    return {
+      classification: 'Normal',
+      color: '#2196F3',  // Blue
+      emoji: '🔵',
+      description: 'Average performance'
+    };
+  } else {
+    return {
+      classification: 'Below Average',
+      color: '#9E9E9E',  // Gray
+      emoji: '📈',
+      description: 'Developing team'
+    };
+  }
+}
+
+/**
+ * GET EPA PERCENTILE FROM STATBOTICS DATA
+ * ----------------------------------------
+ * Extracts the EPA percentile from Statbotics response.
+ *
+ * @param {Object} statboticsData - Raw Statbotics API response
+ * @returns {number} - EPA percentile (0-100)
+ */
+function getEPAPercentile(statboticsData) {
+  if (!statboticsData) return 0;
+
+  // Statbotics provides norm_epa which is already a percentile
+  // norm_epa.mean is the overall percentile
+  // Higher norm_epa = better team
+
+  if (statboticsData.norm_epa && typeof statboticsData.norm_epa.mean === 'number') {
+    return statboticsData.norm_epa.mean;
+  }
+
+  // Fallback: calculate from EPA percentile if available
+  if (statboticsData.epa_percentile) {
+    return statboticsData.epa_percentile;
+  }
+
+  // Default if no data
+  return 50;
+}
+
+
+// =============================================================================
+// THE BLUE ALLIANCE API
+// =============================================================================
+//
+// TBA API Documentation: https://www.thebluealliance.com/apidocs/v3
+//
+// ENDPOINTS USED:
+// - /events/{year} - List all events for a year
+// - /event/{event_key} - Event details
+// - /event/{event_key}/teams - Teams at event
+// - /event/{event_key}/matches - Matches at event
+// - /team/{team_key} - Team details
+//
+// =============================================================================
+
+import { API_KEYS, API_URLS } from './firebase.js';
+
+/**
+ * GET BLUE ALLIANCE EVENT LIST
+ * ----------------------------
+ * Fetches all events for a given year from The Blue Alliance.
+ *
+ * @param {number} year - The year to fetch events for (default: current year)
+ * @returns {Promise<Array>} - Array of event objects
+ */
+async function getBlueAllianceEventList(year = new Date().getFullYear()) {
+  try {
+    console.log(`🔵 Fetching TBA events for ${year}...`);
+
+    const response = await fetch(`${API_URLS.TBA}/events/${year}`, {
+      headers: {
+        'X-TBA-Auth-Key': API_KEYS.TBA,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`TBA API Error: HTTP ${response.status}`);
+    }
+
+    const events = await response.json();
+
+    // Sort by start date
+    events.sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
+
+    console.log(`✅ Retrieved ${events.length} events for ${year}`);
+    return events;
+  } catch (error) {
+    console.error('❌ Error fetching TBA events:', error);
+    return [];
+  }
+}
+
+/**
+ * GET BLUE ALLIANCE EVENT DETAILS
+ * -------------------------------
+ * Fetches detailed information about a specific event.
+ *
+ * @param {string} eventKey - The TBA event key (e.g., "2024casj")
+ * @returns {Promise<Object>} - Event details with teams and matches
+ */
+async function getBlueAllianceEventDetails(eventKey) {
+  try {
+    console.log(`🔵 Fetching TBA event details for ${eventKey}...`);
+
+    // Fetch event info, teams, and matches in parallel
+    const [eventResponse, teamsResponse, matchesResponse] = await Promise.all([
+      fetch(`${API_URLS.TBA}/event/${eventKey}`, {
+        headers: { 'X-TBA-Auth-Key': API_KEYS.TBA }
+      }),
+      fetch(`${API_URLS.TBA}/event/${eventKey}/teams`, {
+        headers: { 'X-TBA-Auth-Key': API_KEYS.TBA }
+      }),
+      fetch(`${API_URLS.TBA}/event/${eventKey}/matches`, {
+        headers: { 'X-TBA-Auth-Key': API_KEYS.TBA }
+      })
     ]);
 
-    return { details, teams, matches };
+    if (!eventResponse.ok) {
+      throw new Error(`Event not found: ${eventKey}`);
+    }
+
+    const event = await eventResponse.json();
+    const teams = teamsResponse.ok ? await teamsResponse.json() : [];
+    const matches = matchesResponse.ok ? await matchesResponse.json() : [];
+
+    // Sort matches by match number
+    matches.sort((a, b) => {
+      // Sort by comp_level first (qm, qf, sf, f)
+      const levelOrder = { qm: 0, qf: 1, sf: 2, f: 3 };
+      const levelDiff = (levelOrder[a.comp_level] || 0) - (levelOrder[b.comp_level] || 0);
+      if (levelDiff !== 0) return levelDiff;
+
+      // Then by match number
+      return (a.match_number || 0) - (b.match_number || 0);
+    });
+
+    console.log(`✅ Event ${eventKey}: ${teams.length} teams, ${matches.length} matches`);
+
+    return {
+      event,
+      teams,
+      matches,
+      // Helper: check if event is finished
+      isFinished: matches.some(m => m.actual_time !== null)
+    };
   } catch (error) {
-    console.error('❌ Error fetching TBA data:', error);
+    console.error('❌ Error fetching TBA event details:', error);
     return null;
   }
 }
 
 /**
- * SAFE FETCH STATBOTICS
- * ---------------------
- * Wrapper to safely fetch data from Statbotics.
+ * GET BLUE ALLIANCE TEAM INFO
+ * ---------------------------
+ * Fetches information about a specific team.
  *
- * @param {number|string} teamNum - The team number
- * @returns {Promise<Object|null>}
+ * @param {string|number} teamNumber - FRC team number
+ * @returns {Promise<Object|null>} - Team info or null
  */
-async function safeFetchStatbotics(teamNum) {
+async function getBlueAllianceTeamInfo(teamNumber) {
   try {
-    const { getStatboticsTeam } = await import('./externalData.js');
-    return await getStatboticsTeam(teamNum);
+    const response = await fetch(`${API_URLS.TBA}/team/frc${teamNumber}`, {
+      headers: {
+        'X-TBA-Auth-Key': API_KEYS.TBA,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) return null;
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('❌ Error fetching TBA team info:', error);
+    return null;
+  }
+}
+
+/**
+ * GET EVENT TEAM STATBOTICS DATA
+ * ------------------------------
+ * Fetches Statbotics data for all teams at an event.
+ * Used for building leaderboards.
+ *
+ * @param {Array} teamNumbers - Array of team numbers
+ * @returns {Promise<Array>} - Array of team stats with EPA
+ */
+async function getEventTeamStats(teamNumbers, eventKey = null) {
+  try {
+    console.log(`📊 Fetching Statbotics data for ${teamNumbers.length} teams...`);
+
+    let teamStats = [];
+
+    // If we have an event key, use the team_events endpoint (FASTEST - single request!)
+    if (eventKey) {
+      try {
+        const eventUrl = `https://api.statbotics.io/v3/team_events?event=${eventKey}&limit=100`;
+        const response = await fetch(eventUrl, {
+          headers: { 'Accept': 'application/json' }
+        });
+
+        if (response.ok) {
+          const teamEvents = await response.json();
+
+          teamStats = teamEvents.map(data => {
+            const breakdown = data.epa?.breakdown || {};
+            const unitlessEpa = data.epa?.unitless || 0;
+            // Calculate percentile from unitless EPA (roughly 1500 = 50th percentile)
+            const percentile = Math.min(100, Math.max(0, ((unitlessEpa - 1200) / 600) * 100));
+
+            return {
+              teamNumber: data.team,
+              name: data.team_name || `Team ${data.team}`,
+              // EPA breakdown values
+              epaTotal: breakdown.total_points || 0,
+              epaTeleop: breakdown.teleop_points || 0,
+              epaAuto: breakdown.auto_points || 0,
+              epaEndgame: breakdown.endgame_points || 0,
+              // For backwards compatibility
+              epaRaw: breakdown.teleop_points || 0,  // Default to teleop
+              epaPercentile: percentile,
+              epaUnitless: unitlessEpa,
+              classification: classifyEPA(percentile),
+              // Record
+              wins: data.record?.total?.wins || 0,
+              losses: data.record?.total?.losses || 0,
+              rank: data.record?.qual?.rank || 0
+            };
+          });
+
+          console.log(`✅ Event endpoint: got ${teamStats.length} teams in 1 request`);
+        }
+      } catch (e) {
+        console.log('Event endpoint failed, trying fallback...', e);
+      }
+    }
+
+    // Fallback: fetch missing teams in parallel batches
+    if (teamStats.length === 0) {
+      const year = new Date().getFullYear();
+      const batchSize = 25;
+
+      for (let i = 0; i < teamNumbers.length; i += batchSize) {
+        const batch = teamNumbers.slice(i, i + batchSize);
+        const batchResults = await Promise.all(
+          batch.map(async num => {
+            try {
+              const resp = await fetch(`https://api.statbotics.io/v3/team_year/${num}/${year}`);
+              if (resp.ok) return await resp.json();
+              return null;
+            } catch { return null; }
+          })
+        );
+
+        batchResults.filter(Boolean).forEach(data => {
+          const breakdown = data.epa?.breakdown || {};
+          const unitlessEpa = data.epa?.unitless || 0;
+          const percentile = Math.min(100, Math.max(0, ((unitlessEpa - 1200) / 600) * 100));
+
+          teamStats.push({
+            teamNumber: data.team,
+            name: data.team_name || `Team ${data.team}`,
+            epaTotal: breakdown.total_points || 0,
+            epaTeleop: breakdown.teleop_points || 0,
+            epaAuto: breakdown.auto_points || 0,
+            epaEndgame: breakdown.endgame_points || 0,
+            epaRaw: breakdown.teleop_points || 0,
+            epaPercentile: percentile,
+            epaUnitless: unitlessEpa,
+            classification: classifyEPA(percentile),
+            wins: data.record?.total?.wins || 0,
+            losses: data.record?.total?.losses || 0,
+            rank: 0
+          });
+        });
+      }
+    }
+
+    // Sort by teleop EPA descending (default)
+    teamStats.sort((a, b) => b.epaTeleop - a.epaTeleop);
+
+    console.log(`✅ Processed stats for ${teamStats.length} teams`);
+    return teamStats;
+  } catch (error) {
+    console.error('❌ Error fetching event team stats:', error);
+    return [];
+  }
+}
+
+
+// =============================================================================
+// TEAM STATISTICS
+// =============================================================================
+
+/**
+ * GET TEAM AVERAGES
+ * -----------------
+ * Computes averages for all teams from scouting data.
+ *
+ * @returns {Promise<Array>} - Array of team stats
+ */
+async function getTeamAverages() {
+  try {
+    const allData = await getAllScoutingData();
+
+    // Group by team
+    const teamMap = {};
+    allData.forEach(entry => {
+      const team = entry.teamNumber;
+      if (!teamMap[team]) {
+        teamMap[team] = { entries: [], totalAuto: 0, totalTeleop: 0, totalPoints: 0 };
+      }
+      teamMap[team].entries.push(entry);
+      teamMap[team].totalAuto += entry.autoPoints || 0;
+      teamMap[team].totalTeleop += entry.teleopPoints || 0;
+      teamMap[team].totalPoints += (entry.autoPoints || 0) + (entry.teleopPoints || 0);
+    });
+
+    // Calculate averages
+    const teamAverages = Object.keys(teamMap).map(team => {
+      const data = teamMap[team];
+      const count = data.entries.length;
+      return {
+        teamNumber: team,
+        matchCount: count,
+        avgAuto: (data.totalAuto / count).toFixed(1),
+        avgTeleop: (data.totalTeleop / count).toFixed(1),
+        avgTotal: (data.totalPoints / count).toFixed(1)
+      };
+    });
+
+    // Sort by average total descending
+    teamAverages.sort((a, b) => parseFloat(b.avgTotal) - parseFloat(a.avgTotal));
+
+    console.log('✅ Calculated averages for', teamAverages.length, 'teams');
+    return teamAverages;
+  } catch (error) {
+    console.error('❌ Error calculating team averages:', error);
+    return [];
+  }
+}
+
+/**
+ * GET STATBOTICS DATA
+ * -------------------
+ * Fetches team data from Statbotics API for current year.
+ * Combines team info with current season stats.
+ *
+ * @param {string|number} teamNumber - FRC team number
+ * @param {number} year - Optional year (defaults to current year)
+ * @returns {Promise<Object|null>} - Team data or null if not found
+ */
+async function getStatboticsData(teamNumber, year = new Date().getFullYear()) {
+  try {
+    // Fetch both team info AND current year stats
+    const [teamResponse, yearResponse] = await Promise.all([
+      fetch(`https://api.statbotics.io/v3/team/${teamNumber}`),
+      fetch(`https://api.statbotics.io/v3/team_year/${teamNumber}/${year}`)
+    ]);
+
+    if (!teamResponse.ok) {
+      if (teamResponse.status === 404) {
+        console.log('Team not found in Statbotics:', teamNumber);
+        return null;
+      }
+      throw new Error(`HTTP ${teamResponse.status}`);
+    }
+
+    const teamData = await teamResponse.json();
+
+    // Merge with current year data if available
+    if (yearResponse.ok) {
+      const yearData = await yearResponse.json();
+      // Use current year record and EPA instead of all-time
+      teamData.record = yearData.record || teamData.record;
+      teamData.epa = yearData.epa || teamData.epa;
+      teamData.norm_epa = yearData.norm_epa || teamData.norm_epa;
+      teamData.currentYear = year;
+      console.log('✅ Statbotics data retrieved for team', teamNumber, '(year:', year + ')');
+    } else {
+      console.log('✅ Statbotics data retrieved for team', teamNumber, '(no current year data)');
+    }
+
+    return teamData;
   } catch (error) {
     console.error('❌ Error fetching Statbotics data:', error);
     return null;
@@ -929,143 +1197,136 @@ async function safeFetchStatbotics(teamNum) {
 }
 
 /**
- * SAFE FETCH NEXUS
- * ----------------
- * Wrapper to safely fetch data from FRC Nexus.
+ * GET PAGINATED SCOUTING ENTRIES
+ * ------------------------------
+ * Retrieves scouting entries with pagination for performance.
  *
- * @param {string} eventCode - The event code
- * @returns {Promise<Object|null>}
+ * @param {number} pageSize - Number of entries per page
+ * @param {Object} lastDoc - Last document from previous page (for pagination)
+ * @returns {Promise<Object>} - { entries: Array, lastDoc: Object, hasMore: boolean }
  */
-async function safeFetchNexus(eventCode) {
+async function getPaginatedScoutingEntries(pageSize = 20, lastDoc = null) {
   try {
-    const { getNexusEventStatus } = await import('./externalData.js');
-    return await getNexusEventStatus(eventCode);
+    const scoutingRef = collection(db, 'scouting');
+    let q;
+
+    if (lastDoc) {
+      q = query(scoutingRef, orderBy('createdAt', 'desc'), startAfter(lastDoc), limit(pageSize));
+    } else {
+      q = query(scoutingRef, orderBy('createdAt', 'desc'), limit(pageSize));
+    }
+
+    const snapshot = await getDocs(q);
+    const entries = [];
+    let newLastDoc = null;
+
+    snapshot.forEach(doc => {
+      entries.push({ id: doc.id, ...doc.data() });
+      newLastDoc = doc;
+    });
+
+    return {
+      entries,
+      lastDoc: newLastDoc,
+      hasMore: entries.length === pageSize
+    };
   } catch (error) {
-    console.error('❌ Error fetching Nexus data:', error);
-    return null;
+    console.error('❌ Error getting paginated entries:', error);
+    return { entries: [], lastDoc: null, hasMore: false };
   }
 }
 
-/**
- * SYNC ALL EXTERNAL DATA
- * ----------------------
- * Syncs all external data for an event.
- * Used by the admin diagnostics panel.
- *
- * @param {string} eventCode - The TBA event code
- * @returns {Promise<Object>}
- */
-async function syncAllExternalData(eventCode) {
-  console.log(`🔄 Syncing all external data for ${eventCode}...`);
-
-  const results = {
-    tba: null,
-    statbotics: null,
-    nexus: null,
-    errors: []
-  };
-
-  try {
-    results.tba = await safeFetchTBA(eventCode);
-    if (!results.tba) results.errors.push('TBA fetch failed');
-  } catch (e) {
-    results.errors.push(`TBA: ${e.message}`);
-  }
-
-  try {
-    const { getStatboticsEventTeams } = await import('./externalData.js');
-    results.statbotics = await getStatboticsEventTeams(eventCode);
-    if (!results.statbotics) results.errors.push('Statbotics fetch failed');
-  } catch (e) {
-    results.errors.push(`Statbotics: ${e.message}`);
-  }
-
-  try {
-    results.nexus = await safeFetchNexus(eventCode);
-    if (!results.nexus) results.errors.push('Nexus fetch failed');
-  } catch (e) {
-    results.errors.push(`Nexus: ${e.message}`);
-  }
-
-  console.log('✅ External data sync complete', results);
-  return results;
-}
-
-/**
- * CHECK API STATUS
- * ----------------
- * Checks the status of all external APIs.
- * Returns object with boolean for each API.
- */
-async function checkExternalAPIStatus() {
-  try {
-    const { checkAPIStatus } = await import('./externalData.js');
-    return await checkAPIStatus();
-  } catch (error) {
-    console.error('Error checking API status:', error);
-    return { tba: false, statbotics: false, nexus: false };
-  }
-}
 
 // =============================================================================
 // APP INITIALIZATION
 // =============================================================================
 
-/**
- * Initialize the application when the page loads.
- * This runs automatically when the DOM is ready.
- */
 function initApp() {
   console.log('🚀 FRC Scouting App initialized');
-  console.log('📋 Ready for scouting data operations');
+  console.log('📋 App.js loaded with all functions');
 }
 
-// DOMContentLoaded fires when the HTML is fully parsed
-// This ensures our code runs after the page structure is ready
 document.addEventListener('DOMContentLoaded', initApp);
+
+
+// =============================================================================
+// GET TEAM STATS (Combined Statbotics + Local)
+// =============================================================================
+
+/**
+ * GET TEAM STATS
+ * Combines Statbotics EPA data with local scouting data
+ *
+ * @param {number} teamNumber - Team number to get stats for
+ * @returns {Promise<Object>} Combined team statistics
+ */
+async function getTeamStats(teamNumber) {
+  try {
+    // Get Statbotics data
+    const statboticsData = await getStatboticsData(teamNumber);
+
+    // Get local scouting data
+    const localData = await getTeamAverages(teamNumber);
+
+    // Combine the data
+    return {
+      teamNumber: teamNumber,
+      epa: statboticsData?.epa_end || null,
+      epa_percentile: statboticsData?.epa_percentile || null,
+      avgAuto: localData?.avgAuto || 0,
+      avgTeleop: localData?.avgTeleop || 0,
+      matchCount: localData?.matchCount || 0,
+      statbotics: statboticsData,
+      local: localData
+    };
+  } catch (error) {
+    console.error('Error getting team stats:', error);
+    return null;
+  }
+}
 
 
 // =============================================================================
 // EXPORTS
 // =============================================================================
-//
-// These functions are available to other JavaScript files that import this module.
-// They can also be used in inline <script> tags with type="module".
-//
-// =============================================================================
 
 export {
-  // CRUD Operations (original names)
+  // Authentication
+  loginUser,
+  signUpUser,
+  checkAdminRights,
+  signOutUser,
+
+  // Scouting CRUD
   saveScoutingData,
   getAllScoutingData,
   getTeamScoutingData,
   updateScoutingData,
   deleteScoutingData,
-
-  // CRUD Operations (required names per spec)
-  createScoutingEntry,
-  readRecentScouting,
-  updateScoutingEntry,
-  deleteScoutingEntry,
-
-  // Team Stats Engine
-  recalculateTeamStats,  // Call after saving scouting data
-  getTeamStats,          // Get stats for a single team
-
-  // Leaderboard & Search
-  readTopTeams,          // Get top N teams by average score
-  searchTeams,           // Search teams by number
+  getPaginatedScoutingEntries,
 
   // Question Management
-  getScoutingQuestions,  // Get custom scouting questions
-  saveScoutingQuestions, // Save custom scouting questions
+  getAllQuestions,
+  addQuestion,
+  updateQuestion,
+  deleteQuestion,
 
-  // External Data Wrappers
-  safeFetchTBA,          // Safely fetch TBA event data
-  safeFetchStatbotics,   // Safely fetch Statbotics team data
-  safeFetchNexus,        // Safely fetch FRC Nexus data
-  syncAllExternalData,   // Sync all external data for an event
-  checkExternalAPIStatus, // Check status of external APIs
+  // API & Stats
+  getAPIKeyStatus,
+  getTeamAverages,
+  getStatboticsData,
+  getTeamStats,
+
+  // EPA Scaling & Classification
+  scaleStatboticsEPA,
+  classifyEPA,
+  getEPAPercentile,
+
+  // The Blue Alliance API
+  getBlueAllianceEventList,
+  getBlueAllianceEventDetails,
+  getBlueAllianceTeamInfo,
+  getEventTeamStats,
 
   // Diagnostics
   runDiagnostics

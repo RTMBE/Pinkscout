@@ -1,0 +1,101 @@
+rules_version = '2';
+
+/**
+ * =============================================================================
+ * FIRESTORE SECURITY RULES - PinkScout React App
+ * =============================================================================
+ * 
+ * These rules control access to Firestore collections.
+ * 
+ * COLLECTIONS:
+ * - scouting: Match scouting data (authenticated users can read/write)
+ * - users: User profiles (users can read/write their own)
+ * - questions: Scouting form questions (admins can write, all can read)
+ * - settings: App settings including admin list (admins only)
+ * - teams: Team statistics (authenticated users can read/write)
+ * 
+ * =============================================================================
+ */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // =========================================================================
+    // HELPER FUNCTIONS
+    // =========================================================================
+    
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Check if user is the primary admin
+    function isPrimaryAdmin() {
+      return request.auth != null && 
+             request.auth.token.email == 'rkuzmik@gmail.com';
+    }
+    
+    // Check if user is in the admin list
+    function isAdmin() {
+      return isPrimaryAdmin() || 
+             (isAuthenticated() && 
+              exists(/databases/$(database)/documents/settings/admins) &&
+              request.auth.token.email in get(/databases/$(database)/documents/settings/admins).data.emails);
+    }
+    
+    // =========================================================================
+    // SCOUTING COLLECTION
+    // =========================================================================
+    // All authenticated users can read and create scouting entries
+    // Users can only update/delete their own entries (or admins can)
+    
+    match /scouting/{docId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && 
+                              (resource.data.scouterUid == request.auth.uid || isAdmin());
+    }
+    
+    // =========================================================================
+    // USERS COLLECTION
+    // =========================================================================
+    // Users can read/write their own profile
+    // Admins can read all profiles
+    
+    match /users/{userId} {
+      allow read: if isAuthenticated() && 
+                    (request.auth.uid == userId || isAdmin());
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // =========================================================================
+    // QUESTIONS COLLECTION
+    // =========================================================================
+    // All authenticated users can read questions
+    // Only admins can create/update/delete questions
+    
+    match /questions/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // =========================================================================
+    // SETTINGS COLLECTION
+    // =========================================================================
+    // Only admins can read/write settings
+    
+    match /settings/{docId} {
+      allow read, write: if isAdmin();
+    }
+    
+    // =========================================================================
+    // TEAMS COLLECTION
+    // =========================================================================
+    // All authenticated users can read/write team stats
+    
+    match /teams/{teamId} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}
+

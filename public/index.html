@@ -88,42 +88,30 @@ PAGE LAYOUT:
     ========================================================================
     -->
     <aside class="sidebar">
-
-      <!-- Sidebar Header - App branding -->
+      <!-- Sidebar Header - Logo -->
       <div class="sidebar-header">
-        <h2>🤖 Pinkscout</h2>
+        <h2>🩷 PinkScout</h2>
         <span>FRC Scouting App</span>
       </div>
 
-      <!--
-      Navigation Links
-      ================
-      <nav> is a semantic element for navigation sections.
-      The .active class highlights the current page.
-      -->
+      <!-- Navigation Links -->
       <nav class="sidebar-nav">
         <ul>
-          <!-- class="active" indicates this is the current page -->
           <li><a href="index.html" class="active">🏠 Home</a></li>
-          <li><a href="newscounting.html">📝 Scouting</a></li>
-          <li><a href="teams.html">🏆 Teams</a></li>
-          <li><a href="events.html">📅 Events</a></li>
+          <li><a href="newscounting.html">📝 Scout</a></li>
+          <li><a href="teams.html">🤖 Teams</a></li>
+          <li><a href="events.html">🏆 Events</a></li>
+          <li><a href="analytics.html">📊 Analytics</a></li>
           <li><a href="scouterProfile.html">👤 Profile</a></li>
           <li><a href="admin.html">⚙️ Admin</a></li>
         </ul>
       </nav>
 
-      <!--
-      User Info Section
-      =================
-      This section is hidden by default (style="display: none;").
-      JavaScript shows it when a user is logged in.
-      -->
+      <!-- User Info - Email and Logout at bottom -->
       <div class="user-info" id="userInfo" style="display: none;">
         <div class="user-email" id="userEmail"></div>
         <button class="btn-logout" id="logoutBtn">Sign Out</button>
       </div>
-
     </aside>
 
     <!--
@@ -158,19 +146,20 @@ PAGE LAYOUT:
       <h2 class="mt-20 mb-20">Quick Links</h2>
       <div class="quick-links">
 
+        <!-- Each card is an <a> tag so the whole card is clickable -->
         <a href="newscounting.html" class="quick-link-card">
           <h3>📝 New Scout</h3>
           <p>Start scouting a match</p>
         </a>
 
-        <a href="teams.html" class="quick-link-card">
-          <h3>🏆 Teams & Stats</h3>
-          <p>View leaderboard, charts, and data</p>
+        <a href="dashboard.html" class="quick-link-card">
+          <h3>📊 View Data</h3>
+          <p>Analyze team performance</p>
         </a>
 
         <a href="admin.html" class="quick-link-card">
-          <h3>⚙️ Admin</h3>
-          <p>Diagnostics and settings</p>
+          <h3>⚙️ Settings</h3>
+          <p>Configure app settings</p>
         </a>
 
       </div>
@@ -200,15 +189,7 @@ PAGE LAYOUT:
   <!-- Page-specific JavaScript -->
   <script type="module">
     // Import functions from our firebase.js module
-    import { requireAuth, setupAuthListener, signOut } from './js/firebase.js';
-
-    /*
-     * REQUIRE AUTHENTICATION
-     * ----------------------
-     * Users must be logged in to access the main page.
-     * If not logged in, they will be redirected to the login page.
-     */
-    requireAuth();
+    import { setupAuthListener, signOut } from './js/firebase.js';
 
     /*
      * SETUP AUTH STATE LISTENER
@@ -223,6 +204,13 @@ PAGE LAYOUT:
         document.getElementById('userInfo').style.display = 'block';
         // Display the user's email
         document.getElementById('userEmail').textContent = user.email;
+      },
+
+      // Callback when user is signed out
+      // Note: We don't redirect from the home page - it's accessible to everyone
+      () => {
+        // Hide the user info section
+        document.getElementById('userInfo').style.display = 'none';
       }
     );
 

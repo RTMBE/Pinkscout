@@ -3,23 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Profile - Pinkscout</title>
+  <title>My Profile - PinkScout</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <div class="app-container">
-    <!-- ===== SIDEBAR NAVIGATION ===== -->
+    <!-- Sidebar Navigation -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <h2>🤖 Pinkscout</h2>
+        <h2>🩷 PinkScout</h2>
         <span>FRC Scouting App</span>
       </div>
       <nav class="sidebar-nav">
         <ul>
           <li><a href="index.html">🏠 Home</a></li>
-          <li><a href="newscounting.html">📝 Scouting</a></li>
-          <li><a href="teams.html">🏆 Teams</a></li>
-          <li><a href="events.html">📅 Events</a></li>
+          <li><a href="newscounting.html">📝 Scout</a></li>
+          <li><a href="teams.html">🤖 Teams</a></li>
+          <li><a href="events.html">🏆 Events</a></li>
+          <li><a href="analytics.html">📊 Analytics</a></li>
           <li><a href="scouterProfile.html" class="active">👤 Profile</a></li>
           <li><a href="admin.html">⚙️ Admin</a></li>
         </ul>
@@ -30,113 +31,65 @@
       </div>
     </aside>
 
-    <!-- ===== MAIN CONTENT ===== -->
-  <main class="main-content">
-    <header class="top-nav">
-      <h1>👤 Scouter Profile</h1>
-    </header>
+    <!-- Main Content -->
+    <main class="main-content">
+      <header class="page-header">
+        <h1>👤 My Profile</h1>
+        <p>View your scouting stats and update your profile</p>
+      </header>
 
-    <!-- Profile Card -->
-    <section class="card profile-card">
-      <div class="profile-header">
-        <div class="profile-avatar" id="profile-avatar">?</div>
-        <div class="profile-info">
-          <h2 id="profile-display-name">Loading...</h2>
-          <p id="profile-email">-</p>
-          <span class="role-badge" id="profile-role">Scouter</span>
+      <!-- Profile Info -->
+      <div class="content-card">
+        <h2>📋 Profile Information</h2>
+        <form id="profileForm" class="profile-form">
+          <div class="form-group">
+            <label for="displayName">Display Name</label>
+            <input type="text" id="displayName" placeholder="Your name">
+          </div>
+          <div class="form-group">
+            <label for="teamNumber">Team Number</label>
+            <input type="number" id="teamNumber" placeholder="e.g., 1551">
+          </div>
+          <div class="form-group">
+            <label for="emailDisplay">Email</label>
+            <input type="email" id="emailDisplay" readonly>
+          </div>
+          <button type="submit" class="btn btn-primary">Save Profile</button>
+          <div id="profileStatus" class="submit-status"></div>
+        </form>
+      </div>
+
+      <!-- Scouting Stats -->
+      <div class="content-card">
+        <h2>📊 My Scouting Stats</h2>
+        <div id="scoutingStats" class="summary-grid">
+          <div class="summary-card">
+            <div class="summary-value" id="myTotalEntries">0</div>
+            <div class="summary-label">Total Entries</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-value" id="myTeamsScounted">0</div>
+            <div class="summary-label">Teams Scouted</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-value" id="myMatchesScounted">0</div>
+            <div class="summary-label">Matches Scouted</div>
+          </div>
         </div>
       </div>
-    </section>
 
-    <!-- Edit Profile -->
-    <section class="card">
-      <h2>Edit Profile</h2>
-      <form id="profile-form" class="profile-form">
-        <div class="form-group">
-          <label for="display-name">Display Name</label>
-          <input type="text" id="display-name" placeholder="Your name" required>
-        </div>
-        <div class="form-group">
-          <label for="team-number">Team Number</label>
-          <input type="number" id="team-number" placeholder="e.g., 1551">
-        </div>
-        <div class="form-group">
-          <label for="preferred-position">Preferred Scouting Position</label>
-          <select id="preferred-position">
-            <option value="">No preference</option>
-            <option value="red1">Red 1</option>
-            <option value="red2">Red 2</option>
-            <option value="red3">Red 3</option>
-            <option value="blue1">Blue 1</option>
-            <option value="blue2">Blue 2</option>
-            <option value="blue3">Blue 3</option>
-          </select>
-        </div>
-        <button type="submit" class="btn btn-primary">Save Profile</button>
-      </form>
-    </section>
-
-    <!-- Scouting Stats -->
-    <section class="card">
-      <h2>Your Scouting Stats</h2>
-      <div class="stats-grid">
-        <div class="stat-card">
-          <span class="stat-value" id="total-scouted">-</span>
-          <span class="stat-label">Matches Scouted</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-value" id="teams-scouted">-</span>
-          <span class="stat-label">Teams Scouted</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-value" id="events-scouted">-</span>
-          <span class="stat-label">Events</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-value" id="scouting-streak">-</span>
-          <span class="stat-label">Day Streak</span>
+      <!-- Recent Entries -->
+      <div class="content-card">
+        <h2>📝 My Recent Entries</h2>
+        <div id="recentEntries" class="entries-list">
+          <p class="no-data">Loading your entries...</p>
         </div>
       </div>
-    </section>
 
-    <!-- Recent Activity -->
-    <section class="card">
-      <h2>Recent Activity</h2>
-      <div id="recent-activity" class="activity-list">
-        <div class="empty-state">Loading activity...</div>
-      </div>
-    </section>
-
-    <!-- Account Actions -->
-    <section class="card danger-zone">
-      <h2>⚠️ Account Actions</h2>
-      <p>These actions cannot be undone. Please be careful.</p>
-      <div class="account-actions">
-        <button type="button" id="signOutBtn" class="btn btn-secondary">Sign Out</button>
-        <button type="button" id="deleteAccountBtn" class="btn btn-danger">Delete Account</button>
-      </div>
-    </section>
-  </main>
+    </main>
   </div>
 
-  <!-- Delete Account Confirmation Modal -->
-  <div id="deleteAccountModal" class="modal" style="display: none;">
-    <div class="modal-content">
-      <h2>🗑️ Delete Account</h2>
-      <p>Are you sure you want to delete your account? This will permanently remove:</p>
-      <ul>
-        <li>Your profile and settings</li>
-        <li>All your scouting data</li>
-        <li>Your authentication credentials</li>
-      </ul>
-      <p><strong>This action cannot be undone.</strong></p>
-      <div class="modal-actions">
-        <button type="button" id="confirmDeleteBtn" class="btn btn-danger">Yes, Delete My Account</button>
-        <button type="button" id="cancelDeleteBtn" class="btn btn-secondary">Cancel</button>
-      </div>
-    </div>
-  </div>
-
+  <!-- JavaScript -->
   <script type="module" src="js/scouterProfile.js"></script>
 </body>
 </html>

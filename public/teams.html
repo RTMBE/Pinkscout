@@ -1,34 +1,23 @@
 <!DOCTYPE html>
 <!--
 ================================================================================
-TEAMS.HTML - Team Search & Analysis
+TEAMS.HTML - Team Search & Statistics (PinkScout FRC Scouting App)
 ================================================================================
 
-PAGE LAYOUT:
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                         SEARCH BAR (Team Number Input)                        │
-├──────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│                     COMBINED STATS (Top Half)                                │
-│           Averaged statistics from Statbotics + Scouting Data                │
-│                                                                              │
-├──────────────────────────────┬───────────────────────────────────────────────┤
-│                              │                                               │
-│    STATBOTICS DATA (Left)    │         SCOUTING DATA (Right)                 │
-│    - EPA, OPR, DPR, CCWM     │         - Avg Auto/Teleop/Total               │
-│    - Win/Loss Record         │         - Max Score, Matches Scouted          │
-│    - Rankings                │         - Notes Summary                       │
-│                              │                                               │
-└──────────────────────────────┴───────────────────────────────────────────────┘
+WHAT IS THIS PAGE?
+The teams page provides team search and statistics:
 
-DATA SOURCES:
-1. Statbotics API (api.statbotics.io) - External FRC statistics
-2. Firestore 'scouting' collection - Internal scouting data
+1. SEARCH BAR (Top)
+   - Search for any FRC team by number
+   - Fetches data from both Statbotics API and local Firestore
 
-COMBINED STATS FORMULA (when both sources available):
-- Combined Auto Avg = (StatboticsAvgAuto + ScoutingAvgAuto) / 2
-- Combined Teleop Avg = (StatboticsAvgTeleop + ScoutingAvgTeleop) / 2
-- Combined Total Avg = (StatboticsAvgTotal + ScoutingAvgTotal) / 2
+2. SPLIT VIEW (Bottom)
+   - LEFT PANE: Statbotics data (EPA, rankings, historical stats)
+   - RIGHT PANE: Local scouting data (your team's observations)
+
+3. COMBINED STATS
+   - Merges external and local data for comprehensive view
+   - Shows averages, trends, and match history
 
 ================================================================================
 -->
@@ -36,27 +25,26 @@ COMBINED STATS FORMULA (when both sources available):
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Team Search - Pinkscout</title>
+  <title>Teams - Pinkscout</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 
 <body>
   <div class="app-container">
 
-    <!-- ========================================================================
-         SIDEBAR NAVIGATION
-         ======================================================================== -->
+    <!-- Sidebar Navigation -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <h2>🤖 Pinkscout</h2>
+        <h2>🩷 PinkScout</h2>
         <span>FRC Scouting App</span>
       </div>
       <nav class="sidebar-nav">
         <ul>
           <li><a href="index.html">🏠 Home</a></li>
-          <li><a href="newscounting.html">📝 Scouting</a></li>
-          <li><a href="teams.html" class="active">🏆 Teams</a></li>
-          <li><a href="events.html">📅 Events</a></li>
+          <li><a href="newscounting.html">📝 Scout</a></li>
+          <li><a href="teams.html" class="active">🤖 Teams</a></li>
+          <li><a href="events.html">🏆 Events</a></li>
+          <li><a href="analytics.html">📊 Analytics</a></li>
           <li><a href="scouterProfile.html">👤 Profile</a></li>
           <li><a href="admin.html">⚙️ Admin</a></li>
         </ul>
@@ -67,277 +55,99 @@ COMBINED STATS FORMULA (when both sources available):
       </div>
     </aside>
 
-    <!-- ========================================================================
-         MAIN CONTENT AREA
-         ======================================================================== -->
+    <!-- Main Content -->
     <main class="main-content">
 
-      <!-- PAGE HEADER -->
+      <!-- Page Header with Search -->
       <header class="page-header">
         <h1>🔍 Team Search</h1>
-        <p>Search any FRC team to view Statbotics data and our scouting records.</p>
+        <p>Search for any FRC team to view combined statistics</p>
       </header>
 
-      <!-- ======================================================================
-           SEARCH BAR
-           ====================================================================== -->
-      <div class="team-search-section">
-        <div class="search-input-wrapper">
-          <input
-            type="number"
-            id="teamSearchInput"
-            placeholder="Enter team number (e.g., 254, 1551, 1678)"
-            min="1"
-            max="99999"
-            autocomplete="off"
-          >
-          <button type="button" id="searchBtn" class="btn btn-primary">
-            🔍 Search
-          </button>
-        </div>
-        <p class="search-hint">Press Enter or click Search to find a team</p>
+      <!-- Search Bar -->
+      <div class="content-card search-card">
+        <form id="teamSearchForm" class="search-form">
+          <input type="text" id="teamSearchInput" placeholder="Enter team number (e.g., 254)" 
+                 pattern="[0-9]+" title="Enter a team number">
+          <button type="submit" class="btn btn-primary">Search</button>
+        </form>
       </div>
 
-      <!-- ======================================================================
-           SEARCH RESULTS CONTAINER
-           This container holds all search results and is hidden until search
-           ====================================================================== -->
-      <div id="searchResultsContainer" class="search-results-container" style="display: none;">
+      <!-- Results Container (hidden until search) -->
+      <div id="resultsContainer" style="display: none;">
 
-        <!-- LOADING STATE -->
-        <div id="searchLoading" class="search-loading" style="display: none;">
-          <div class="spinner"></div>
-          <p>Searching for team data...</p>
+        <!-- Team Header with Classification Badge -->
+        <div class="content-card team-header-card">
+          <div class="team-header">
+            <div class="team-identity">
+              <h2 id="teamName">Team Loading...</h2>
+              <span class="team-number" id="teamNumber">#----</span>
+            </div>
+            <div id="classificationBadge" class="classification-badge-container" style="display: none;">
+              <!-- Classification badge rendered by JS -->
+            </div>
+          </div>
+          <p id="teamLocation" class="team-location">Location loading...</p>
         </div>
 
-        <!-- ERROR STATE -->
-        <div id="searchError" class="search-error" style="display: none;">
-          <h3>⚠️ Search Error</h3>
-          <p id="searchErrorMessage">Something went wrong.</p>
-          <button type="button" class="btn btn-secondary" onclick="clearSearch()">Try Again</button>
-        </div>
-
-        <!-- NO RESULTS STATE -->
-        <div id="noResults" class="no-results-panel" style="display: none;">
-          <h3>🔍 Team Not Found</h3>
-          <p id="noResultsMessage">No data available for this team.</p>
-        </div>
-
-        <!-- ====================================================================
-             COMBINED STATS PANEL (TOP HALF)
-             Shows averaged/combined statistics from both data sources
-             ==================================================================== -->
-        <div id="combinedStatsPanel" class="combined-stats-panel" style="display: none;">
-          <h2>📊 Combined Statistics</h2>
-          <p class="panel-subtitle" id="combinedStatsSubtitle">Averaged from Statbotics and Scouting Data</p>
-
-          <div class="combined-stats-grid">
-            <!-- Combined Auto Average -->
-            <div class="combined-stat-card">
-              <div class="stat-value" id="combinedAutoAvg">-</div>
-              <div class="stat-label">Avg Auto Points</div>
-              <div class="stat-source" id="combinedAutoSource">-</div>
-            </div>
-
-            <!-- Combined Teleop Average -->
-            <div class="combined-stat-card">
-              <div class="stat-value" id="combinedTeleopAvg">-</div>
-              <div class="stat-label">Avg Teleop Points</div>
-              <div class="stat-source" id="combinedTeleopSource">-</div>
-            </div>
-
-            <!-- Combined Total Average -->
-            <div class="combined-stat-card highlight">
-              <div class="stat-value" id="combinedTotalAvg">-</div>
-              <div class="stat-label">Avg Total Points</div>
-              <div class="stat-source" id="combinedTotalSource">-</div>
-            </div>
-
-            <!-- EPA (from Statbotics) -->
-            <div class="combined-stat-card">
-              <div class="stat-value" id="combinedEPA">-</div>
-              <div class="stat-label">EPA Score</div>
-              <div class="stat-source">Statbotics</div>
-            </div>
-
-            <!-- Win Rate -->
-            <div class="combined-stat-card">
-              <div class="stat-value" id="combinedWinRate">-</div>
-              <div class="stat-label">Win Rate</div>
-              <div class="stat-source" id="combinedWinRateSource">-</div>
-            </div>
-
-            <!-- Matches Played -->
-            <div class="combined-stat-card">
-              <div class="stat-value" id="combinedMatchCount">-</div>
-              <div class="stat-label">Matches Played</div>
-              <div class="stat-source" id="combinedMatchSource">-</div>
-            </div>
+        <!-- Combined Stats Section (Top Half) -->
+        <div class="content-card combined-stats-card">
+          <h3>📊 Team Overview</h3>
+          <div id="combinedStatsSection" class="combined-stats-section">
+            <div class="loading-spinner"></div>
           </div>
         </div>
 
-        <!-- ====================================================================
-             SPLIT DATA PANELS (BOTTOM HALF)
-             Left: Statbotics Data | Right: Scouting Data
-             ==================================================================== -->
-        <div id="splitDataPanels" class="split-data-panels" style="display: none;">
+        <!-- Split View Container (Bottom Half) -->
+        <div class="split-view">
 
-          <!-- LEFT PANEL: STATBOTICS DATA -->
-          <div id="statboticsPanel" class="data-panel statbotics-panel">
-            <div class="panel-header">
+          <!-- Left Pane: Statbotics Data -->
+          <div class="split-pane" id="statboticsPane">
+            <div class="content-card">
               <h3>📈 Statbotics Data</h3>
-              <span class="data-year" id="statboticsYear">2025</span>
-            </div>
-
-            <div id="statboticsContent" class="panel-content">
-              <!-- Team Info -->
-              <div class="team-info-row">
-                <h4 id="statboticsTeamName">Team Name</h4>
-                <p id="statboticsTeamLocation">Location</p>
+              <p class="pane-subtitle">External EPA rankings and statistics</p>
+              <div id="statboticsData" class="pane-content">
+                <div class="loading-spinner"></div>
               </div>
-
-              <!-- Stats Grid -->
-              <div class="stats-list">
-                <div class="stat-row">
-                  <span class="stat-name">EPA (End)</span>
-                  <span class="stat-value" id="sbEPA">-</span>
-                </div>
-                <div class="stat-row">
-                  <span class="stat-name">EPA Rank</span>
-                  <span class="stat-value" id="sbEPARank">-</span>
-                </div>
-                <div class="stat-row">
-                  <span class="stat-name">OPR</span>
-                  <span class="stat-value" id="sbOPR">-</span>
-                </div>
-                <div class="stat-row">
-                  <span class="stat-name">DPR</span>
-                  <span class="stat-value" id="sbDPR">-</span>
-                </div>
-                <div class="stat-row">
-                  <span class="stat-name">CCWM</span>
-                  <span class="stat-value" id="sbCCWM">-</span>
-                </div>
-                <div class="stat-row">
-                  <span class="stat-name">Record (W-L-T)</span>
-                  <span class="stat-value" id="sbRecord">-</span>
-                </div>
-                <div class="stat-row">
-                  <span class="stat-name">Win Rate</span>
-                  <span class="stat-value" id="sbWinRate">-</span>
-                </div>
-                <div class="stat-row">
-                  <span class="stat-name">Avg Points</span>
-                  <span class="stat-value" id="sbAvgPoints">-</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- No Statbotics Data Message -->
-            <div id="statboticsNoData" class="no-data-message" style="display: none;">
-              <p>⚠️ No Statbotics data available for this team.</p>
-              <p class="hint">This team may not have competed recently or data is still being processed.</p>
             </div>
           </div>
 
-          <!-- RIGHT PANEL: SCOUTING DATA -->
-          <div id="scoutingPanel" class="data-panel scouting-panel">
-            <div class="panel-header">
-              <h3>📋 Our Scouting Data</h3>
-              <span class="match-count" id="scoutingMatchCount">0 matches</span>
-            </div>
-
-            <div id="scoutingContent" class="panel-content">
-              <!-- Stats Grid -->
-              <div class="stats-list">
-                <div class="stat-row">
-                  <span class="stat-name">Avg Auto Points</span>
-                  <span class="stat-value" id="scAutoAvg">-</span>
-                </div>
-                <div class="stat-row">
-                  <span class="stat-name">Avg Teleop Points</span>
-                  <span class="stat-value" id="scTeleopAvg">-</span>
-                </div>
-                <div class="stat-row">
-                  <span class="stat-name">Avg Total Points</span>
-                  <span class="stat-value" id="scTotalAvg">-</span>
-                </div>
-                <div class="stat-row">
-                  <span class="stat-name">Max Match Score</span>
-                  <span class="stat-value" id="scMaxScore">-</span>
-                </div>
-                <div class="stat-row">
-                  <span class="stat-name">Min Match Score</span>
-                  <span class="stat-value" id="scMinScore">-</span>
-                </div>
-                <div class="stat-row">
-                  <span class="stat-name">Matches Scouted</span>
-                  <span class="stat-value" id="scMatchCount">-</span>
-                </div>
+          <!-- Right Pane: Local Scouting Data -->
+          <div class="split-pane" id="scoutingPane">
+            <div class="content-card">
+              <h3>📋 Your Scouting Data</h3>
+              <p class="pane-subtitle">Data from your team's observations</p>
+              <div id="scoutingData" class="pane-content">
+                <div class="loading-spinner"></div>
               </div>
-
-              <!-- Notes Summary -->
-              <div class="notes-section">
-                <h4>📝 Scout Notes</h4>
-                <div id="scoutingNotes" class="notes-content">
-                  <p class="no-notes">No notes recorded yet.</p>
-                </div>
-              </div>
-            </div>
-
-            <!-- No Scouting Data Message -->
-            <div id="scoutingNoData" class="no-data-message" style="display: none;">
-              <p>📝 No scouting data available yet for this team.</p>
-              <a href="newscounting.html" class="btn btn-primary scout-now-btn">Scout This Team</a>
             </div>
           </div>
 
         </div>
 
-      </div>
-
-      <!-- ======================================================================
-           QUICK STATS (Shown before search)
-           ====================================================================== -->
-      <div id="quickStatsSection" class="quick-stats-section">
-        <h2>📊 Quick Stats</h2>
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-value" id="totalMatchesScouted">0</div>
-            <div class="stat-label">Matches Scouted</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" id="totalTeamsTracked">0</div>
-            <div class="stat-label">Teams Tracked</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" id="overallAvgScore">0</div>
-            <div class="stat-label">Avg Total Score</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value" id="topPerformer">-</div>
-            <div class="stat-label">Top Performer</div>
+        <!-- Match History -->
+        <div class="content-card">
+          <h3>📜 Match History</h3>
+          <div id="matchHistory" class="match-history">
+            <p>No match data available</p>
           </div>
         </div>
+
       </div>
 
-      <!-- ======================================================================
-           LEADERBOARD
-           ====================================================================== -->
-      <div id="leaderboardSection" class="leaderboard-section">
-        <h2>🏆 Team Leaderboard</h2>
-        <p>Top teams ranked by average total score from our scouting data.</p>
-        <div id="leaderboard" class="leaderboard-table">
-          <p class="loading">Loading leaderboard...</p>
+      <!-- No Results Message -->
+      <div id="noResults" class="content-card" style="display: none;">
+        <div class="placeholder-content">
+          <div class="icon">🔍</div>
+          <h3>No Team Found</h3>
+          <p id="noResultsMessage">Enter a team number to search</p>
         </div>
       </div>
 
     </main>
   </div>
 
-  <!-- ========================================================================
-       JAVASCRIPT MODULES
-       ======================================================================== -->
+  <!-- JavaScript -->
   <script type="module" src="js/teams.js"></script>
 
 </body>

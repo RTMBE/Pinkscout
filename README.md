@@ -1,6 +1,14 @@
-# 🤖 Pinkscout - FRC Scouting App
+# 🩷 PinkScout - FRC Scouting Application
 
 A web-based scouting application for FIRST Robotics Competition (FRC) teams. Built with vanilla HTML, CSS, and JavaScript, hosted on Firebase.
+
+## Features
+
+- **Match Scouting**: Record detailed match data with counter buttons
+- **Team Search**: Search teams with combined Statbotics + local data
+- **Events**: Browse TBA events, view teams, and match predictions
+- **Analytics**: Compare teams and view performance charts
+- **User Profiles**: Track your scouting contributions
 
 ---
 
@@ -15,23 +23,23 @@ Pinkscout/
 │
 └── public/                # All website files (served by Firebase)
     ├── css/
-    │   └── style.css      # Main stylesheet (1600+ lines)
+    │   └── style.css      # Main stylesheet
     ├── js/
-    │   ├── firebase.js    # Firebase initialization & auth
-    │   ├── app.js         # Shared CRUD functions & diagnostics
+    │   ├── firebase.js    # Firebase initialization & API keys
+    │   ├── app.js         # Shared utilities & API functions
     │   ├── scouting.js    # Scouting form handling
-    │   ├── teams.js       # Team search & leaderboard
-    │   ├── user.js        # User profile management
-    │   ├── externalData.js # TBA, Statbotics, Nexus API integration
-    │   ├── events.js      # Event schedule & team lists
-    │   ├── analytics.js   # Charts & data visualization
-    │   └── scouterProfile.js # Scouter stats & profile
+    │   ├── teams.js       # Team search & stats
+    │   ├── events.js      # Event browser
+    │   ├── analytics.js   # Charts & comparison
+    │   ├── scouterProfile.js # User profile
+    │   ├── admin.js       # Admin functions
+    │   └── user.js        # User profile helpers
     ├── index.html         # Home page
     ├── login.html         # Sign in / Sign up page
     ├── teams.html         # Team search & leaderboard
-    ├── events.html        # Event schedules from TBA
-    ├── analytics.html     # Charts & external data comparison
-    ├── scouterProfile.html # User profile & scouting stats
+    ├── events.html        # Event browser
+    ├── analytics.html     # Analytics & charts
+    ├── scouterProfile.html # User profile
     ├── admin.html         # Admin controls & diagnostics
     └── newscounting.html  # Match scouting form
 ```
@@ -131,11 +139,8 @@ Your app will be live at: `https://your-project-id.web.app`
 |------|-----|-------------|
 | Home | `index.html` | Welcome page with links to all sections |
 | Login | `login.html` | Sign in or create an account |
+| Dashboard | `dashboard.html` | View scouting data and charts |
 | Scouting | `newscounting.html` | Enter match scouting data |
-| Teams | `teams.html` | Search teams and view leaderboard |
-| Events | `events.html` | View event schedules from The Blue Alliance |
-| Analytics | `analytics.html` | Charts, stats, and external data comparison |
-| Profile | `scouterProfile.html` | Your scouting stats and profile settings |
 | Admin | `admin.html` | Run diagnostics, manage settings |
 
 ---
@@ -150,38 +155,6 @@ The Admin page includes a **Diagnostics** button that checks:
 4. ✅ Authentication is available
 
 Results appear in both the UI and browser console (F12 > Console).
-
----
-
-## 🌐 External API Integration
-
-Pinkscout integrates with three external FRC data sources:
-
-### The Blue Alliance (TBA)
-- Event schedules and match lists
-- Team information and rankings
-- Requires API key from [thebluealliance.com/account](https://www.thebluealliance.com/account)
-- Set in `externalData.js` as `TBA_API_KEY`
-
-### Statbotics
-- EPA (Expected Points Added) statistics
-- Historical team performance data
-- No API key required
-
-### FRC Nexus
-- Real-time match status during events
-- Requires API key from [frc.nexus](https://frc.nexus)
-- Set in `externalData.js` as `NEXUS_API_KEY`
-
-### Setting Up API Keys
-
-1. Get your TBA API key from your TBA account
-2. Get your Nexus API key from FRC Nexus
-3. Edit `public/js/externalData.js`:
-   ```javascript
-   const TBA_API_KEY = 'your-tba-key-here';
-   const NEXUS_API_KEY = 'your-nexus-key-here';
-   ```
 
 ---
 
@@ -214,11 +187,45 @@ firebase deploy --only firestore:rules
 
 ---
 
+## 🔑 API Keys
+
+Update `public/js/firebase.js` with your API keys:
+
+- **Blue Alliance API**: Get from [thebluealliance.com/account](https://www.thebluealliance.com/account)
+- **Statbotics API**: No key required (public API)
+- **FRC Nexus API**: Get from [frc.nexus](https://frc.nexus)
+
+---
+
+## 📊 EPA Scaling
+
+The app uses Statbotics EPA (Expected Points Added) data. EPA values are scaled for display:
+
+| Percentile | Classification | Display |
+|------------|----------------|---------|
+| 90%+ | 🌟 Elite | Gold badge |
+| 70-89% | 🔥 Top | Orange badge |
+| 30-69% | ✅ Normal | Green badge |
+| <30% | 📈 Below Avg | Gray badge |
+
+**Scaling Formula**: `displayEPA = percentile * 50` (0-100 percentile → 0-50 EPA)
+
+---
+
+## 🔐 Access Control
+
+- **Signup Code**: New users need code `1551` to create an account
+- **Admin Access**: Requires email ending in `@1551.org` or listed in `ADMIN_EMAILS`
+
+---
+
 ## 📚 Learn More
 
 - [Firebase Documentation](https://firebase.google.com/docs)
 - [Firestore Guide](https://firebase.google.com/docs/firestore)
 - [Firebase Auth Guide](https://firebase.google.com/docs/auth)
+- [The Blue Alliance API](https://www.thebluealliance.com/apidocs)
+- [Statbotics API](https://www.statbotics.io/api)
 
 ---
 
@@ -226,5 +233,4 @@ firebase deploy --only firestore:rules
 
 This app is designed for scouting at FRC competitions. Customize the form in `newscounting.html` to match your scouting needs for the current game.
 
-**Happy Scouting! 🎯**
-
+**Happy Scouting! 🎯 - Built for FRC Team 1551**

@@ -20,10 +20,11 @@
 
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import ThemeToggle from './ThemeToggle';
 
 /**
  * Sidebar Navigation Component
- * 
+ *
  * Displays navigation links and user information.
  * Uses NavLink from React Router for automatic active class.
  */
@@ -101,6 +102,13 @@ export default function Sidebar() {
           </li>
         </ul>
       </nav>
+
+      {/* ================================================================
+          THEME TOGGLE
+          ================================================================ */}
+      <div className="sidebar-theme-toggle">
+        <ThemeToggle />
+      </div>
 
       {/* ================================================================
           USER INFO SECTION

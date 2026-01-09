@@ -21,10 +21,14 @@
 /**
  * SCALE STATBOTICS EPA
  * --------------------
- * Returns the actual EPA points value from Statbotics data.
- * 
+ * Returns the EPA rating value from Statbotics data.
+ *
+ * Statbotics API formats:
+ * - /team/{team}: Returns norm_epa.mean (Elo-like rating, 1000-2000 range)
+ * - /team_event/{team}/{event}: Returns epa.total_points.mean (actual points)
+ *
  * @param {Object|number} statboticsData - The Statbotics data object or percentile
- * @returns {number} - EPA points value
+ * @returns {number} - EPA rating value
  */
 export function scaleStatboticsEPA(statboticsData) {
   if (!statboticsData) return 0;
@@ -34,9 +38,14 @@ export function scaleStatboticsEPA(statboticsData) {
     return statboticsData;
   }
 
-  // Get actual EPA total points (expected contribution per match)
+  // Get actual EPA total points (from team_event endpoint)
   if (statboticsData.epa?.total_points?.mean) {
     return statboticsData.epa.total_points.mean;
+  }
+
+  // Get norm_epa from team endpoint (Elo-like rating)
+  if (statboticsData.norm_epa?.mean) {
+    return statboticsData.norm_epa.mean;
   }
 
   // Fallback to older API format
@@ -112,22 +121,44 @@ export function classifyEPA(epaPercentile, allTeamEPAs = null) {
 /**
  * GET EPA PERCENTILE FROM STATBOTICS DATA
  * ----------------------------------------
- * Extracts the EPA percentile from Statbotics response.
- * 
+ * Extracts or calculates the EPA percentile from Statbotics response.
+ *
+ * Statbotics API formats:
+ * - /team_event: epa.unitless (0-1 range, represents percentile)
+ * - /team: norm_epa.mean (Elo-like rating, 1000-2000 range, 1500 = average)
+ *
+ * For norm_epa (Elo ratings):
+ * - 1500 = 50th percentile (average)
+ * - 1600 = ~84th percentile
+ * - 1700 = ~98th percentile
+ * - 1400 = ~16th percentile
+ *
  * @param {Object} statboticsData - Raw Statbotics API response
  * @returns {number} - EPA percentile (0-100)
  */
 export function getEPAPercentile(statboticsData) {
   if (!statboticsData) return 0;
 
-  // Statbotics provides norm_epa which is already a percentile
-  if (statboticsData.norm_epa && typeof statboticsData.norm_epa.mean === 'number') {
-    return statboticsData.norm_epa.mean;
+  // Statbotics provides epa.unitless which is 0-1 range (percentile)
+  if (statboticsData.epa?.unitless !== undefined) {
+    return statboticsData.epa.unitless * 100;
   }
 
   // Fallback: calculate from EPA percentile if available
   if (statboticsData.epa_percentile) {
     return statboticsData.epa_percentile;
+  }
+
+  // Convert norm_epa (Elo rating) to percentile
+  // Using standard Elo distribution: 1500 = 50%, std dev ~100
+  if (statboticsData.norm_epa && typeof statboticsData.norm_epa.mean === 'number') {
+    const eloRating = statboticsData.norm_epa.mean;
+    // Convert Elo to percentile using normal distribution approximation
+    // z-score = (rating - 1500) / 100
+    const zScore = (eloRating - 1500) / 100;
+    // Approximate percentile using sigmoid function
+    const percentile = 100 / (1 + Math.exp(-0.7 * zScore));
+    return Math.min(Math.max(percentile, 1), 99);
   }
 
   // Default if no data

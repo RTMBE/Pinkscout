@@ -1,20 +1,16 @@
 /**
  * =============================================================================
- * TEAMS.JSX - Team Search and Stats Page
+ * TEAMS.JSX - Team Search and Stats Page (Matching Original PinkScout Design)
  * =============================================================================
- * 
- * WHAT IS THIS PAGE?
- * Allows users to search for FRC teams and view their stats:
- * - Search by team number
- * - View EPA rating and classification
- * - See team info from TBA
- * - View scouting data for the team
- * 
- * DATA SOURCES:
- * - Statbotics API for EPA data
- * - The Blue Alliance API for team info
- * - Firestore for scouting data
- * 
+ *
+ * FEATURES:
+ * - Search by team number with URL param support
+ * - Team header with classification badge (Elite, Top Tier, Normal, Below Avg)
+ * - Team Overview cards (EPA Rating, Record, Your Scouting)
+ * - Data source tabs (Statbotics / Scouting Data)
+ * - Split view with colored stat boxes
+ * - Match history table
+ *
  * =============================================================================
  */
 
@@ -72,12 +68,16 @@ export default function Teams() {
     setScoutingData([]);
 
     try {
-      // Fetch data from all sources in parallel
-      const [statbotics, tba, scouting] = await Promise.all([
+      // Fetch data from all sources in parallel, handling individual failures
+      const [statboticsResult, tbaResult, scoutingResult] = await Promise.allSettled([
         getStatboticsTeam(number),
         getTeamInfo(number),
         getTeamScoutingData(number)
       ]);
+
+      const statbotics = statboticsResult.status === 'fulfilled' ? statboticsResult.value : null;
+      const tba = tbaResult.status === 'fulfilled' ? tbaResult.value : null;
+      const scouting = scoutingResult.status === 'fulfilled' ? scoutingResult.value : [];
 
       if (!statbotics && !tba) {
         setError(`Team ${number} not found. Please check the team number.`);
@@ -98,15 +98,38 @@ export default function Teams() {
   // ==========================================================================
   // COMPUTED VALUES
   // ==========================================================================
-  
+
   const epaValue = teamData ? scaleStatboticsEPA(teamData) : 0;
   const epaPercentile = teamData ? getEPAPercentile(teamData) : 0;
   const classification = classifyEPA(epaPercentile);
 
+  // Get record from teamData
+  const wins = teamData?.record?.wins || 0;
+  const losses = teamData?.record?.losses || 0;
+  const ties = teamData?.record?.ties || 0;
+  const totalMatches = wins + losses + ties;
+  const winRate = totalMatches > 0 ? ((wins / totalMatches) * 100).toFixed(0) : 'N/A';
+
+  // ==========================================================================
+  // CALCULATE SCOUTING AVERAGES
+  // ==========================================================================
+
+  const scoutingAvg = scoutingData.length > 0 ? {
+    autoPoints: scoutingData.reduce((s, e) => s + (e.autoPoints || 0), 0) / scoutingData.length,
+    teleopPoints: scoutingData.reduce((s, e) => s + (e.teleopPoints || 0), 0) / scoutingData.length,
+    totalPoints: scoutingData.reduce((s, e) => s + ((e.autoPoints || 0) + (e.teleopPoints || 0)), 0) / scoutingData.length,
+    autoSpeaker: scoutingData.reduce((s, e) => s + (e.autoSpeaker || 0), 0) / scoutingData.length,
+    autoAmp: scoutingData.reduce((s, e) => s + (e.autoAmp || 0), 0) / scoutingData.length,
+    teleopSpeaker: scoutingData.reduce((s, e) => s + (e.teleopSpeaker || 0), 0) / scoutingData.length,
+    teleopAmp: scoutingData.reduce((s, e) => s + (e.teleopAmp || 0), 0) / scoutingData.length,
+    bestMatch: Math.max(...scoutingData.map(e => (e.autoPoints || 0) + (e.teleopPoints || 0))),
+    matchCount: scoutingData.length
+  } : null;
+
   // ==========================================================================
   // RENDER
   // ==========================================================================
-  
+
   return (
     <>
       <Helmet>
@@ -116,100 +139,233 @@ export default function Teams() {
 
       {/* Page Header */}
       <header className="page-header">
-        <h1>🤖 Team Search</h1>
-        <p>Look up any FRC team to see their EPA rating and stats</p>
+        <h1>🔍 Team Search</h1>
+        <p>Search for any FRC team to view combined statistics</p>
       </header>
 
-      {/* Search Form */}
-      <div className="content-card">
+      {/* Search Bar */}
+      <div className="content-card search-card">
         <form onSubmit={handleSearch} className="search-form">
           <input
-            type="number"
+            type="text"
             value={teamNumber}
             onChange={(e) => setTeamNumber(e.target.value)}
-            placeholder="Enter team number (e.g., 1551)"
-            className="search-input search-input-large"
-            min="1"
-            max="99999"
+            placeholder="Enter team number (e.g., 254)"
+            pattern="[0-9]+"
+            title="Enter a team number"
+            className="search-input"
+            style={{ flex: 1 }}
           />
           <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? 'Searching...' : '🔍 Search'}
+            {loading ? 'Searching...' : 'Search'}
           </button>
         </form>
       </div>
 
-      {/* Loading State */}
-      {loading && (
-        <div className="content-card">
-          <div className="loading-container">
-            <div className="loading-spinner"></div>
-            <p>Fetching team data...</p>
-          </div>
-        </div>
-      )}
-
-      {/* Error State */}
-      {error && (
-        <div className="content-card">
-          <div className="error-message">{error}</div>
-        </div>
-      )}
-
-      {/* Team Results */}
-      {!loading && !error && (teamData || tbaData) && (
-        <>
-          {/* Team Header Card */}
-          <div className="content-card team-header-card">
-            <div className="team-header">
-              <div className="team-number-large">
-                {teamNumber}
-              </div>
-              <div className="team-info">
-                <h2>{tbaData?.nickname || teamData?.team || `Team ${teamNumber}`}</h2>
-                {tbaData && (
-                  <p className="team-location">
-                    📍 {tbaData.city}, {tbaData.state_prov}, {tbaData.country}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* EPA Stats Card */}
-          {teamData && (
+      {/* Results Container */}
+      {(loading || teamData || tbaData || error) && (
+        <div id="resultsContainer">
+          {/* Loading State */}
+          {loading && (
             <div className="content-card">
-              <h3>EPA Rating</h3>
-              <div className="epa-display">
-                <div
-                  className="epa-badge"
-                  style={{ backgroundColor: classification.color }}
-                >
-                  <span className="epa-emoji">{classification.emoji}</span>
-                  <span className="epa-label">{classification.label}</span>
-                </div>
-                <div className="epa-details">
-                  <div className="epa-stat">
-                    <span className="epa-stat-value">{epaValue.toFixed(1)}</span>
-                    <span className="epa-stat-label">EPA Points</span>
-                  </div>
-                  <div className="epa-stat">
-                    <span className="epa-stat-value">{epaPercentile.toFixed(0)}%</span>
-                    <span className="epa-stat-label">Percentile</span>
-                  </div>
-                </div>
+              <div className="loading-container">
+                <div className="loading-spinner"></div>
+                <p>Loading team data...</p>
               </div>
-              <p className="epa-description">{classification.description}</p>
             </div>
           )}
 
-          {/* Scouting Data Card */}
-          <div className="content-card">
-            <h3>Your Team's Scouting Data</h3>
-            {scoutingData.length === 0 ? (
-              <p className="empty-state-text">
-                No scouting data for this team yet.
-              </p>
-            ) : (
+          {/* Error State */}
+          {error && (
+            <div className="content-card">
+              <div className="placeholder-content">
+                <div className="icon">🔍</div>
+                <h3>No Team Found</h3>
+                <p>{error}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Team Header with Classification Badge */}
+          {!loading && !error && (teamData || tbaData) && (
+            <div className="content-card team-header-card">
+              <div className="team-header">
+                <div className="team-identity">
+                  <h2>{tbaData?.nickname || teamData?.team || `Team ${teamNumber}`}</h2>
+                  <span className="team-number-badge">#{teamNumber}</span>
+                </div>
+                {teamData && (
+                  <div className="classification-badge-container">
+                    <span
+                      className="classification-badge"
+                      style={{ backgroundColor: classification.color }}
+                    >
+                      {classification.emoji} {classification.label}
+                    </span>
+                    <span className="classification-desc">{classification.description}</span>
+                  </div>
+                )}
+              </div>
+              {tbaData && (
+                <p className="team-location">
+                  {tbaData.city}, {tbaData.state_prov}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Team Overview - 3 Cards */}
+          {!loading && !error && (teamData || tbaData) && (
+            <div className="content-card">
+              <h3>📊 Team Overview</h3>
+              <div className="overview-cards">
+                {/* EPA Rating Card */}
+                <div className="overview-card epa-card" style={{ borderLeftColor: classification.color }}>
+                  <div className="overview-card-header">
+                    <span className="overview-icon">📊</span>
+                    <span>EPA Rating</span>
+                  </div>
+                  <div className="overview-card-value">{epaValue.toFixed(1)}</div>
+                  <div className="overview-card-sub">
+                    Percentile: {epaPercentile.toFixed(0)}%
+                    <span className="mini-badge" style={{ color: classification.color }}>
+                      {classification.emoji} {classification.label}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Record Card */}
+                <div className="overview-card">
+                  <div className="overview-card-header">
+                    <span className="overview-icon">🏆</span>
+                    <span>Record</span>
+                  </div>
+                  <div className="overview-card-value">{wins}-{losses}-{ties}</div>
+                  <div className="overview-card-sub">Win Rate: {winRate}%</div>
+                </div>
+
+                {/* Your Scouting Card */}
+                <div className="overview-card scouting-card">
+                  <div className="overview-card-header">
+                    <span className="overview-icon">📋</span>
+                    <span>Your Scouting</span>
+                  </div>
+                  <div className="overview-card-value">
+                    {scoutingAvg ? scoutingAvg.totalPoints.toFixed(1) : '0'} pts
+                  </div>
+                  <div className="overview-card-sub">
+                    {scoutingData.length} matches scouted
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Data Sources - Split View */}
+          {!loading && !error && (teamData || tbaData) && (
+            <div className="split-view">
+              {/* Statbotics Data */}
+              <div className="split-pane">
+                <div className="content-card data-source-card">
+                  <h3>📈 Statbotics Data</h3>
+                  <p className="pane-subtitle">External EPA rankings and statistics</p>
+                  {teamData ? (
+                    <div className="stat-boxes-grid">
+                      <div className="stat-box epa-box">
+                        <div className="stat-box-value" style={{ color: '#e91e63' }}>
+                          {epaValue.toFixed(1)}
+                        </div>
+                        <div className="stat-box-label">EPA</div>
+                      </div>
+                      <div className="stat-box">
+                        <div className="stat-box-value" style={{ color: '#e91e63' }}>
+                          {epaPercentile.toFixed(0)}%
+                        </div>
+                        <div className="stat-box-label">Percentile</div>
+                      </div>
+                      <div className="stat-box">
+                        <div className="stat-box-value">
+                          {teamData?.rank || 'N/A'}
+                        </div>
+                        <div className="stat-box-label">Rank</div>
+                      </div>
+                      <div className="stat-box">
+                        <div className="stat-box-value" style={{ color: '#e91e63' }}>
+                          {wins}-{losses}-{ties}
+                        </div>
+                        <div className="stat-box-label">Record</div>
+                      </div>
+                      <div className="stat-box">
+                        <div className="stat-box-value">
+                          {tbaData?.rookie_year || teamData?.rookie_year || 'N/A'}
+                        </div>
+                        <div className="stat-box-label">Rookie Year</div>
+                      </div>
+                      <div className="stat-box">
+                        <div className="stat-box-value">{teamNumber}</div>
+                        <div className="stat-box-label">Team Number</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="no-data">No Statbotics data available</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Scouting Data */}
+              <div className="split-pane">
+                <div className="content-card data-source-card">
+                  <h3>📋 Your Scouting Data</h3>
+                  <p className="pane-subtitle">Data from your team's observations</p>
+                  {scoutingData.length > 0 && scoutingAvg ? (
+                    <div className="stat-boxes-grid scouting-boxes">
+                      <div className="stat-box">
+                        <div className="stat-box-value" style={{ color: '#e91e63' }}>
+                          {scoutingAvg.matchCount}
+                        </div>
+                        <div className="stat-box-label">Matches Scouted</div>
+                      </div>
+                      <div className="stat-box">
+                        <div className="stat-box-value" style={{ color: '#e91e63' }}>
+                          {scoutingAvg.totalPoints.toFixed(1)}
+                        </div>
+                        <div className="stat-box-label">Avg Total</div>
+                      </div>
+                      <div className="stat-box">
+                        <div className="stat-box-value" style={{ color: '#e91e63' }}>
+                          {scoutingAvg.autoPoints.toFixed(1)}
+                        </div>
+                        <div className="stat-box-label">Avg Auto</div>
+                      </div>
+                      <div className="stat-box">
+                        <div className="stat-box-value" style={{ color: '#e91e63' }}>
+                          {scoutingAvg.teleopPoints.toFixed(1)}
+                        </div>
+                        <div className="stat-box-label">Avg Teleop</div>
+                      </div>
+                      <div className="stat-box">
+                        <div className="stat-box-value" style={{ color: '#e91e63' }}>
+                          {scoutingAvg.bestMatch}
+                        </div>
+                        <div className="stat-box-label">Best Match</div>
+                      </div>
+                      <div className="stat-box">
+                        <div className="stat-box-value">Consistent</div>
+                        <div className="stat-box-label">Consistency</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="no-data">No scouting data available for this team</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Match History */}
+          {!loading && !error && scoutingData.length > 0 && (
+            <div className="content-card">
+              <h3>📜 Match History</h3>
               <div className="table-container">
                 <table className="data-table">
                   <thead>
@@ -218,33 +374,38 @@ export default function Teams() {
                       <th>Event</th>
                       <th>Auto Pts</th>
                       <th>Teleop Pts</th>
+                      <th>Total</th>
                       <th>Scouter</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {scoutingData.map(entry => (
-                      <tr key={entry.id}>
+                    {scoutingData.map((entry, idx) => (
+                      <tr key={entry.id || idx}>
                         <td>{entry.matchNumber || '-'}</td>
                         <td>{entry.eventKey || '-'}</td>
-                        <td>
-                          {((entry.autoSpeaker || 0) * 5) +
-                           ((entry.autoAmp || 0) * 2) +
-                           (entry.autoMobility ? 2 : 0)}
-                        </td>
-                        <td>
-                          {((entry.teleopSpeaker || 0) * 2) +
-                           ((entry.teleopAmp || 0) * 1) +
-                           ((entry.amplifiedScored || 0) * 5)}
-                        </td>
+                        <td>{entry.autoPoints || 0}</td>
+                        <td>{entry.teleopPoints || 0}</td>
+                        <td><strong>{(entry.autoPoints || 0) + (entry.teleopPoints || 0)}</strong></td>
                         <td>{entry.scouterName || 'Unknown'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* No Results Message (initial state) */}
+      {!loading && !error && !teamData && !tbaData && (
+        <div className="content-card">
+          <div className="placeholder-content">
+            <div className="icon">🔍</div>
+            <h3>Search for a Team</h3>
+            <p>Enter a team number above to view their stats</p>
           </div>
-        </>
+        </div>
       )}
     </>
   );

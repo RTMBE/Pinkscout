@@ -51,25 +51,29 @@ export default function Analytics() {
     
     setLoading(true);
     setError('');
-    
+
     try {
-      const [statbotics, scouting] = await Promise.all([
+      // Use Promise.allSettled to handle individual failures gracefully
+      const [statboticsResult, scoutingResult] = await Promise.allSettled([
         getStatboticsTeam(teamNumber),
         getTeamScoutingData(teamNumber)
       ]);
-      
+
+      const statbotics = statboticsResult.status === 'fulfilled' ? statboticsResult.value : null;
+      const scouting = scoutingResult.status === 'fulfilled' ? scoutingResult.value : [];
+
       if (!statbotics) {
         setError(`Team ${teamNumber} not found in Statbotics`);
         return;
       }
-      
+
       const epaValue = scaleStatboticsEPA(statbotics);
       const epaPercentile = getEPAPercentile(statbotics);
       const classification = classifyEPA(epaPercentile);
-      
+
       // Calculate scouting averages
       const scoutingAvg = calculateScoutingAverages(scouting);
-      
+
       setTeams(prev => [...prev, {
         teamNumber,
         name: statbotics.team || `Team ${teamNumber}`,
@@ -79,7 +83,7 @@ export default function Analytics() {
         scoutingData: scouting,
         scoutingAvg
       }]);
-      
+
       setTeamInput('');
     } catch (err) {
       console.error('Error adding team:', err);

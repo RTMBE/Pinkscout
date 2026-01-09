@@ -48,12 +48,12 @@ import { getAuth } from 'firebase/auth';
 // They are safe to expose in client-side code (Firebase Security Rules protect data)
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBZ7LK0s4iMg-fvXvx4JnuvNhkUh8yNlf0",
+  apiKey: "AIzaSyCqUoIrwQdBFlaF0P9NfTRN7pVfji5p3-M",
   authDomain: "pinkscout-470d1.firebaseapp.com",
   projectId: "pinkscout-470d1",
   storageBucket: "pinkscout-470d1.firebasestorage.app",
-  messagingSenderId: "346828983498",
-  appId: "1:346828983498:web:e4da99e81d15f1bdcc2680"
+  messagingSenderId: "386591970958",
+  appId: "1:386591970958:web:a7a9483684c3418cea1bdf"
 };
 
 // =============================================================================

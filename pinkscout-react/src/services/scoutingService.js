@@ -101,24 +101,63 @@ export async function getAllScoutingData() {
 
 /**
  * Get all scouting entries for a specific team
- * 
+ *
  * @param {number|string} teamNumber - The team number to fetch data for
+ * @param {Object} options - Optional filters { year, eventKey }
  * @returns {Array} - Array of scouting entries for the team
  */
-export async function getTeamScoutingData(teamNumber) {
+export async function getTeamScoutingData(teamNumber, options = {}) {
   try {
     const teamNum = parseInt(teamNumber);
-    const q = query(
-      collection(db, SCOUTING_COLLECTION),
-      where('teamNumber', '==', teamNum),
-      orderBy('createdAt', 'desc')
-    );
+    const { year, eventKey } = options;
+
+    // Build query based on filters
+    let q;
+
+    if (eventKey) {
+      // Filter by specific event
+      q = query(
+        collection(db, SCOUTING_COLLECTION),
+        where('teamNumber', '==', teamNum),
+        where('eventKey', '==', eventKey),
+        orderBy('createdAt', 'desc')
+      );
+    } else if (year) {
+      // Filter by year - use eventYear field if available
+      q = query(
+        collection(db, SCOUTING_COLLECTION),
+        where('teamNumber', '==', teamNum),
+        where('eventYear', '==', year),
+        orderBy('createdAt', 'desc')
+      );
+    } else {
+      // No filter - get all data for team
+      q = query(
+        collection(db, SCOUTING_COLLECTION),
+        where('teamNumber', '==', teamNum),
+        orderBy('createdAt', 'desc')
+      );
+    }
+
     const snapshot = await getDocs(q);
-    
-    return snapshot.docs.map(doc => ({
+    let results = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
+
+    // If filtering by year but eventYear field might not exist on old data,
+    // also filter client-side by eventKey prefix (e.g., "2025flor" starts with "2025")
+    if (year && !eventKey) {
+      results = results.filter(doc => {
+        // Check eventYear field first
+        if (doc.eventYear === year) return true;
+        // Fall back to checking eventKey prefix
+        if (doc.eventKey && doc.eventKey.startsWith(year.toString())) return true;
+        return false;
+      });
+    }
+
+    return results;
   } catch (error) {
     console.error('❌ Error fetching team scouting data:', error);
     throw error;

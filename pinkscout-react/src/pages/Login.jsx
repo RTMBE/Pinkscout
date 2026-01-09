@@ -41,6 +41,7 @@ export default function Login() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [username, setUsername] = useState('');
   const [signupCode, setSignupCode] = useState('');
+  const [teamNumber, setTeamNumber] = useState('');
   
   // UI state
   const [error, setError] = useState('');
@@ -106,7 +107,7 @@ export default function Login() {
         }
         
         // Signup (includes code validation)
-        await signup(email, password, username, signupCode);
+        await signup(email, password, username, signupCode, teamNumber || null);
         setSuccess('Account created! Redirecting...');
         
         // Short delay to show success
@@ -237,6 +238,21 @@ export default function Login() {
                     minLength={2}
                     maxLength={30}
                   />
+                </div>
+
+                {/* Team Number */}
+                <div className="form-group">
+                  <label htmlFor="teamNumber">Your FRC Team Number (optional)</label>
+                  <input
+                    type="number"
+                    id="teamNumber"
+                    value={teamNumber}
+                    onChange={(e) => setTeamNumber(e.target.value)}
+                    placeholder="e.g. 1551"
+                    min={1}
+                    max={99999}
+                  />
+                  <small className="form-hint">This enables the "My Matches" feature</small>
                 </div>
 
                 {/* Sign Up Code */}

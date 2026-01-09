@@ -167,12 +167,12 @@ export async function removeAdmin(email) {
 
 /**
  * Check the status of external APIs
- * 
+ *
  * @returns {Object} - Status of each API { tba, statbotics }
  */
 export async function getAPIStatus() {
   const status = { tba: false, statbotics: false };
-  
+
   // Check TBA
   try {
     const tbaRes = await fetch('https://www.thebluealliance.com/api/v3/status', {
@@ -180,13 +180,120 @@ export async function getAPIStatus() {
     });
     status.tba = tbaRes.ok;
   } catch { status.tba = false; }
-  
+
   // Check Statbotics
   try {
     const sbRes = await fetch('https://api.statbotics.io/v3/team/1551');
     status.statbotics = sbRes.ok;
   } catch { status.statbotics = false; }
-  
+
   return status;
+}
+
+// =============================================================================
+// DATA WIPE FUNCTIONS
+// =============================================================================
+
+/**
+ * Wipe all scouting data from the database
+ *
+ * @returns {Object} - { deleted: number } count of deleted documents
+ */
+export async function wipeAllScoutingData() {
+  try {
+    const snapshot = await getDocs(collection(db, 'scouting'));
+    let deleted = 0;
+
+    for (const docSnap of snapshot.docs) {
+      await deleteDoc(doc(db, 'scouting', docSnap.id));
+      deleted++;
+    }
+
+    console.log(`✅ Wiped ${deleted} scouting records`);
+    return { deleted };
+  } catch (error) {
+    console.error('Error wiping scouting data:', error);
+    throw error;
+  }
+}
+
+/**
+ * Wipe all user data except the primary admin
+ *
+ * @param {string} preserveEmail - Email to preserve (primary admin)
+ * @returns {Object} - { deleted: number, preserved: number }
+ */
+export async function wipeAllUserData(preserveEmail = 'rtmbe20@gmail.com') {
+  try {
+    const snapshot = await getDocs(collection(db, 'users'));
+    let deleted = 0;
+    let preserved = 0;
+
+    for (const docSnap of snapshot.docs) {
+      const userData = docSnap.data();
+      if (userData.email?.toLowerCase() === preserveEmail.toLowerCase()) {
+        preserved++;
+        continue; // Skip the primary admin
+      }
+      await deleteDoc(doc(db, 'users', docSnap.id));
+      deleted++;
+    }
+
+    console.log(`✅ Wiped ${deleted} user profiles, preserved ${preserved}`);
+    return { deleted, preserved };
+  } catch (error) {
+    console.error('Error wiping user data:', error);
+    throw error;
+  }
+}
+
+/**
+ * Ensure the admin settings document has the primary admin email
+ *
+ * @param {string} adminEmail - The primary admin email
+ */
+export async function ensureAdminExists(adminEmail = 'rtmbe20@gmail.com') {
+  try {
+    await setDoc(doc(db, 'settings', 'admins'), {
+      emails: [adminEmail.toLowerCase()]
+    }, { merge: false }); // Overwrite to ensure clean state
+    console.log(`✅ Admin settings reset with: ${adminEmail}`);
+  } catch (error) {
+    console.error('Error ensuring admin exists:', error);
+    throw error;
+  }
+}
+
+/**
+ * Complete data wipe - removes all scouting and user data, preserves primary admin
+ *
+ * @returns {Object} - Summary of what was deleted
+ */
+export async function performCompleteDataWipe() {
+  try {
+    const results = {
+      scoutingDeleted: 0,
+      usersDeleted: 0,
+      usersPreserved: 0
+    };
+
+    // Wipe scouting data
+    const scoutingResult = await wipeAllScoutingData();
+    results.scoutingDeleted = scoutingResult.deleted;
+
+    // Wipe user data (preserve primary admin)
+    const userResult = await wipeAllUserData('rtmbe20@gmail.com');
+    results.usersDeleted = userResult.deleted;
+    results.usersPreserved = userResult.preserved;
+
+    // Ensure admin settings are correct
+    await ensureAdminExists('rtmbe20@gmail.com');
+
+    console.log('✅ Complete data wipe finished:', results);
+    return results;
+  } catch (error) {
+    console.error('Error during complete data wipe:', error);
+    throw error;
+  }
 }
 

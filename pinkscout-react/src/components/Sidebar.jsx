@@ -30,7 +30,7 @@ import ThemeToggle from './ThemeToggle';
  */
 export default function Sidebar() {
   // Get auth state from context
-  const { user, logout } = useAuth();
+  const { user, userProfile, logout } = useAuth();
 
   // Handle logout click
   const handleLogout = async () => {
@@ -66,11 +66,6 @@ export default function Sidebar() {
             </NavLink>
           </li>
           <li>
-            <NavLink to="/dashboard">
-              📊 Dashboard
-            </NavLink>
-          </li>
-          <li>
             <NavLink to="/scouting">
               📝 Scout
             </NavLink>
@@ -85,6 +80,14 @@ export default function Sidebar() {
               🏆 Events
             </NavLink>
           </li>
+          {/* My Matches - Only visible when user has set their team number */}
+          {userProfile?.teamNumber && (
+            <li>
+              <NavLink to="/my-matches">
+                📅 My Matches
+              </NavLink>
+            </li>
+          )}
           <li>
             <NavLink to="/analytics">
               📈 Analytics
@@ -97,7 +100,7 @@ export default function Sidebar() {
           </li>
           <li>
             <NavLink to="/admin">
-              ⚙️ Admin
+              🔐 Admin
             </NavLink>
           </li>
         </ul>

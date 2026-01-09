@@ -151,27 +151,131 @@ export async function getTeamInfo(teamNumber) {
 }
 
 // =============================================================================
+// GET EVENT RANKINGS
+// =============================================================================
+
+/**
+ * Fetch qualification rankings for an event
+ *
+ * @param {string} eventKey - Event key (e.g., "2024casj")
+ * @returns {Object} - Rankings data including team ranks
+ */
+export async function getEventRankings(eventKey) {
+  try {
+    const data = await tbaFetch(`/event/${eventKey}/rankings`);
+    return data?.rankings || [];
+  } catch (error) {
+    console.error('Error fetching event rankings:', error);
+    return [];
+  }
+}
+
+// =============================================================================
+// GET EVENT AWARDS
+// =============================================================================
+
+/**
+ * Fetch all awards given at an event
+ *
+ * @param {string} eventKey - Event key (e.g., "2024casj")
+ * @returns {Array} - Array of award objects
+ *
+ * Award object structure:
+ * - award_type: number (0 = Chairman's, 1 = Winner, 2 = Finalist, etc.)
+ * - event_key: string
+ * - name: string (human-readable award name)
+ * - recipient_list: Array of { team_key, awardee } objects
+ * - year: number
+ */
+export async function getEventAwards(eventKey) {
+  try {
+    return await tbaFetch(`/event/${eventKey}/awards`);
+  } catch (error) {
+    console.error('Error fetching event awards:', error);
+    return [];
+  }
+}
+
+// =============================================================================
+// GET TEAM EVENTS FOR YEAR
+// =============================================================================
+
+/**
+ * Fetch all events a team is attending in a given year
+ *
+ * @param {string|number} teamNumber - FRC team number
+ * @param {number} year - The year to fetch events for
+ * @returns {Array} - Array of event objects sorted by date
+ */
+export async function getTeamEvents(teamNumber, year) {
+  try {
+    const events = await tbaFetch(`/team/frc${teamNumber}/events/${year}`);
+
+    // Sort by start date
+    return events.sort((a, b) =>
+      new Date(a.start_date) - new Date(b.start_date)
+    );
+  } catch (error) {
+    console.error('Error fetching team events:', error);
+    return [];
+  }
+}
+
+// =============================================================================
+// GET TEAM MATCHES AT EVENT
+// =============================================================================
+
+/**
+ * Fetch all matches for a specific team at an event
+ *
+ * @param {string|number} teamNumber - FRC team number
+ * @param {string} eventKey - Event key (e.g., "2024casj")
+ * @returns {Array} - Array of match objects sorted by time/number
+ */
+export async function getTeamEventMatches(teamNumber, eventKey) {
+  try {
+    const matches = await tbaFetch(`/team/frc${teamNumber}/event/${eventKey}/matches`);
+
+    // Sort matches by competition level and match number
+    const levelOrder = { qm: 0, ef: 1, qf: 2, sf: 3, f: 4 };
+    return matches.sort((a, b) => {
+      const levelDiff = (levelOrder[a.comp_level] || 0) - (levelOrder[b.comp_level] || 0);
+      if (levelDiff !== 0) return levelDiff;
+
+      const setDiff = (a.set_number || 0) - (b.set_number || 0);
+      if (setDiff !== 0) return setDiff;
+
+      return (a.match_number || 0) - (b.match_number || 0);
+    });
+  } catch (error) {
+    console.error('Error fetching team event matches:', error);
+    return [];
+  }
+}
+
+// =============================================================================
 // GET FULL EVENT DATA (COMBINED)
 // =============================================================================
 
 /**
- * Fetch all data for an event in parallel (event details, teams, matches)
- * 
+ * Fetch all data for an event in parallel (event details, teams, matches, rankings)
+ *
  * @param {string} eventKey - Event key (e.g., "2024casj")
- * @returns {Object} - { event, teams, matches }
+ * @returns {Object} - { event, teams, matches, rankings }
  */
 export async function getFullEventData(eventKey) {
   try {
-    const [event, teams, matches] = await Promise.all([
+    const [event, teams, matches, rankings] = await Promise.all([
       getEventDetails(eventKey),
       getEventTeams(eventKey),
-      getEventMatches(eventKey)
+      getEventMatches(eventKey),
+      getEventRankings(eventKey)
     ]);
-    
-    return { event, teams, matches };
+
+    return { event, teams, matches, rankings };
   } catch (error) {
     console.error('Error fetching full event data:', error);
-    return { event: null, teams: [], matches: [] };
+    return { event: null, teams: [], matches: [], rankings: [] };
   }
 }
 

@@ -17,23 +17,30 @@ import { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../contexts/AuthContext';
 import { getAllScoutingData } from '../services/scoutingService';
-import { doc, updateDoc } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
-import { db } from '../services/firebase';
 
 export default function Profile() {
-  const { user, userProfile, isAdmin } = useAuth();
-  
+  const { user, userProfile, isAdmin, updateUserProfile } = useAuth();
+
   // ==========================================================================
   // STATE
   // ==========================================================================
-  
+
   const [displayName, setDisplayName] = useState(userProfile?.displayName || user?.displayName || '');
+  const [teamNumber, setTeamNumber] = useState(userProfile?.teamNumber || '');
   const [stats, setStats] = useState({ entries: 0, teams: 0 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+
+  // Update form when userProfile loads
+  useEffect(() => {
+    if (userProfile) {
+      setDisplayName(userProfile.displayName || user?.displayName || '');
+      setTeamNumber(userProfile.teamNumber || '');
+    }
+  }, [userProfile, user]);
 
   // ==========================================================================
   // LOAD USER STATS
@@ -64,27 +71,41 @@ export default function Profile() {
   // ==========================================================================
   // UPDATE PROFILE
   // ==========================================================================
-  
+
   const handleSave = async (e) => {
     e.preventDefault();
     if (!displayName.trim()) {
       setError('Display name is required');
       return;
     }
-    
+
+    // Validate team number if provided
+    const teamNum = teamNumber ? parseInt(teamNumber, 10) : null;
+    if (teamNumber && (isNaN(teamNum) || teamNum < 1 || teamNum > 99999)) {
+      setError('Please enter a valid team number (1-99999)');
+      return;
+    }
+
     setSaving(true);
     setError('');
     setSuccess('');
-    
+
     try {
       // Update Firebase Auth profile
       await updateProfile(user, { displayName: displayName.trim() });
-      
-      // Update Firestore profile
-      await updateDoc(doc(db, 'users', user.uid), {
+
+      // Update Firestore profile with team number
+      const updates = {
         displayName: displayName.trim()
-      });
-      
+      };
+      if (teamNum) {
+        updates.teamNumber = teamNum;
+      } else {
+        updates.teamNumber = null; // Clear team number if empty
+      }
+
+      await updateUserProfile(updates);
+
       setSuccess('Profile updated successfully!');
     } catch (err) {
       console.error('Error updating profile:', err);
@@ -159,7 +180,23 @@ export default function Profile() {
               maxLength={30}
             />
           </div>
-          
+
+          <div className="form-group">
+            <label htmlFor="teamNumber">Your FRC Team Number</label>
+            <input
+              type="number"
+              id="teamNumber"
+              value={teamNumber}
+              onChange={(e) => setTeamNumber(e.target.value)}
+              placeholder="e.g. 1551"
+              min={1}
+              max={99999}
+            />
+            <small className="form-hint">
+              Set your team number to access the "My Matches" feature
+            </small>
+          </div>
+
           <button type="submit" className="btn btn-primary" disabled={saving}>
             {saving ? 'Saving...' : '💾 Save Changes'}
           </button>

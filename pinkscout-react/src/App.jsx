@@ -2,25 +2,24 @@
  * =============================================================================
  * APP.JSX - Main Application Component with Routing
  * =============================================================================
- * 
+ *
  * WHAT IS THIS FILE?
  * The main application component that:
  * 1. Sets up React Router routes
  * 2. Implements protected routes (auth required)
- * 3. Implements admin-only routes
+ * 3. Implements admin-only routes (email-based access)
  * 4. Renders the layout (sidebar + content)
- * 
+ *
  * ROUTE STRUCTURE:
  * /             → Home (protected)
- * /dashboard    → Dashboard (protected)
  * /teams        → Team Search (protected)
  * /events       → Event Page (protected)
  * /scouting     → Scouting Form (protected)
- * /admin        → Admin Panel (protected + admin only)
+ * /admin        → Admin Panel (protected + email whitelist)
  * /analytics    → Analytics (protected)
  * /login        → Login Page (public, no sidebar)
  * /profile      → Scouter Profile (protected)
- * 
+ *
  * =============================================================================
  */
 
@@ -38,7 +37,6 @@ import Sidebar from './components/Sidebar';
 // This improves initial load time
 
 const Home = lazy(() => import('./pages/Home'));
-const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Teams = lazy(() => import('./pages/Teams'));
 const Events = lazy(() => import('./pages/Events'));
 const Scouting = lazy(() => import('./pages/Scouting'));
@@ -46,6 +44,7 @@ const Admin = lazy(() => import('./pages/Admin'));
 const Analytics = lazy(() => import('./pages/Analytics'));
 const Login = lazy(() => import('./pages/Login'));
 const Profile = lazy(() => import('./pages/Profile'));
+const MyMatches = lazy(() => import('./pages/MyMatches'));
 
 // =============================================================================
 // LOADING FALLBACK COMPONENT
@@ -87,23 +86,20 @@ function ProtectedRoute({ children }) {
 // =============================================================================
 /**
  * Wrapper that only allows access if user is an admin
+ * Note: The Admin page itself handles email-based access control
  */
 function AdminRoute({ children }) {
-  const { user, isAdmin, loading } = useAuth();
-  
+  const { user, loading } = useAuth();
+
   if (loading) {
     return <LoadingSpinner />;
   }
-  
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
-  
-  if (!isAdmin) {
-    // Redirect non-admins to dashboard
-    return <Navigate to="/dashboard" replace />;
-  }
-  
+
+  // Let the Admin page handle its own access control based on email
   return children;
 }
 
@@ -149,12 +145,7 @@ export default function App() {
             <Route path="/" element={
               <ProtectedRoute><Home /></ProtectedRoute>
             } />
-            
-            {/* Dashboard - Scouting data overview */}
-            <Route path="/dashboard" element={
-              <ProtectedRoute><Dashboard /></ProtectedRoute>
-            } />
-            
+
             {/* Teams - Team search and stats */}
             <Route path="/teams" element={
               <ProtectedRoute><Teams /></ProtectedRoute>
@@ -179,7 +170,12 @@ export default function App() {
             <Route path="/profile" element={
               <ProtectedRoute><Profile /></ProtectedRoute>
             } />
-            
+
+            {/* My Matches - User's team matches */}
+            <Route path="/my-matches" element={
+              <ProtectedRoute><MyMatches /></ProtectedRoute>
+            } />
+
             {/* Admin - Admin panel (admin only) */}
             <Route path="/admin" element={
               <AdminRoute><Admin /></AdminRoute>

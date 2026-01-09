@@ -14,19 +14,19 @@
  * =============================================================================
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { getStatboticsTeam } from '../services/statboticsAPI';
 import { getTeamInfo } from '../services/blueAllianceAPI';
 import { getTeamScoutingData } from '../services/scoutingService';
-import { scaleStatboticsEPA, classifyEPA, getEPAPercentile } from '../utils/epaUtils';
+import { scaleStatboticsEPA, classifyEPA, getEPAPercentile, calculateAutoPoints, calculateTeleopPoints } from '../utils/epaUtils';
 
 export default function Teams() {
   // ==========================================================================
   // STATE
   // ==========================================================================
-  
+
   const [searchParams, setSearchParams] = useSearchParams();
   const [teamNumber, setTeamNumber] = useState(searchParams.get('team') || '');
   const [teamData, setTeamData] = useState(null);
@@ -35,10 +35,15 @@ export default function Teams() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Filter state
+  const currentYear = new Date().getFullYear();
+  const [selectedYear, setSelectedYear] = useState('all');
+  const [selectedEvent, setSelectedEvent] = useState('all');
+
   // ==========================================================================
   // SEARCH ON URL PARAM CHANGE
   // ==========================================================================
-  
+
   useEffect(() => {
     const teamParam = searchParams.get('team');
     if (teamParam) {
@@ -50,11 +55,11 @@ export default function Teams() {
   // ==========================================================================
   // SEARCH HANDLER
   // ==========================================================================
-  
+
   const handleSearch = (e) => {
     e.preventDefault();
     if (!teamNumber.trim()) return;
-    
+
     // Update URL
     setSearchParams({ team: teamNumber.trim() });
     searchTeam(teamNumber.trim());
@@ -66,6 +71,9 @@ export default function Teams() {
     setTeamData(null);
     setTbaData(null);
     setScoutingData([]);
+    // Reset filters when searching new team
+    setSelectedYear('all');
+    setSelectedEvent('all');
 
     try {
       // Fetch data from all sources in parallel, handling individual failures
@@ -96,6 +104,62 @@ export default function Teams() {
   };
 
   // ==========================================================================
+  // FILTER SCOUTING DATA
+  // ==========================================================================
+
+  // Extract unique years and events from scouting data
+  const { availableYears, availableEvents } = useMemo(() => {
+    const years = new Set();
+    const events = new Map(); // eventKey -> eventKey (for display)
+
+    scoutingData.forEach(entry => {
+      // Extract year from eventKey (e.g., "2025flor" -> 2025) or eventYear field
+      const year = entry.eventYear || (entry.eventKey ? parseInt(entry.eventKey.substring(0, 4)) : null);
+      if (year && !isNaN(year)) {
+        years.add(year);
+      }
+      if (entry.eventKey) {
+        events.set(entry.eventKey, entry.eventKey);
+      }
+    });
+
+    return {
+      availableYears: [...years].sort((a, b) => b - a),
+      availableEvents: [...events.keys()].sort()
+    };
+  }, [scoutingData]);
+
+  // Filter scouting data based on selected year and event
+  const filteredScoutingData = useMemo(() => {
+    return scoutingData.filter(entry => {
+      // Year filter
+      if (selectedYear !== 'all') {
+        const entryYear = entry.eventYear || (entry.eventKey ? parseInt(entry.eventKey.substring(0, 4)) : null);
+        if (entryYear !== parseInt(selectedYear)) return false;
+      }
+
+      // Event filter
+      if (selectedEvent !== 'all') {
+        if (entry.eventKey !== selectedEvent) return false;
+      }
+
+      return true;
+    });
+  }, [scoutingData, selectedYear, selectedEvent]);
+
+  // Filter available events based on selected year
+  const filteredAvailableEvents = useMemo(() => {
+    if (selectedYear === 'all') return availableEvents;
+    return availableEvents.filter(eventKey => eventKey.startsWith(selectedYear));
+  }, [availableEvents, selectedYear]);
+
+  // Reset event selection when year changes
+  const handleYearChange = (year) => {
+    setSelectedYear(year);
+    setSelectedEvent('all');
+  };
+
+  // ==========================================================================
   // COMPUTED VALUES
   // ==========================================================================
 
@@ -111,19 +175,19 @@ export default function Teams() {
   const winRate = totalMatches > 0 ? ((wins / totalMatches) * 100).toFixed(0) : 'N/A';
 
   // ==========================================================================
-  // CALCULATE SCOUTING AVERAGES
+  // CALCULATE SCOUTING AVERAGES (using filtered data)
   // ==========================================================================
 
-  const scoutingAvg = scoutingData.length > 0 ? {
-    autoPoints: scoutingData.reduce((s, e) => s + (e.autoPoints || 0), 0) / scoutingData.length,
-    teleopPoints: scoutingData.reduce((s, e) => s + (e.teleopPoints || 0), 0) / scoutingData.length,
-    totalPoints: scoutingData.reduce((s, e) => s + ((e.autoPoints || 0) + (e.teleopPoints || 0)), 0) / scoutingData.length,
-    autoSpeaker: scoutingData.reduce((s, e) => s + (e.autoSpeaker || 0), 0) / scoutingData.length,
-    autoAmp: scoutingData.reduce((s, e) => s + (e.autoAmp || 0), 0) / scoutingData.length,
-    teleopSpeaker: scoutingData.reduce((s, e) => s + (e.teleopSpeaker || 0), 0) / scoutingData.length,
-    teleopAmp: scoutingData.reduce((s, e) => s + (e.teleopAmp || 0), 0) / scoutingData.length,
-    bestMatch: Math.max(...scoutingData.map(e => (e.autoPoints || 0) + (e.teleopPoints || 0))),
-    matchCount: scoutingData.length
+  const scoutingAvg = filteredScoutingData.length > 0 ? {
+    autoPoints: filteredScoutingData.reduce((s, e) => s + calculateAutoPoints(e), 0) / filteredScoutingData.length,
+    teleopPoints: filteredScoutingData.reduce((s, e) => s + calculateTeleopPoints(e), 0) / filteredScoutingData.length,
+    totalPoints: filteredScoutingData.reduce((s, e) => s + calculateAutoPoints(e) + calculateTeleopPoints(e), 0) / filteredScoutingData.length,
+    autoSpeaker: filteredScoutingData.reduce((s, e) => s + (e.autoSpeaker || 0), 0) / filteredScoutingData.length,
+    autoAmp: filteredScoutingData.reduce((s, e) => s + (e.autoAmp || 0), 0) / filteredScoutingData.length,
+    teleopSpeaker: filteredScoutingData.reduce((s, e) => s + (e.teleopSpeaker || 0), 0) / filteredScoutingData.length,
+    teleopAmp: filteredScoutingData.reduce((s, e) => s + (e.teleopAmp || 0), 0) / filteredScoutingData.length,
+    bestMatch: Math.max(...filteredScoutingData.map(e => calculateAutoPoints(e) + calculateTeleopPoints(e))),
+    matchCount: filteredScoutingData.length
   } : null;
 
   // ==========================================================================
@@ -254,7 +318,7 @@ export default function Teams() {
                     {scoutingAvg ? scoutingAvg.totalPoints.toFixed(1) : '0'} pts
                   </div>
                   <div className="overview-card-sub">
-                    {scoutingData.length} matches scouted
+                    {filteredScoutingData.length} matches {selectedYear !== 'all' || selectedEvent !== 'all' ? '(filtered)' : 'scouted'}
                   </div>
                 </div>
               </div>
@@ -317,7 +381,47 @@ export default function Teams() {
                 <div className="content-card data-source-card">
                   <h3>📋 Your Scouting Data</h3>
                   <p className="pane-subtitle">Data from your team's observations</p>
-                  {scoutingData.length > 0 && scoutingAvg ? (
+
+                  {/* Year/Event Filter */}
+                  {scoutingData.length > 0 && (
+                    <div className="scouting-filters" style={{
+                      display: 'flex',
+                      gap: '1rem',
+                      marginBottom: '1rem',
+                      flexWrap: 'wrap'
+                    }}>
+                      <div className="form-group" style={{ flex: '1', minWidth: '120px' }}>
+                        <label htmlFor="yearFilter" style={{ fontSize: '0.75rem', marginBottom: '0.25rem' }}>Year</label>
+                        <select
+                          id="yearFilter"
+                          value={selectedYear}
+                          onChange={(e) => handleYearChange(e.target.value)}
+                          style={{ width: '100%' }}
+                        >
+                          <option value="all">All Years</option>
+                          {availableYears.map(year => (
+                            <option key={year} value={year}>{year}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group" style={{ flex: '2', minWidth: '180px' }}>
+                        <label htmlFor="eventFilter" style={{ fontSize: '0.75rem', marginBottom: '0.25rem' }}>Event</label>
+                        <select
+                          id="eventFilter"
+                          value={selectedEvent}
+                          onChange={(e) => setSelectedEvent(e.target.value)}
+                          style={{ width: '100%' }}
+                        >
+                          <option value="all">All Events</option>
+                          {filteredAvailableEvents.map(eventKey => (
+                            <option key={eventKey} value={eventKey}>{eventKey}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {filteredScoutingData.length > 0 && scoutingAvg ? (
                     <div className="stat-boxes-grid scouting-boxes">
                       <div className="stat-box">
                         <div className="stat-box-value" style={{ color: '#e91e63' }}>
@@ -354,6 +458,8 @@ export default function Teams() {
                         <div className="stat-box-label">Consistency</div>
                       </div>
                     </div>
+                  ) : scoutingData.length > 0 ? (
+                    <p className="no-data">No scouting data matches the selected filters</p>
                   ) : (
                     <p className="no-data">No scouting data available for this team</p>
                   )}
@@ -363,9 +469,9 @@ export default function Teams() {
           )}
 
           {/* Match History */}
-          {!loading && !error && scoutingData.length > 0 && (
+          {!loading && !error && filteredScoutingData.length > 0 && (
             <div className="content-card">
-              <h3>📜 Match History</h3>
+              <h3>📜 Match History {selectedYear !== 'all' || selectedEvent !== 'all' ? '(Filtered)' : ''}</h3>
               <div className="table-container">
                 <table className="data-table">
                   <thead>
@@ -379,16 +485,20 @@ export default function Teams() {
                     </tr>
                   </thead>
                   <tbody>
-                    {scoutingData.map((entry, idx) => (
-                      <tr key={entry.id || idx}>
-                        <td>{entry.matchNumber || '-'}</td>
-                        <td>{entry.eventKey || '-'}</td>
-                        <td>{entry.autoPoints || 0}</td>
-                        <td>{entry.teleopPoints || 0}</td>
-                        <td><strong>{(entry.autoPoints || 0) + (entry.teleopPoints || 0)}</strong></td>
-                        <td>{entry.scouterName || 'Unknown'}</td>
-                      </tr>
-                    ))}
+                    {filteredScoutingData.map((entry, idx) => {
+                      const autoPoints = calculateAutoPoints(entry);
+                      const teleopPoints = calculateTeleopPoints(entry);
+                      return (
+                        <tr key={entry.id || idx}>
+                          <td>{entry.matchNumber || '-'}</td>
+                          <td>{entry.eventKey || '-'}</td>
+                          <td>{autoPoints}</td>
+                          <td>{teleopPoints}</td>
+                          <td><strong>{autoPoints + teleopPoints}</strong></td>
+                          <td>{entry.scouterName || 'Unknown'}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

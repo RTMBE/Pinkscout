@@ -139,29 +139,51 @@ export function AuthProvider({ children }) {
   // =========================================================================
   // SIGNUP FUNCTION
   // =========================================================================
-  
-  async function signup(email, password, username, signupCode) {
+
+  async function signup(email, password, username, signupCode, teamNumber = null) {
     // Validate signup code
     if (signupCode !== VALID_SIGNUP_CODE) {
       throw new Error('Invalid sign-up code. Please contact your team lead.');
     }
-    
+
     // Create user in Firebase Auth
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const newUser = userCredential.user;
-    
+
     // Update display name
     await updateProfile(newUser, { displayName: username });
-    
+
     // Create user profile in Firestore
-    await setDoc(doc(db, 'users', newUser.uid), {
+    const profileData = {
       email: newUser.email,
       displayName: username,
       role: 'scouter',
       createdAt: serverTimestamp()
-    });
-    
+    };
+
+    // Add team number if provided
+    if (teamNumber) {
+      profileData.teamNumber = parseInt(teamNumber, 10);
+    }
+
+    await setDoc(doc(db, 'users', newUser.uid), profileData);
+
     return userCredential;
+  }
+
+  // =========================================================================
+  // UPDATE USER PROFILE
+  // =========================================================================
+
+  async function updateUserProfile(updates) {
+    if (!user) throw new Error('No user logged in');
+
+    await setDoc(doc(db, 'users', user.uid), updates, { merge: true });
+
+    // Update local profile state
+    setUserProfile(prev => ({ ...prev, ...updates }));
+
+    return true;
   }
 
   // =========================================================================
@@ -178,13 +200,14 @@ export function AuthProvider({ children }) {
   // All values and functions exposed to consumers
 
   const value = {
-    user,           // Current Firebase user object
-    userProfile,    // User profile from Firestore
-    isAdmin,        // Boolean: is user an admin?
-    loading,        // Boolean: is auth state being checked?
-    login,          // Function: login(email, password)
-    signup,         // Function: signup(email, password, username, signupCode)
-    logout          // Function: logout()
+    user,               // Current Firebase user object
+    userProfile,        // User profile from Firestore
+    isAdmin,            // Boolean: is user an admin?
+    loading,            // Boolean: is auth state being checked?
+    login,              // Function: login(email, password)
+    signup,             // Function: signup(email, password, username, signupCode, teamNumber)
+    logout,             // Function: logout()
+    updateUserProfile   // Function: updateUserProfile(updates)
   };
 
   // Don't render children until auth state is determined

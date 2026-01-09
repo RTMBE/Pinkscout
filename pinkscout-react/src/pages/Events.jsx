@@ -1,49 +1,68 @@
 /**
  * =============================================================================
- * EVENTS.JSX - Event Browser Page
+ * EVENTS.JSX - Event Browser Page (Redesigned)
  * =============================================================================
- * 
+ *
  * WHAT IS THIS PAGE?
- * Browse FRC events and view their details:
- * - List events for the current year
- * - View teams at an event
- * - View match schedule
- * - See team EPA rankings at event
- * 
+ * Browse FRC events with a search-first approach:
+ * 1. SEARCH VIEW: Large centered search bar to find events
+ * 2. EVENT DETAIL VIEW: Full page with teams, leaderboard, and match schedule
+ * 3. MATCH MODAL: Click a match to see scores, winner, and team scouting data
+ *
  * DATA SOURCES:
  * - The Blue Alliance API for event data
  * - Statbotics API for team EPA at events
- * 
+ * - Firestore for scouting data
+ *
  * =============================================================================
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { getEventList, getEventTeams, getEventMatches } from '../services/blueAllianceAPI';
+import { getEventList, getEventTeams, getEventMatches, getEventRankings, getEventAwards } from '../services/blueAllianceAPI';
 import { getEventTeamStats } from '../services/statboticsAPI';
-import { classifyEPA } from '../utils/epaUtils';
+import { getEventScoutingData } from '../services/scoutingService';
+import { classifyEPA, calculateAutoPoints, calculateTeleopPoints } from '../utils/epaUtils';
 
 export default function Events() {
   // ==========================================================================
   // STATE
   // ==========================================================================
-  
+
   const currentYear = new Date().getFullYear();
+
+  // View state: 'search' or 'detail'
+  const [view, setView] = useState('search');
+
+  // Search state
   const [year, setYear] = useState(currentYear);
   const [events, setEvents] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  // Event detail state
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [eventTeams, setEventTeams] = useState([]);
   const [eventMatches, setEventMatches] = useState([]);
+  const [eventRankings, setEventRankings] = useState([]);
+  const [eventAwards, setEventAwards] = useState([]);
   const [teamStats, setTeamStats] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [scoutingData, setScoutingData] = useState([]);
   const [loadingDetails, setLoadingDetails] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState('teams');
+
+  // Match modal state
+  const [selectedMatch, setSelectedMatch] = useState(null);
+
+  // Leaderboard sorting state
+  const [sortBy, setSortBy] = useState('rank'); // 'rank', 'epa_total', 'epa_auto', 'epa_teleop', 'wins'
+  const [sortDirection, setSortDirection] = useState('asc'); // 'asc' or 'desc'
 
   // ==========================================================================
   // LOAD EVENTS ON MOUNT/YEAR CHANGE
   // ==========================================================================
-  
+
   useEffect(() => {
     loadEvents();
   }, [year]);
@@ -61,196 +80,949 @@ export default function Events() {
   };
 
   // ==========================================================================
-  // LOAD EVENT DETAILS
+  // SELECT AN EVENT - LOAD FULL DETAILS
   // ==========================================================================
-  
+
   const selectEvent = async (event) => {
     setSelectedEvent(event);
+    setView('detail');
     setLoadingDetails(true);
-    
-    try {
-      const [teams, matches, stats] = await Promise.all([
-        getEventTeams(event.key),
-        getEventMatches(event.key),
-        getEventTeamStats(event.key)
-      ]);
-      
-      setEventTeams(teams);
-      setEventMatches(matches);
-      setTeamStats(stats);
-    } catch (err) {
-      console.error('Error loading event details:', err);
-    } finally {
-      setLoadingDetails(false);
-    }
+    setActiveTab('teams');
+
+    // Load all data in parallel with individual error handling
+    // Use Promise.allSettled to avoid one failure breaking everything
+    const [teamsResult, matchesResult, rankingsResult, statsResult, scoutingResult, awardsResult] = await Promise.allSettled([
+      getEventTeams(event.key),
+      getEventMatches(event.key),
+      getEventRankings(event.key),
+      getEventTeamStats(event.key),
+      getEventScoutingData(event.key),
+      getEventAwards(event.key)
+    ]);
+
+    // Extract values with fallbacks for failed promises
+    const teams = teamsResult.status === 'fulfilled' ? teamsResult.value : [];
+    const matches = matchesResult.status === 'fulfilled' ? matchesResult.value : [];
+    const rankings = rankingsResult.status === 'fulfilled' ? rankingsResult.value : [];
+    const stats = statsResult.status === 'fulfilled' ? statsResult.value : [];
+    const scouting = scoutingResult.status === 'fulfilled' ? scoutingResult.value : [];
+    const awards = awardsResult.status === 'fulfilled' ? awardsResult.value : [];
+
+    console.log('Event data loaded:', {
+      teams: teams.length,
+      matches: matches.length,
+      rankings: rankings.length,
+      stats: stats.length,
+      scouting: scouting.length,
+      awards: awards.length
+    });
+
+    // Log any errors
+    [teamsResult, matchesResult, rankingsResult, statsResult, scoutingResult, awardsResult].forEach((result, i) => {
+      if (result.status === 'rejected') {
+        const names = ['teams', 'matches', 'rankings', 'stats', 'scouting', 'awards'];
+        console.warn(`Failed to load ${names[i]}:`, result.reason);
+      }
+    });
+
+    setEventTeams(teams);
+    setEventMatches(matches);
+    setEventRankings(rankings);
+    setTeamStats(stats);
+    setScoutingData(scouting);
+    setEventAwards(awards);
+    setLoadingDetails(false);
+  };
+
+  // ==========================================================================
+  // BACK TO SEARCH
+  // ==========================================================================
+
+  const backToSearch = () => {
+    setView('search');
+    setSelectedEvent(null);
+    setSelectedMatch(null);
   };
 
   // ==========================================================================
   // FILTER EVENTS
   // ==========================================================================
-  
-  const filteredEvents = events.filter(event => {
+
+  const filteredEvents = useMemo(() => {
+    if (!searchTerm.trim()) return events.slice(0, 50); // Show first 50 if no search
+
     const term = searchTerm.toLowerCase();
-    return (
+    return events.filter(event => (
       event.name.toLowerCase().includes(term) ||
       event.key.toLowerCase().includes(term) ||
       (event.city || '').toLowerCase().includes(term) ||
       (event.state_prov || '').toLowerCase().includes(term)
-    );
-  });
+    ));
+  }, [events, searchTerm]);
 
   // ==========================================================================
-  // RENDER
+  // COMPUTED: MERGED TEAM DATA (TBA + Statbotics + Rankings)
   // ==========================================================================
-  
-  return (
+
+  const mergedTeamData = useMemo(() => {
+    // Create a map of all teams with their data
+    const teamMap = new Map();
+
+    // Add TBA team data first
+    eventTeams.forEach(team => {
+      const teamNum = parseInt(team.team_number || team.key?.replace('frc', ''));
+      if (teamNum) {
+        teamMap.set(teamNum, {
+          team_number: teamNum,
+          nickname: team.nickname || `Team ${teamNum}`,
+          city: team.city,
+          state_prov: team.state_prov,
+          country: team.country,
+          rank: null,
+          record: null,
+          epa_total: 0,
+          epa_auto: 0,
+          epa_teleop: 0,
+          epa_endgame: 0,
+          epa_percentile: 0
+        });
+      }
+    });
+
+    // Merge TBA rankings data
+    eventRankings.forEach(ranking => {
+      const teamNum = parseInt(ranking.team_key?.replace('frc', ''));
+      if (teamNum && teamMap.has(teamNum)) {
+        const team = teamMap.get(teamNum);
+        team.rank = ranking.rank;
+        team.record = ranking.record;
+        team.wins = ranking.record?.wins || 0;
+        team.losses = ranking.record?.losses || 0;
+        team.ties = ranking.record?.ties || 0;
+        team.ranking_points = ranking.extra_stats?.[0] || ranking.sort_orders?.[0] || 0;
+        teamMap.set(teamNum, team);
+      }
+    });
+
+    // Merge Statbotics EPA data
+    teamStats.forEach(stat => {
+      const teamNum = stat.team_number;
+      if (teamNum && teamMap.has(teamNum)) {
+        const team = teamMap.get(teamNum);
+        team.epa_total = stat.epa_total || stat.epa_raw || 0;
+        team.epa_auto = stat.epa_auto || 0;
+        team.epa_teleop = stat.epa_teleop || 0;
+        team.epa_endgame = stat.epa_endgame || 0;
+        team.epa_percentile = stat.epa_percentile || 0;
+        // Use Statbotics rank if TBA rank not available
+        if (!team.rank && stat.rank) {
+          team.rank = stat.rank;
+        }
+        // Use Statbotics record if not set
+        if (!team.wins && stat.wins) {
+          team.wins = stat.wins;
+          team.losses = stat.losses;
+        }
+        teamMap.set(teamNum, team);
+      }
+    });
+
+    return Array.from(teamMap.values());
+  }, [eventTeams, eventRankings, teamStats]);
+
+  // ==========================================================================
+  // COMPUTED: SORTED LEADERBOARD
+  // ==========================================================================
+
+  const leaderboard = useMemo(() => {
+    return [...mergedTeamData].sort((a, b) => {
+      let aVal, bVal;
+
+      switch (sortBy) {
+        case 'rank':
+          aVal = a.rank || 999;
+          bVal = b.rank || 999;
+          break;
+        case 'epa_total':
+          aVal = a.epa_total || 0;
+          bVal = b.epa_total || 0;
+          break;
+        case 'epa_auto':
+          aVal = a.epa_auto || 0;
+          bVal = b.epa_auto || 0;
+          break;
+        case 'epa_teleop':
+          aVal = a.epa_teleop || 0;
+          bVal = b.epa_teleop || 0;
+          break;
+        case 'wins':
+          aVal = a.wins || 0;
+          bVal = b.wins || 0;
+          break;
+        case 'ranking_points':
+          aVal = a.ranking_points || 0;
+          bVal = b.ranking_points || 0;
+          break;
+        case 'team_number':
+          aVal = a.team_number || 0;
+          bVal = b.team_number || 0;
+          break;
+        default:
+          aVal = a.rank || 999;
+          bVal = b.rank || 999;
+      }
+
+      // For rank, lower is better (ascending). For EPA/wins, higher is better (descending default)
+      if (sortDirection === 'asc') {
+        return aVal - bVal;
+      } else {
+        return bVal - aVal;
+      }
+    });
+  }, [mergedTeamData, sortBy, sortDirection]);
+
+  // ==========================================================================
+  // SORT HANDLER
+  // ==========================================================================
+
+  const handleSort = (column) => {
+    if (sortBy === column) {
+      // Toggle direction if clicking same column
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Set new column with appropriate default direction
+      setSortBy(column);
+      // Rank should default to ascending, EPA/wins should default to descending
+      if (column === 'rank' || column === 'team_number') {
+        setSortDirection('asc');
+      } else {
+        setSortDirection('desc');
+      }
+    }
+  };
+
+  // Helper to get sort indicator
+  const getSortIndicator = (column) => {
+    if (sortBy !== column) return '';
+    return sortDirection === 'asc' ? ' ↑' : ' ↓';
+  };
+
+  // ==========================================================================
+  // HELPER: GET TEAM LOGO URL
+  // ==========================================================================
+
+  const getTeamLogoUrl = (teamNumber) => {
+    const eventYear = selectedEvent?.year || year;
+    return `https://www.thebluealliance.com/avatar/${eventYear}/frc${teamNumber}.png`;
+  };
+
+  // ==========================================================================
+  // HELPER: GET MATCH DISPLAY LABEL
+  // ==========================================================================
+
+  const getMatchLabel = (match) => {
+    const levelNames = {
+      qm: 'Qual',
+      ef: 'Eighths',
+      qf: 'Quarters',
+      sf: 'Semis',
+      f: 'Finals'
+    };
+    const levelName = levelNames[match.comp_level] || match.comp_level.toUpperCase();
+    if (match.comp_level === 'qm') {
+      return `${levelName} ${match.match_number}`;
+    }
+    return `${levelName} ${match.set_number}-${match.match_number}`;
+  };
+
+  // ==========================================================================
+  // HELPER: CHECK IF MATCH HAS BEEN PLAYED
+  // ==========================================================================
+
+  const isMatchPlayed = (match) => {
+    return match.alliances?.red?.score !== null &&
+           match.alliances?.red?.score !== undefined &&
+           match.alliances?.red?.score >= 0;
+  };
+
+  // ==========================================================================
+  // HELPER: GET SCOUTING AVERAGES FOR A TEAM
+  // ==========================================================================
+
+  const getTeamScoutingAverages = (teamNumber) => {
+    const teamData = scoutingData.filter(d => d.teamNumber === teamNumber);
+    if (teamData.length === 0) return null;
+
+    const avgAuto = teamData.reduce((s, e) => s + calculateAutoPoints(e), 0) / teamData.length;
+    const avgTeleop = teamData.reduce((s, e) => s + calculateTeleopPoints(e), 0) / teamData.length;
+
+    return {
+      matchCount: teamData.length,
+      avgAuto: avgAuto.toFixed(1),
+      avgTeleop: avgTeleop.toFixed(1),
+      avgTotal: (avgAuto + avgTeleop).toFixed(1)
+    };
+  };
+
+  // ==========================================================================
+  // RENDER: SEARCH VIEW
+  // ==========================================================================
+
+  const renderSearchView = () => (
     <>
       <Helmet>
         <title>Events - PinkScout</title>
-        <meta name="description" content="Browse FRC events and view team rankings" />
+        <meta name="description" content="Search FRC events and view team rankings" />
       </Helmet>
 
-      {/* Page Header */}
-      <header className="page-header">
-        <h1>🏆 Events</h1>
-        <p>Browse FRC events and view team rankings</p>
-      </header>
+      {/* Large Centered Search Section */}
+      <div className="events-search-hero">
+        <div className="search-hero-content">
+          <h1>🏆 Find an Event</h1>
+          <p>Search for FRC events by name, location, or event key</p>
 
-      {/* Year Selector and Search */}
-      <div className="content-card">
-        <div className="events-controls">
-          <div className="year-selector">
-            <label htmlFor="year">Year:</label>
-            <select 
-              id="year" 
-              value={year} 
-              onChange={(e) => setYear(parseInt(e.target.value))}
-            >
-              {[...Array(10)].map((_, i) => (
-                <option key={currentYear - i} value={currentYear - i}>
-                  {currentYear - i}
-                </option>
-              ))}
-            </select>
+          <div className="search-hero-controls">
+            <div className="year-selector-large">
+              <select
+                value={year}
+                onChange={(e) => setYear(parseInt(e.target.value))}
+                className="year-select-large"
+              >
+                {[...Array(10)].map((_, i) => (
+                  <option key={currentYear - i} value={currentYear - i}>
+                    {currentYear - i}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <input
+              type="text"
+              placeholder="Search events..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="search-input-large"
+              autoFocus
+            />
           </div>
-          <input
-            type="text"
-            placeholder="Search events..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="search-input"
-          />
+
+          <p className="search-hint">
+            {loading ? 'Loading events...' : `${events.length} events in ${year}`}
+          </p>
         </div>
       </div>
 
-      {/* Two Column Layout */}
-      <div className="events-layout">
-        {/* Event List */}
-        <div className="content-card events-list-card">
-          <h3>Events ({filteredEvents.length})</h3>
-          
-          {loading ? (
-            <div className="loading-container">
-              <div className="loading-spinner"></div>
+      {/* Event Results */}
+      {loading ? (
+        <div className="loading-container">
+          <div className="loading-spinner"></div>
+          <p>Loading events...</p>
+        </div>
+      ) : (
+        <div className="events-results-grid">
+          {filteredEvents.length === 0 ? (
+            <div className="content-card empty-state">
+              <p>No events found matching "{searchTerm}"</p>
             </div>
           ) : (
-            <div className="events-list">
-              {filteredEvents.map(event => (
-                <div
-                  key={event.key}
-                  className={`event-item ${selectedEvent?.key === event.key ? 'selected' : ''}`}
-                  onClick={() => selectEvent(event)}
-                >
-                  <div className="event-name">{event.name}</div>
-                  <div className="event-meta">
-                    📍 {event.city}, {event.state_prov} • 📅 {event.start_date}
-                  </div>
+            filteredEvents.map(event => (
+              <div
+                key={event.key}
+                className="event-result-card"
+                onClick={() => selectEvent(event)}
+              >
+                <div className="event-result-header">
+                  <span className="event-type-badge">
+                    {event.event_type_string || 'Regional'}
+                  </span>
+                  <span className="event-week">
+                    Week {event.week !== undefined ? event.week + 1 : '?'}
+                  </span>
                 </div>
-              ))}
-            </div>
+                <h3 className="event-result-name">{event.name}</h3>
+                <div className="event-result-meta">
+                  <span>📍 {event.city}, {event.state_prov || event.country}</span>
+                  <span>📅 {event.start_date}</span>
+                </div>
+              </div>
+            ))
           )}
         </div>
-
-        {/* Event Details */}
-        <div className="content-card event-details-card">
-          {!selectedEvent ? (
-            <div className="empty-state">
-              <p>Select an event to view details</p>
-            </div>
-          ) : loadingDetails ? (
-            <div className="loading-container">
-              <div className="loading-spinner"></div>
-              <p>Loading event details...</p>
-            </div>
-          ) : (
-            <>
-              <h3>{selectedEvent.name}</h3>
-              <p className="event-info">
-                📍 {selectedEvent.city}, {selectedEvent.state_prov} •
-                📅 {selectedEvent.start_date} to {selectedEvent.end_date}
-              </p>
-
-              {/* Teams Tab */}
-              <div className="event-section">
-                <h4>Teams ({eventTeams.length})</h4>
-                <div className="teams-grid">
-                  {teamStats
-                    .sort((a, b) => (b.epa_percentile || 0) - (a.epa_percentile || 0))
-                    .slice(0, 20)
-                    .map(team => {
-                      const classification = classifyEPA(team.epa_percentile || 50);
-                      return (
-                        <Link
-                          key={team.team_number}
-                          to={`/teams?team=${team.team_number}`}
-                          className="team-chip"
-                          style={{ borderColor: classification.color }}
-                        >
-                          <span className="team-chip-number">{team.team_number}</span>
-                          <span className="team-chip-emoji">{classification.emoji}</span>
-                        </Link>
-                      );
-                    })}
-                </div>
-                {teamStats.length > 20 && (
-                  <p className="more-text">+{teamStats.length - 20} more teams</p>
-                )}
-              </div>
-
-              {/* Matches Preview */}
-              <div className="event-section">
-                <h4>Matches ({eventMatches.length})</h4>
-                {eventMatches.length === 0 ? (
-                  <p>No matches scheduled yet.</p>
-                ) : (
-                  <div className="matches-preview">
-                    {eventMatches.slice(0, 5).map(match => (
-                      <div key={match.key} className="match-item">
-                        <span className="match-label">
-                          {match.comp_level.toUpperCase()} {match.match_number}
-                        </span>
-                        <span className="match-alliances">
-                          <span className="red-alliance">
-                            {match.alliances?.red?.team_keys?.map(t => t.replace('frc', '')).join(', ')}
-                          </span>
-                          <span className="vs">vs</span>
-                          <span className="blue-alliance">
-                            {match.alliances?.blue?.team_keys?.map(t => t.replace('frc', '')).join(', ')}
-                          </span>
-                        </span>
-                      </div>
-                    ))}
-                    {eventMatches.length > 5 && (
-                      <p className="more-text">+{eventMatches.length - 5} more matches</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+      )}
     </>
   );
+
+
+  // ==========================================================================
+  // RENDER: EVENT DETAIL VIEW
+  // ==========================================================================
+
+  const renderEventDetail = () => (
+    <>
+      <Helmet>
+        <title>{selectedEvent?.name || 'Event'} - PinkScout</title>
+      </Helmet>
+
+      {/* Back Button and Event Header */}
+      <div className="event-detail-header">
+        <button onClick={backToSearch} className="btn btn-secondary">
+          ← Back to Search
+        </button>
+        <div className="event-detail-title">
+          <h1>{selectedEvent?.name}</h1>
+          <p>
+            📍 {selectedEvent?.city}, {selectedEvent?.state_prov || selectedEvent?.country} •
+            📅 {selectedEvent?.start_date} to {selectedEvent?.end_date}
+          </p>
+        </div>
+      </div>
+
+      {loadingDetails ? (
+        <div className="loading-container">
+          <div className="loading-spinner"></div>
+          <p>Loading event data...</p>
+        </div>
+      ) : (
+        <>
+          {/* Stats Summary */}
+          <div className="stats-grid">
+            <div className="stat-card">
+              <div className="stat-value">{eventTeams.length}</div>
+              <div className="stat-label">Teams</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-value">{eventMatches.length}</div>
+              <div className="stat-label">Matches</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-value">{scoutingData.length}</div>
+              <div className="stat-label">Scouting Entries</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-value">
+                {eventMatches.filter(m => isMatchPlayed(m)).length}
+              </div>
+              <div className="stat-label">Matches Played</div>
+            </div>
+          </div>
+
+          {/* Tab Navigation */}
+          <div className="content-card tab-nav-card">
+            <div className="tab-nav">
+              <button
+                className={`btn ${activeTab === 'teams' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setActiveTab('teams')}
+              >
+                🤖 Teams ({eventTeams.length})
+              </button>
+              <button
+                className={`btn ${activeTab === 'leaderboard' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setActiveTab('leaderboard')}
+              >
+                🏆 Leaderboard
+              </button>
+              <button
+                className={`btn ${activeTab === 'matches' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setActiveTab('matches')}
+              >
+                📋 Match Schedule
+              </button>
+              <button
+                className={`btn ${activeTab === 'awards' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setActiveTab('awards')}
+              >
+                🏅 Awards
+              </button>
+            </div>
+          </div>
+
+          {/* TEAMS TAB */}
+          {activeTab === 'teams' && (
+            <div className="content-card">
+              <h2>Teams Attending ({mergedTeamData.length})</h2>
+              <div className="teams-attending-grid">
+                {mergedTeamData
+                  .sort((a, b) => a.team_number - b.team_number)
+                  .map(team => {
+                    const classification = classifyEPA(team.epa_percentile || 50);
+                    return (
+                      <Link
+                        key={team.team_number}
+                        to={`/teams?team=${team.team_number}`}
+                        className="team-attending-card"
+                      >
+                        <img
+                          src={getTeamLogoUrl(team.team_number)}
+                          alt={`Team ${team.team_number}`}
+                          className="team-logo"
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                        <div className="team-attending-info">
+                          <span className="team-number">{team.team_number}</span>
+                          <span className="team-name">{team.nickname || 'Unknown'}</span>
+                          <span
+                            className="team-epa-badge"
+                            style={{ backgroundColor: classification.color }}
+                          >
+                            {classification.emoji} {team.rank ? `#${team.rank}` : 'EPA ' + (team.epa_total || 0).toFixed(0)}
+                          </span>
+                        </div>
+                      </Link>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
+          {/* LEADERBOARD TAB */}
+          {activeTab === 'leaderboard' && (
+            <div className="content-card">
+              <h2>Event Rankings ({leaderboard.length} teams)</h2>
+              <p className="sort-hint">Click column headers to sort</p>
+              {leaderboard.length === 0 ? (
+                <p className="empty-state">Rankings not available yet.</p>
+              ) : (
+                <div className="table-container">
+                  <table className="data-table sortable-table">
+                    <thead>
+                      <tr>
+                        <th
+                          className="sortable-header"
+                          onClick={() => handleSort('rank')}
+                        >
+                          Rank{getSortIndicator('rank')}
+                        </th>
+                        <th
+                          className="sortable-header"
+                          onClick={() => handleSort('team_number')}
+                        >
+                          Team{getSortIndicator('team_number')}
+                        </th>
+                        <th
+                          className="sortable-header"
+                          onClick={() => handleSort('wins')}
+                        >
+                          Record{getSortIndicator('wins')}
+                        </th>
+                        <th
+                          className="sortable-header"
+                          onClick={() => handleSort('epa_total')}
+                        >
+                          Total EPA{getSortIndicator('epa_total')}
+                        </th>
+                        <th
+                          className="sortable-header"
+                          onClick={() => handleSort('epa_auto')}
+                        >
+                          Auto EPA{getSortIndicator('epa_auto')}
+                        </th>
+                        <th
+                          className="sortable-header"
+                          onClick={() => handleSort('epa_teleop')}
+                        >
+                          Teleop EPA{getSortIndicator('epa_teleop')}
+                        </th>
+                        <th
+                          className="sortable-header"
+                          onClick={() => handleSort('ranking_points')}
+                          title="Ranking Points"
+                        >
+                          RP{getSortIndicator('ranking_points')}
+                        </th>
+                        <th>Classification</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leaderboard.map((team, index) => {
+                        // Calculate event-relative classification based on EPA ranking within this event
+                        const allEPAs = mergedTeamData.map(t => t.epa_total || 0).sort((a, b) => b - a);
+                        const teamEPA = team.epa_total || 0;
+                        const epaRankIndex = allEPAs.findIndex(epa => epa === teamEPA);
+                        const eventPercentile = epaRankIndex >= 0
+                          ? ((allEPAs.length - epaRankIndex) / allEPAs.length) * 100
+                          : 50;
+                        const classification = classifyEPA(eventPercentile);
+                        const record = team.ties ?
+                          `${team.wins || 0}-${team.losses || 0}-${team.ties}` :
+                          `${team.wins || 0}-${team.losses || 0}`;
+                        return (
+                          <tr key={team.team_number}>
+                            <td className="rank-cell">
+                              {team.rank || '-'}
+                            </td>
+                            <td>
+                              <Link to={`/teams?team=${team.team_number}`}>
+                                <strong>{team.team_number}</strong>
+                                <span className="team-name-small"> {team.nickname}</span>
+                              </Link>
+                            </td>
+                            <td>{record}</td>
+                            <td><strong>{(team.epa_total || 0).toFixed(1)}</strong></td>
+                            <td>{(team.epa_auto || 0).toFixed(1)}</td>
+                            <td>{(team.epa_teleop || 0).toFixed(1)}</td>
+                            <td className="rp-cell">{team.ranking_points || '-'}</td>
+                            <td>
+                              <span
+                                className="classification-badge-small"
+                                style={{ backgroundColor: classification.color }}
+                              >
+                                {classification.emoji} {classification.label}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* MATCHES TAB */}
+          {activeTab === 'matches' && (
+            <div className="content-card">
+              <h2>Match Schedule</h2>
+              {eventMatches.length === 0 ? (
+                <p className="empty-state">No matches scheduled yet.</p>
+              ) : (
+                <div className="matches-schedule">
+                  {eventMatches.map(match => {
+                    const played = isMatchPlayed(match);
+                    const redScore = match.alliances?.red?.score;
+                    const blueScore = match.alliances?.blue?.score;
+                    const redWon = played && redScore > blueScore;
+                    const blueWon = played && blueScore > redScore;
+
+                    return (
+                      <div
+                        key={match.key}
+                        className={`match-schedule-item ${played ? 'played' : 'upcoming'}`}
+                        onClick={() => setSelectedMatch(match)}
+                      >
+                        <div className="match-schedule-label">
+                          {getMatchLabel(match)}
+                          {played && <span className="match-played-badge">✓</span>}
+                        </div>
+
+                        <div className={`match-alliance red ${redWon ? 'winner' : ''}`}>
+                          <span className="alliance-label">Red</span>
+                          <span className="alliance-teams">
+                            {match.alliances?.red?.team_keys?.map(t => t.replace('frc', '')).join(' • ')}
+                          </span>
+                          {played && <span className="alliance-score">{redScore}</span>}
+                        </div>
+
+                        <div className={`match-alliance blue ${blueWon ? 'winner' : ''}`}>
+                          <span className="alliance-label">Blue</span>
+                          <span className="alliance-teams">
+                            {match.alliances?.blue?.team_keys?.map(t => t.replace('frc', '')).join(' • ')}
+                          </span>
+                          {played && <span className="alliance-score">{blueScore}</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* AWARDS TAB */}
+          {activeTab === 'awards' && (
+            <div className="content-card">
+              <h2>🏅 Event Awards</h2>
+              {eventAwards.length === 0 ? (
+                <div className="empty-state">
+                  <p>🏅 No awards yet</p>
+                  <p className="empty-hint">Awards will appear here once the event has concluded and awards have been announced.</p>
+                </div>
+              ) : (
+                <div className="awards-list">
+                  {/* Sort awards by type - Winners/Finalists first, then by name */}
+                  {eventAwards
+                    .sort((a, b) => {
+                      // Winner (1) and Finalist (2) should come first
+                      const priorityOrder = { 1: 0, 2: 1 };
+                      const aPriority = priorityOrder[a.award_type] ?? 10;
+                      const bPriority = priorityOrder[b.award_type] ?? 10;
+                      if (aPriority !== bPriority) return aPriority - bPriority;
+                      return a.name.localeCompare(b.name);
+                    })
+                    .map((award, index) => (
+                      <div key={`${award.award_type}-${index}`} className="award-card">
+                        <div className="award-header">
+                          <span className="award-icon">
+                            {award.award_type === 1 ? '🥇' :
+                             award.award_type === 2 ? '🥈' :
+                             award.award_type === 0 ? '👑' :
+                             award.name.toLowerCase().includes('impact') ? '🌟' :
+                             award.name.toLowerCase().includes('engineering') ? '⚙️' :
+                             award.name.toLowerCase().includes('rookie') ? '🌱' :
+                             award.name.toLowerCase().includes('gracious') ? '🤝' :
+                             award.name.toLowerCase().includes('spirit') ? '💪' :
+                             award.name.toLowerCase().includes('safety') ? '🦺' :
+                             award.name.toLowerCase().includes('imagery') ? '🎨' :
+                             award.name.toLowerCase().includes('quality') ? '✨' :
+                             award.name.toLowerCase().includes('creativity') ? '💡' :
+                             award.name.toLowerCase().includes('autonomous') ? '🤖' :
+                             award.name.toLowerCase().includes('judges') ? '⭐' :
+                             '🏆'}
+                          </span>
+                          <span className="award-name">{award.name}</span>
+                        </div>
+                        <div className="award-recipients">
+                          {award.recipient_list?.map((recipient, rIndex) => {
+                            const teamNum = recipient.team_key?.replace('frc', '');
+                            const team = mergedTeamData.find(t => t.team_number === parseInt(teamNum));
+                            return (
+                              <div key={rIndex} className="award-recipient">
+                                {teamNum && (
+                                  <Link to={`/teams?team=${teamNum}`} className="award-team-link">
+                                    <img
+                                      src={getTeamLogoUrl(teamNum)}
+                                      alt={`Team ${teamNum}`}
+                                      className="award-team-logo"
+                                      onError={(e) => { e.target.style.display = 'none'; }}
+                                    />
+                                    <span className="award-team-number">{teamNum}</span>
+                                    {team?.nickname && (
+                                      <span className="award-team-name">{team.nickname}</span>
+                                    )}
+                                  </Link>
+                                )}
+                                {recipient.awardee && (
+                                  <span className="award-awardee">
+                                    {teamNum ? ' - ' : ''}{recipient.awardee}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* MATCH DETAIL MODAL */}
+      {selectedMatch && (
+        <div className="modal-overlay" onClick={() => setSelectedMatch(null)}>
+          <div className="modal-content match-modal" onClick={e => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setSelectedMatch(null)}>×</button>
+
+            <h2>{getMatchLabel(selectedMatch)}</h2>
+
+            {/* Match Result */}
+            {isMatchPlayed(selectedMatch) ? (
+              <>
+                <div className="match-result-summary">
+                  <div className={`result-alliance red ${
+                    selectedMatch.alliances?.red?.score > selectedMatch.alliances?.blue?.score ? 'winner' : ''
+                  }`}>
+                    <span className="result-label">Red Alliance</span>
+                    <span className="result-score">{selectedMatch.alliances?.red?.score}</span>
+                  </div>
+                  <div className="result-vs">vs</div>
+                  <div className={`result-alliance blue ${
+                    selectedMatch.alliances?.blue?.score > selectedMatch.alliances?.red?.score ? 'winner' : ''
+                  }`}>
+                    <span className="result-label">Blue Alliance</span>
+                    <span className="result-score">{selectedMatch.alliances?.blue?.score}</span>
+                  </div>
+                </div>
+                {/* Ranking Points (only for qual matches) */}
+                {selectedMatch.score_breakdown && selectedMatch.comp_level === 'qm' && (
+                  <div className="match-rp-summary">
+                    <div className="rp-alliance red">
+                      <span className="rp-label">RP:</span>
+                      <span className="rp-value">{selectedMatch.score_breakdown.red?.rp || 0}</span>
+                      {selectedMatch.score_breakdown.red?.melodyBonusAchieved && (
+                        <span className="rp-bonus" title="Melody Bonus">🎵</span>
+                      )}
+                      {selectedMatch.score_breakdown.red?.ensembleBonusAchieved && (
+                        <span className="rp-bonus" title="Ensemble Bonus">🎭</span>
+                      )}
+                      {selectedMatch.score_breakdown.red?.coopertitionBonusAchieved && (
+                        <span className="rp-bonus" title="Coopertition Bonus">🤝</span>
+                      )}
+                    </div>
+                    <div className="rp-divider">|</div>
+                    <div className="rp-alliance blue">
+                      <span className="rp-label">RP:</span>
+                      <span className="rp-value">{selectedMatch.score_breakdown.blue?.rp || 0}</span>
+                      {selectedMatch.score_breakdown.blue?.melodyBonusAchieved && (
+                        <span className="rp-bonus" title="Melody Bonus">🎵</span>
+                      )}
+                      {selectedMatch.score_breakdown.blue?.ensembleBonusAchieved && (
+                        <span className="rp-bonus" title="Ensemble Bonus">🎭</span>
+                      )}
+                      {selectedMatch.score_breakdown.blue?.coopertitionBonusAchieved && (
+                        <span className="rp-bonus" title="Coopertition Bonus">🤝</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="match-upcoming-notice">
+                <span>⏳ Match has not been played yet</span>
+              </div>
+            )}
+
+            {/* Red Alliance Teams */}
+            <div className="modal-section">
+              <h3 className="red-text">🔴 Red Alliance</h3>
+              <div className="match-teams-grid">
+                {selectedMatch.alliances?.red?.team_keys?.map(key => {
+                  const teamNum = parseInt(key.replace('frc', ''));
+                  const team = mergedTeamData.find(t => t.team_number === teamNum);
+                  const scouting = getTeamScoutingAverages(teamNum);
+                  const classification = classifyEPA(team?.epa_percentile || 50);
+
+                  return (
+                    <div key={key} className="match-team-card">
+                      <Link to={`/teams?team=${teamNum}`} className="match-team-header">
+                        <img
+                          src={getTeamLogoUrl(teamNum)}
+                          alt={`Team ${teamNum}`}
+                          className="match-team-logo"
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                        <div>
+                          <span className="match-team-number">{teamNum}</span>
+                          <span
+                            className="match-team-badge"
+                            style={{ backgroundColor: classification.color }}
+                          >
+                            {classification.emoji}
+                          </span>
+                        </div>
+                      </Link>
+                      <div className="match-team-stats">
+                        <div className="stat-row">
+                          <span>EPA Total:</span>
+                          <span>{(team?.epa_total || 0).toFixed(1)}</span>
+                        </div>
+                        <div className="stat-row">
+                          <span>Rank:</span>
+                          <span>{team?.rank || 'N/A'}</span>
+                        </div>
+                        {scouting && (
+                          <>
+                            <div className="stat-row">
+                              <span>Avg Auto:</span>
+                              <span>{scouting.avgAuto}</span>
+                            </div>
+                            <div className="stat-row">
+                              <span>Avg Teleop:</span>
+                              <span>{scouting.avgTeleop}</span>
+                            </div>
+                            <div className="stat-row">
+                              <span>Avg Total:</span>
+                              <span>{scouting.avgTotal}</span>
+                            </div>
+                            <div className="stat-row muted">
+                              <span>Scouted:</span>
+                              <span>{scouting.matchCount} matches</span>
+                            </div>
+                          </>
+                        )}
+                        {!scouting && (
+                          <div className="stat-row muted">
+                            <span>No scouting data</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Blue Alliance Teams */}
+            <div className="modal-section">
+              <h3 className="blue-text">🔵 Blue Alliance</h3>
+              <div className="match-teams-grid">
+                {selectedMatch.alliances?.blue?.team_keys?.map(key => {
+                  const teamNum = parseInt(key.replace('frc', ''));
+                  const team = mergedTeamData.find(t => t.team_number === teamNum);
+                  const scouting = getTeamScoutingAverages(teamNum);
+                  const classification = classifyEPA(team?.epa_percentile || 50);
+
+                  return (
+                    <div key={key} className="match-team-card">
+                      <Link to={`/teams?team=${teamNum}`} className="match-team-header">
+                        <img
+                          src={getTeamLogoUrl(teamNum)}
+                          alt={`Team ${teamNum}`}
+                          className="match-team-logo"
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                        <div>
+                          <span className="match-team-number">{teamNum}</span>
+                          <span
+                            className="match-team-badge"
+                            style={{ backgroundColor: classification.color }}
+                          >
+                            {classification.emoji}
+                          </span>
+                        </div>
+                      </Link>
+                      <div className="match-team-stats">
+                        <div className="stat-row">
+                          <span>EPA Total:</span>
+                          <span>{(team?.epa_total || 0).toFixed(1)}</span>
+                        </div>
+                        <div className="stat-row">
+                          <span>Rank:</span>
+                          <span>{team?.rank || 'N/A'}</span>
+                        </div>
+                        {scouting && (
+                          <>
+                            <div className="stat-row">
+                              <span>Avg Auto:</span>
+                              <span>{scouting.avgAuto}</span>
+                            </div>
+                            <div className="stat-row">
+                              <span>Avg Teleop:</span>
+                              <span>{scouting.avgTeleop}</span>
+                            </div>
+                            <div className="stat-row">
+                              <span>Avg Total:</span>
+                              <span>{scouting.avgTotal}</span>
+                            </div>
+                            <div className="stat-row muted">
+                              <span>Scouted:</span>
+                              <span>{scouting.matchCount} matches</span>
+                            </div>
+                          </>
+                        )}
+                        {!scouting && (
+                          <div className="stat-row muted">
+                            <span>No scouting data</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  // ==========================================================================
+  // MAIN RENDER
+  // ==========================================================================
+
+  return view === 'search' ? renderSearchView() : renderEventDetail();
 }
 

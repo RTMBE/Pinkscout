@@ -29,16 +29,17 @@ service cloud.firestore {
       return request.auth != null;
     }
     
-    // Check if user is the primary admin
+    // Check if user is the primary admin (hardcoded admins)
     function isPrimaryAdmin() {
-      return request.auth != null && 
-             request.auth.token.email == 'rkuzmik@gmail.com';
+      return request.auth != null &&
+             (request.auth.token.email == 'rkuzmik@gmail.com' ||
+              request.auth.token.email == 'rtmbe20@gmail.com');
     }
-    
+
     // Check if user is in the admin list
     function isAdmin() {
-      return isPrimaryAdmin() || 
-             (isAuthenticated() && 
+      return isPrimaryAdmin() ||
+             (isAuthenticated() &&
               exists(/databases/$(database)/documents/settings/admins) &&
               request.auth.token.email in get(/databases/$(database)/documents/settings/admins).data.emails);
     }
@@ -60,12 +61,14 @@ service cloud.firestore {
     // USERS COLLECTION
     // =========================================================================
     // Users can read/write their own profile
-    // Admins can read all profiles
-    
+    // Admins can read all profiles and delete any profile
+
     match /users/{userId} {
-      allow read: if isAuthenticated() && 
+      allow read: if isAuthenticated() &&
                     (request.auth.uid == userId || isAdmin());
-      allow write: if isAuthenticated() && request.auth.uid == userId;
+      allow create, update: if isAuthenticated() && request.auth.uid == userId;
+      allow delete: if isAuthenticated() &&
+                      (request.auth.uid == userId || isAdmin());
     }
     
     // =========================================================================
@@ -83,9 +86,10 @@ service cloud.firestore {
     // SETTINGS COLLECTION
     // =========================================================================
     // Only admins can read/write settings
-    
+    // Primary admins can always access (to bootstrap the admin list)
+
     match /settings/{docId} {
-      allow read, write: if isAdmin();
+      allow read, write: if isPrimaryAdmin() || isAdmin();
     }
     
     // =========================================================================

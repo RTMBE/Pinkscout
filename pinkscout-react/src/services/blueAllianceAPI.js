@@ -254,6 +254,96 @@ export async function getTeamEventMatches(teamNumber, eventKey) {
 }
 
 // =============================================================================
+// GET TEAM AWARDS FOR YEAR
+// =============================================================================
+
+/**
+ * Fetch all awards a team won in a specific year
+ *
+ * @param {string|number} teamNumber - FRC team number
+ * @param {number} year - The year to fetch awards for
+ * @returns {Array} - Array of award objects
+ *
+ * Award object structure:
+ * - award_type: number (0 = Chairman's, 1 = Winner, 2 = Finalist, etc.)
+ * - event_key: string
+ * - name: string (human-readable award name)
+ * - recipient_list: Array of { team_key, awardee } objects
+ * - year: number
+ */
+export async function getTeamAwardsForYear(teamNumber, year) {
+  try {
+    return await tbaFetch(`/team/frc${teamNumber}/awards/${year}`);
+  } catch (error) {
+    console.error('Error fetching team awards for year:', error);
+    return [];
+  }
+}
+
+// =============================================================================
+// GET ALL TEAM AWARDS
+// =============================================================================
+
+/**
+ * Fetch all awards a team has ever won
+ *
+ * @param {string|number} teamNumber - FRC team number
+ * @returns {Array} - Array of award objects sorted by year (newest first)
+ */
+export async function getTeamAllAwards(teamNumber) {
+  try {
+    const awards = await tbaFetch(`/team/frc${teamNumber}/awards`);
+    // Sort by year descending
+    return awards.sort((a, b) => b.year - a.year);
+  } catch (error) {
+    console.error('Error fetching all team awards:', error);
+    return [];
+  }
+}
+
+// =============================================================================
+// GET TEAM MATCHES FOR YEAR
+// =============================================================================
+
+/**
+ * Fetch all matches a team played in a specific year
+ *
+ * @param {string|number} teamNumber - FRC team number
+ * @param {number} year - The year to fetch matches for
+ * @returns {Array} - Array of match objects sorted by time
+ */
+export async function getTeamMatchesForYear(teamNumber, year) {
+  try {
+    const matches = await tbaFetch(`/team/frc${teamNumber}/matches/${year}`);
+    // Sort by actual_time or predicted_time
+    return matches.sort((a, b) => (a.actual_time || a.predicted_time || 0) - (b.actual_time || b.predicted_time || 0));
+  } catch (error) {
+    console.error('Error fetching team matches for year:', error);
+    return [];
+  }
+}
+
+// =============================================================================
+// GET TEAM YEARS PARTICIPATED
+// =============================================================================
+
+/**
+ * Fetch all years a team has participated in
+ *
+ * @param {string|number} teamNumber - FRC team number
+ * @returns {Array} - Array of years (numbers) sorted descending
+ */
+export async function getTeamYearsParticipated(teamNumber) {
+  try {
+    const years = await tbaFetch(`/team/frc${teamNumber}/years_participated`);
+    return years.sort((a, b) => b - a);
+  } catch (error) {
+    console.error('Error fetching team years participated:', error);
+    return [];
+  }
+}
+
+// =============================================================================
 // GET FULL EVENT DATA (COMBINED)
 // =============================================================================
 

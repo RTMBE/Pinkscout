@@ -2,19 +2,22 @@
  * =============================================================================
  * EPAUTILS.JS - EPA Scaling and Classification Utilities
  * =============================================================================
- * 
+ *
  * WHAT IS EPA?
  * EPA (Expected Points Added) is a metric from Statbotics that measures
  * how many points a team contributes to their alliance per match.
- * 
- * CLASSIFICATION THRESHOLDS:
- * - Elite: Top 10% of teams (percentile >= 90)
- * - Top Tier: Next 25% (percentile >= 65)
- * - Normal: Middle 45% (percentile >= 20)
- * - Below Average: Bottom 20% (percentile < 20)
- * 
+ *
+ * CLASSIFICATION THRESHOLDS (7 tiers):
+ * - Elite: Top 5% (percentile >= 95)
+ * - Great: Top 10% (percentile >= 90, < 95)
+ * - Good: Top 20% (percentile >= 80, < 90)
+ * - Above Average: 60-80th percentile
+ * - Average: 40-60th percentile
+ * - Below Average: 20-40th percentile
+ * - Developing: Bottom 20% (percentile < 20)
+ *
  * These functions are ported directly from the vanilla JS app.js
- * 
+ *
  * =============================================================================
  */
 
@@ -60,13 +63,16 @@ export function scaleStatboticsEPA(statboticsData) {
  * CLASSIFY EPA
  * ------------
  * Classifies a team based on their EPA percentile.
- * 
- * CLASSIFICATION LOGIC:
- * - Elite: >= 90th percentile (top 10%)
- * - Top Tier: >= 65th percentile (next 25%)
- * - Normal: >= 20th percentile (middle 45%)
- * - Below Average: < 20th percentile (bottom 20%)
- * 
+ *
+ * CLASSIFICATION LOGIC (7 tiers):
+ * - Elite: >= 95th percentile (top 5%)
+ * - Great: >= 90th percentile (top 10%)
+ * - Good: >= 80th percentile (top 20%)
+ * - Above Average: >= 60th percentile (60-80%)
+ * - Average: >= 40th percentile (40-60%)
+ * - Below Average: >= 20th percentile (20-40%)
+ * - Developing: < 20th percentile (bottom 20%)
+ *
  * @param {number} epaPercentile - Team's EPA percentile (0-100)
  * @param {Array} allTeamEPAs - Optional: Array of all team EPAs for relative ranking
  * @returns {Object} - { classification, color, emoji, description }
@@ -82,38 +88,62 @@ export function classifyEPA(epaPercentile, allTeamEPAs = null) {
     percentile = ((rank === -1 ? sorted.length : rank) / sorted.length) * 100;
   }
 
-  // Classification thresholds
-  if (percentile >= 90) {
+  // Classification thresholds (7 tiers)
+  if (percentile >= 95) {
     return {
       classification: 'Elite',
       label: 'Elite',
       color: '#FFD700',  // Gold
       emoji: '🏆',
+      description: 'Top 5% of teams'
+    };
+  } else if (percentile >= 90) {
+    return {
+      classification: 'Great',
+      label: 'Great',
+      color: '#FF6B00',  // Orange
+      emoji: '🔥',
       description: 'Top 10% of teams'
     };
-  } else if (percentile >= 65) {
+  } else if (percentile >= 80) {
     return {
-      classification: 'Top Tier',
-      label: 'Top Tier',
+      classification: 'Good',
+      label: 'Good',
       color: '#4CAF50',  // Green
       emoji: '⭐',
-      description: 'Top 35% of teams'
+      description: 'Top 20% of teams'
     };
-  } else if (percentile >= 20) {
+  } else if (percentile >= 60) {
     return {
-      classification: 'Normal',
-      label: 'Normal',
+      classification: 'Above Average',
+      label: 'Above Average',
+      color: '#8BC34A',  // Light Green
+      emoji: '✅',
+      description: '60-80th percentile'
+    };
+  } else if (percentile >= 40) {
+    return {
+      classification: 'Average',
+      label: 'Average',
       color: '#2196F3',  // Blue
       emoji: '🔵',
-      description: 'Average performance'
+      description: '40-60th percentile'
     };
-  } else {
+  } else if (percentile >= 20) {
     return {
       classification: 'Below Average',
       label: 'Below Average',
       color: '#9E9E9E',  // Gray
+      emoji: '📊',
+      description: '20-40th percentile'
+    };
+  } else {
+    return {
+      classification: 'Developing',
+      label: 'Developing',
+      color: '#607D8B',  // Blue Gray
       emoji: '📈',
-      description: 'Developing team'
+      description: 'Bottom 20% - Room to grow'
     };
   }
 }

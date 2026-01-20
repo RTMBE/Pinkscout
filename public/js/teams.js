@@ -14,7 +14,7 @@
  * - Query local scouting entries
  * - Combine and analyze both data sources
  * - Display match history
- * - EPA Classification: Elite / Top Tier / Normal / Below Average
+ * - EPA Classification: 7-tier system (Elite to Developing)
  *
  * LAYOUT:
  * ┌─────────────────────────────────────┐
@@ -25,11 +25,14 @@
  * │   (Left Pane)    │   (Right Pane)   │
  * └──────────────────┴──────────────────┘
  *
- * EPA CLASSIFICATION THRESHOLDS:
- * - Elite: >= 90th percentile (top 10%)
- * - Top Tier: >= 65th percentile (next 25%)
- * - Normal: >= 20th percentile (middle 45%)
- * - Below Average: < 20th percentile (bottom 20%)
+ * EPA CLASSIFICATION THRESHOLDS (7 tiers):
+ * - Elite: >= 95th percentile (top 5%)
+ * - Great: >= 90th percentile (top 10%)
+ * - Good: >= 80th percentile (top 20%)
+ * - Above Average: >= 60th percentile (60-80%)
+ * - Average: >= 40th percentile (40-60%)
+ * - Below Average: >= 20th percentile (20-40%)
+ * - Developing: < 20th percentile (bottom 20%)
  *
  * =============================================================================
  */
@@ -620,8 +623,11 @@ function showNoResults(message) {
 // INITIALIZATION
 // =============================================================================
 console.log('🔍 Teams page loaded with EPA classification support');
-console.log('📊 EPA Classification Thresholds:');
-console.log('   - Elite: >= 90th percentile');
-console.log('   - Top Tier: >= 65th percentile');
-console.log('   - Normal: >= 20th percentile');
-console.log('   - Below Average: < 20th percentile');
+console.log('📊 EPA Classification Thresholds (7 tiers):');
+console.log('   - Elite: >= 95th percentile (top 5%)');
+console.log('   - Great: >= 90th percentile (top 10%)');
+console.log('   - Good: >= 80th percentile (top 20%)');
+console.log('   - Above Average: >= 60th percentile');
+console.log('   - Average: >= 40th percentile');
+console.log('   - Below Average: >= 20th percentile');
+console.log('   - Developing: < 20th percentile (bottom 20%)');

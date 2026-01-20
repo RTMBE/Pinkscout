@@ -135,16 +135,44 @@ export async function getTeamYearStats(teamNumber, year) {
     const response = await fetch(
       `${API_URLS.STATBOTICS}/team_year/${teamNumber}/${year}`
     );
-    
+
     if (!response.ok) {
       if (response.status === 404) return null;
       throw new Error(`HTTP ${response.status}`);
     }
-    
+
     return await response.json();
   } catch (error) {
     console.error('Statbotics team year error:', error);
     return null;
+  }
+}
+
+// =============================================================================
+// GET TOP TEAMS (WORLD RANKINGS)
+// =============================================================================
+
+/**
+ * Fetch top teams globally for a specific year
+ *
+ * @param {number} year - Year to fetch rankings for
+ * @param {number} limit - Number of teams to fetch (default 20)
+ * @returns {Array} - Array of top teams sorted by EPA
+ */
+export async function getTopTeams(year, limit = 20) {
+  try {
+    const response = await fetch(
+      `${API_URLS.STATBOTICS}/team_years?year=${year}&limit=${limit}&metric=epa_end&ascending=false`
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Statbotics top teams error:', error);
+    return [];
   }
 }
 

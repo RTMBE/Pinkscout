@@ -23,7 +23,7 @@ import { Helmet } from 'react-helmet-async';
 import { getEventList, getEventTeams, getEventMatches, getEventRankings, getEventAwards } from '../services/blueAllianceAPI';
 import { getEventTeamStats } from '../services/statboticsAPI';
 import { getEventScoutingData } from '../services/scoutingService';
-import { classifyEPA, calculateAutoPoints, calculateTeleopPoints } from '../utils/epaUtils';
+import { classifyEPA, getEPAPercentile, calculateAutoPoints, calculateTeleopPoints } from '../utils/epaUtils';
 
 export default function Events() {
   // ==========================================================================
@@ -184,7 +184,8 @@ export default function Events() {
           epa_auto: 0,
           epa_teleop: 0,
           epa_endgame: 0,
-          epa_percentile: 0
+          epa_elo: 0,
+          epa_percentile: 50
         });
       }
     });
@@ -204,30 +205,47 @@ export default function Events() {
       }
     });
 
-    // Merge Statbotics EPA data
+    // Merge Statbotics EPA data (new API format: epa.breakdown.*)
     teamStats.forEach(stat => {
-      const teamNum = stat.team_number;
+      const teamNum = stat.team;
       if (teamNum && teamMap.has(teamNum)) {
         const team = teamMap.get(teamNum);
-        team.epa_total = stat.epa_total || stat.epa_raw || 0;
-        team.epa_auto = stat.epa_auto || 0;
-        team.epa_teleop = stat.epa_teleop || 0;
-        team.epa_endgame = stat.epa_endgame || 0;
-        team.epa_percentile = stat.epa_percentile || 0;
+        // New Statbotics API format uses epa.breakdown for individual stats
+        const breakdown = stat.epa?.breakdown || {};
+        team.epa_total = breakdown.total_points || stat.epa?.total_points?.mean || 0;
+        team.epa_auto = breakdown.auto_points || 0;
+        team.epa_teleop = breakdown.teleop_points || 0;
+        team.epa_endgame = breakdown.endgame_points || 0;
+        // Store the Elo rating (unitless) for percentile calculation
+        team.epa_elo = stat.epa?.unitless || stat.epa?.norm || 0;
         // Use Statbotics rank if TBA rank not available
-        if (!team.rank && stat.rank) {
-          team.rank = stat.rank;
+        if (!team.rank && stat.record?.qual?.rank) {
+          team.rank = stat.record.qual.rank;
         }
         // Use Statbotics record if not set
-        if (!team.wins && stat.wins) {
-          team.wins = stat.wins;
-          team.losses = stat.losses;
+        if (!team.wins && stat.record?.qual?.wins) {
+          team.wins = stat.record.qual.wins;
+          team.losses = stat.record.qual.losses;
         }
         teamMap.set(teamNum, team);
       }
     });
 
-    return Array.from(teamMap.values());
+    // Calculate event-relative percentile based on EPA Elo ratings within this event
+    const teams = Array.from(teamMap.values());
+    const allElos = teams.map(t => t.epa_elo || 0).filter(e => e > 0).sort((a, b) => a - b);
+
+    teams.forEach(team => {
+      if (team.epa_elo > 0 && allElos.length > 0) {
+        // Find where this team's Elo ranks among all teams at this event
+        const rank = allElos.filter(e => e <= team.epa_elo).length;
+        team.epa_percentile = (rank / allElos.length) * 100;
+      } else {
+        team.epa_percentile = 50; // Default if no data
+      }
+    });
+
+    return teams;
   }, [eventTeams, eventRankings, teamStats]);
 
   // ==========================================================================
@@ -634,14 +652,8 @@ export default function Events() {
                     </thead>
                     <tbody>
                       {leaderboard.map((team, index) => {
-                        // Calculate event-relative classification based on EPA ranking within this event
-                        const allEPAs = mergedTeamData.map(t => t.epa_total || 0).sort((a, b) => b - a);
-                        const teamEPA = team.epa_total || 0;
-                        const epaRankIndex = allEPAs.findIndex(epa => epa === teamEPA);
-                        const eventPercentile = epaRankIndex >= 0
-                          ? ((allEPAs.length - epaRankIndex) / allEPAs.length) * 100
-                          : 50;
-                        const classification = classifyEPA(eventPercentile);
+                        // Use the team's actual global EPA percentile from Statbotics
+                        const classification = classifyEPA(team.epa_percentile || 50);
                         const record = team.ties ?
                           `${team.wins || 0}-${team.losses || 0}-${team.ties}` :
                           `${team.wins || 0}-${team.losses || 0}`;

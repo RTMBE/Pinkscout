@@ -20,7 +20,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../contexts/AuthContext';
-import { getAdminList, addAdmin, removeAdmin, getAPIStatus } from '../services/adminService';
+import { getAdminList, addAdmin, removeAdmin, getAPIStatus, performCompleteDataWipe } from '../services/adminService';
 import { getAllScoutingData, deleteScoutingData } from '../services/scoutingService';
 
 // =============================================================================
@@ -157,15 +157,57 @@ export default function Admin() {
       setError("You can't remove yourself as admin");
       return;
     }
-    
+
     if (!window.confirm(`Remove ${email} as admin?`)) return;
-    
+
     try {
       await removeAdmin(email);
       setAdmins(prev => prev.filter(e => e !== email));
       setSuccess('Admin removed');
     } catch (err) {
       setError('Failed to remove admin');
+    }
+  };
+
+  // ==========================================================================
+  // DATA WIPE HANDLER
+  // ==========================================================================
+  const [isWiping, setIsWiping] = useState(false);
+
+  const handleDataWipe = async () => {
+    // Triple confirmation for destructive action
+    const confirm1 = window.confirm(
+      '⚠️ WARNING: This will DELETE ALL scouting data and user profiles!\n\n' +
+      'Only rtmbe20@gmail.com will remain as admin.\n\n' +
+      'Are you SURE you want to proceed?'
+    );
+    if (!confirm1) return;
+
+    const confirm2 = window.prompt(
+      'Type "DELETE ALL DATA" to confirm this destructive action:'
+    );
+    if (confirm2 !== 'DELETE ALL DATA') {
+      setError('Data wipe cancelled - confirmation text did not match.');
+      return;
+    }
+
+    setIsWiping(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const results = await performCompleteDataWipe();
+      setSuccess(
+        `✅ Data wipe complete! Deleted ${results.scoutingDeleted} scouting entries and ${results.usersDeleted} user profiles. ` +
+        `${results.usersPreserved} admin profile(s) preserved.`
+      );
+      // Refresh the data
+      await loadData();
+    } catch (err) {
+      console.error('Error during data wipe:', err);
+      setError('Failed to wipe data: ' + err.message);
+    } finally {
+      setIsWiping(false);
     }
   };
 
@@ -441,6 +483,32 @@ export default function Admin() {
                 </li>
               ))}
             </ul>
+          </div>
+
+          {/* Danger Zone */}
+          <div className="content-card" style={{
+            border: '2px solid var(--danger)',
+            background: 'rgba(239, 68, 68, 0.05)'
+          }}>
+            <h3 style={{ color: 'var(--danger)' }}>⚠️ Danger Zone</h3>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '1rem', fontSize: '0.875rem' }}>
+              Destructive actions that cannot be undone. Use with extreme caution.
+            </p>
+            <button
+              onClick={handleDataWipe}
+              disabled={isWiping}
+              className="btn btn-danger"
+              style={{ marginTop: '0.5rem' }}
+            >
+              {isWiping ? '🔄 Wiping Data...' : '🗑️ Wipe All Data'}
+            </button>
+            <p style={{
+              color: 'var(--text-muted)',
+              marginTop: '0.5rem',
+              fontSize: '0.75rem'
+            }}>
+              This will delete ALL scouting data and user profiles. Only rtmbe20@gmail.com will remain as admin.
+            </p>
           </div>
         </>
       )}

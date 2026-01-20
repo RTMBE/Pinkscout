@@ -17,8 +17,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { getStatboticsTeam } from '../services/statboticsAPI';
-import { getTeamInfo } from '../services/blueAllianceAPI';
+import { getStatboticsTeam, getTeamYearStats } from '../services/statboticsAPI';
+import { getTeamInfo, getTeamAllAwards, getTeamAwardsForYear, getTeamMatchesForYear, getTeamYearsParticipated } from '../services/blueAllianceAPI';
 import { getTeamScoutingData } from '../services/scoutingService';
 import { scaleStatboticsEPA, classifyEPA, getEPAPercentile, calculateAutoPoints, calculateTeleopPoints } from '../utils/epaUtils';
 
@@ -34,6 +34,16 @@ export default function Teams() {
   const [scoutingData, setScoutingData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Awards state
+  const [allAwards, setAllAwards] = useState([]);
+  const [awardsViewMode, setAwardsViewMode] = useState('thisYear'); // 'thisYear' or 'allTime'
+
+  // Record/matches state
+  const [recordViewMode, setRecordViewMode] = useState('thisYear'); // 'thisYear' or 'allTime'
+  const [thisYearMatches, setThisYearMatches] = useState([]);
+  const [allTimeRecord, setAllTimeRecord] = useState({ wins: 0, losses: 0, ties: 0 });
+  const [thisYearRecord, setThisYearRecord] = useState({ wins: 0, losses: 0, ties: 0 });
 
   // Filter state
   const currentYear = new Date().getFullYear();
@@ -71,21 +81,31 @@ export default function Teams() {
     setTeamData(null);
     setTbaData(null);
     setScoutingData([]);
+    setAllAwards([]);
+    setThisYearMatches([]);
+    setAllTimeRecord({ wins: 0, losses: 0, ties: 0 });
+    setThisYearRecord({ wins: 0, losses: 0, ties: 0 });
     // Reset filters when searching new team
     setSelectedYear('all');
     setSelectedEvent('all');
 
     try {
       // Fetch data from all sources in parallel, handling individual failures
-      const [statboticsResult, tbaResult, scoutingResult] = await Promise.allSettled([
+      const [statboticsResult, tbaResult, scoutingResult, awardsResult, thisYearMatchesResult, thisYearStatsResult] = await Promise.allSettled([
         getStatboticsTeam(number),
         getTeamInfo(number),
-        getTeamScoutingData(number)
+        getTeamScoutingData(number),
+        getTeamAllAwards(number),
+        getTeamMatchesForYear(number, currentYear),
+        getTeamYearStats(number, currentYear)
       ]);
 
       const statbotics = statboticsResult.status === 'fulfilled' ? statboticsResult.value : null;
       const tba = tbaResult.status === 'fulfilled' ? tbaResult.value : null;
       const scouting = scoutingResult.status === 'fulfilled' ? scoutingResult.value : [];
+      const awards = awardsResult.status === 'fulfilled' ? awardsResult.value : [];
+      const yearMatches = thisYearMatchesResult.status === 'fulfilled' ? thisYearMatchesResult.value : [];
+      const yearStats = thisYearStatsResult.status === 'fulfilled' ? thisYearStatsResult.value : null;
 
       if (!statbotics && !tba) {
         setError(`Team ${number} not found. Please check the team number.`);
@@ -95,6 +115,52 @@ export default function Teams() {
       setTeamData(statbotics);
       setTbaData(tba);
       setScoutingData(scouting);
+      setAllAwards(awards);
+      setThisYearMatches(yearMatches);
+
+      // Calculate records
+      // All-time record from statbotics base data
+      if (statbotics?.record) {
+        setAllTimeRecord({
+          wins: statbotics.record.wins || 0,
+          losses: statbotics.record.losses || 0,
+          ties: statbotics.record.ties || 0
+        });
+      }
+
+      // This year record from year stats or calculate from matches
+      if (yearStats?.record) {
+        setThisYearRecord({
+          wins: yearStats.record.wins || 0,
+          losses: yearStats.record.losses || 0,
+          ties: yearStats.record.ties || 0
+        });
+      } else if (yearMatches.length > 0) {
+        // Calculate from matches
+        let wins = 0, losses = 0, ties = 0;
+        yearMatches.forEach(match => {
+          if (!match.alliances) return;
+          const teamKey = `frc${number}`;
+          const isBlue = match.alliances.blue?.team_keys?.includes(teamKey);
+          const isRed = match.alliances.red?.team_keys?.includes(teamKey);
+          if (!isBlue && !isRed) return;
+
+          const blueScore = match.alliances.blue?.score ?? -1;
+          const redScore = match.alliances.red?.score ?? -1;
+          if (blueScore < 0 || redScore < 0) return; // Match not played yet
+
+          if (isBlue) {
+            if (blueScore > redScore) wins++;
+            else if (blueScore < redScore) losses++;
+            else ties++;
+          } else {
+            if (redScore > blueScore) wins++;
+            else if (redScore < blueScore) losses++;
+            else ties++;
+          }
+        });
+        setThisYearRecord({ wins, losses, ties });
+      }
     } catch (err) {
       console.error('Error searching team:', err);
       setError('Failed to fetch team data. Please try again.');
@@ -167,12 +233,21 @@ export default function Teams() {
   const epaPercentile = teamData ? getEPAPercentile(teamData) : 0;
   const classification = classifyEPA(epaPercentile);
 
-  // Get record from teamData
-  const wins = teamData?.record?.wins || 0;
-  const losses = teamData?.record?.losses || 0;
-  const ties = teamData?.record?.ties || 0;
+  // Get record based on view mode
+  const displayRecord = recordViewMode === 'thisYear' ? thisYearRecord : allTimeRecord;
+  const wins = displayRecord.wins;
+  const losses = displayRecord.losses;
+  const ties = displayRecord.ties;
   const totalMatches = wins + losses + ties;
   const winRate = totalMatches > 0 ? ((wins / totalMatches) * 100).toFixed(0) : 'N/A';
+
+  // Filter awards based on view mode
+  const displayAwards = useMemo(() => {
+    if (awardsViewMode === 'thisYear') {
+      return allAwards.filter(award => award.year === currentYear);
+    }
+    return allAwards;
+  }, [allAwards, awardsViewMode, currentYear]);
 
   // ==========================================================================
   // CALCULATE SCOUTING AVERAGES (using filtered data)
@@ -298,14 +373,30 @@ export default function Teams() {
                   </div>
                 </div>
 
-                {/* Record Card */}
+                {/* Record Card with Toggle */}
                 <div className="overview-card">
                   <div className="overview-card-header">
                     <span className="overview-icon">🏆</span>
                     <span>Record</span>
+                    <div className="toggle-switch-mini" style={{ marginLeft: 'auto' }}>
+                      <button
+                        className={`toggle-btn-mini ${recordViewMode === 'thisYear' ? 'active' : ''}`}
+                        onClick={() => setRecordViewMode('thisYear')}
+                      >
+                        {currentYear}
+                      </button>
+                      <button
+                        className={`toggle-btn-mini ${recordViewMode === 'allTime' ? 'active' : ''}`}
+                        onClick={() => setRecordViewMode('allTime')}
+                      >
+                        All
+                      </button>
+                    </div>
                   </div>
                   <div className="overview-card-value">{wins}-{losses}-{ties}</div>
-                  <div className="overview-card-sub">Win Rate: {winRate}%</div>
+                  <div className="overview-card-sub">
+                    Win Rate: {winRate}% ({recordViewMode === 'thisYear' ? currentYear : 'All Time'})
+                  </div>
                 </div>
 
                 {/* Your Scouting Card */}
@@ -468,6 +559,63 @@ export default function Teams() {
             </div>
           )}
 
+          {/* Awards Section */}
+          {!loading && !error && (teamData || tbaData) && (
+            <div className="content-card awards-section">
+              <div className="section-header-with-toggle">
+                <h3>🏅 Awards</h3>
+                <div className="toggle-switch">
+                  <button
+                    className={`toggle-btn ${awardsViewMode === 'thisYear' ? 'active' : ''}`}
+                    onClick={() => setAwardsViewMode('thisYear')}
+                  >
+                    {currentYear}
+                  </button>
+                  <button
+                    className={`toggle-btn ${awardsViewMode === 'allTime' ? 'active' : ''}`}
+                    onClick={() => setAwardsViewMode('allTime')}
+                  >
+                    All Time
+                  </button>
+                </div>
+              </div>
+              <p className="section-subtitle">
+                {awardsViewMode === 'thisYear'
+                  ? `Awards won in ${currentYear}`
+                  : `All-time awards (${allAwards.length} total)`}
+              </p>
+
+              {displayAwards.length > 0 ? (
+                <div className="awards-list">
+                  {displayAwards.map((award, idx) => (
+                    <div key={`${award.event_key}-${award.award_type}-${idx}`} className="award-card">
+                      <div className="award-icon">
+                        {award.award_type === 0 ? '🌟' :
+                         award.award_type === 1 ? '🥇' :
+                         award.award_type === 2 ? '🥈' :
+                         award.award_type === 69 ? '🔧' :
+                         award.award_type === 9 ? '📐' :
+                         '🏅'}
+                      </div>
+                      <div className="award-details">
+                        <div className="award-name">{award.name}</div>
+                        <div className="award-event">
+                          {award.event_key} • {award.year}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="no-data">
+                  {awardsViewMode === 'thisYear'
+                    ? `No awards won in ${currentYear} yet`
+                    : 'No awards on record'}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Match History */}
           {!loading && !error && filteredScoutingData.length > 0 && (
             <div className="content-card">
@@ -501,6 +649,33 @@ export default function Teams() {
                     })}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {/* Team Notes Section */}
+          {filteredScoutingData.length > 0 && (
+            <div className="content-card team-notes-section">
+              <h3>📝 Team Notes</h3>
+              <p className="section-subtitle">
+                Notes from scouting entries {selectedYear !== 'all' || selectedEvent !== 'all' ? '(filtered)' : ''}
+              </p>
+              <div className="team-notes-list">
+                {filteredScoutingData
+                  .filter(entry => entry.notes && entry.notes.trim())
+                  .map((entry, idx) => (
+                    <div key={entry.id || idx} className="team-note-card">
+                      <div className="note-header">
+                        <span className="note-match">Match {entry.matchNumber || '?'}</span>
+                        <span className="note-event">{entry.eventKey || 'Unknown Event'}</span>
+                        <span className="note-scouter">by {entry.scouterName || 'Unknown'}</span>
+                      </div>
+                      <div className="note-content">{entry.notes}</div>
+                    </div>
+                  ))}
+                {filteredScoutingData.filter(entry => entry.notes && entry.notes.trim()).length === 0 && (
+                  <p className="no-notes">No notes recorded for this team yet.</p>
+                )}
               </div>
             </div>
           )}

@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "pinkscout-react-app",
     "public": "dist",
     "ignore": [
       "firebase.json",

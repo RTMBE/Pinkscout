@@ -198,13 +198,32 @@ export function getEPAPercentile(statboticsData) {
 /**
  * CALCULATE AUTO POINTS FROM SCOUTING ENTRY
  * ------------------------------------------
- * 2024 game scoring: Speaker = 5pts, Amp = 2pts, Mobility = 2pts
- * 
+ * 2026 REBUILT™ scoring:
+ * - Fuel in active Hub: 1 pt each
+ * - Tower Level 1: 15 pts, Level 3: 30 pts
+ *
+ * Also supports 2024 Crescendo for backwards compatibility:
+ * - Speaker = 5pts, Amp = 2pts, Mobility = 2pts
+ *
  * @param {Object} entry - Scouting data entry
  * @returns {number} - Total auto points
  */
 export function calculateAutoPoints(entry) {
   if (!entry) return 0;
+
+  // 2026 REBUILT™ scoring
+  if (entry.autoFuelScored !== undefined || entry.autoTowerClimb !== undefined) {
+    const fuel = (entry.autoFuelScored || 0) * 1;
+    let tower = 0;
+    switch (entry.autoTowerClimb) {
+      case 'level1': tower = 15; break;
+      case 'level3': tower = 30; break;
+      default: tower = 0;
+    }
+    return fuel + tower;
+  }
+
+  // 2024 Crescendo scoring (backwards compatibility)
   const speaker = (entry.autoSpeaker || 0) * 5;
   const amp = (entry.autoAmp || 0) * 2;
   const mobility = entry.autoMobility ? 2 : 0;
@@ -214,16 +233,90 @@ export function calculateAutoPoints(entry) {
 /**
  * CALCULATE TELEOP POINTS FROM SCOUTING ENTRY
  * --------------------------------------------
- * 2024 game scoring: Speaker = 2pts, Amp = 1pt, Amplified = 5pts
- * 
+ * 2026 REBUILT™ scoring:
+ * - Fuel in active Hub: 1 pt each
+ * - Fuel in inactive Hub: 0 pts (tracked for strategy)
+ *
+ * Also supports 2024 Crescendo for backwards compatibility:
+ * - Speaker = 2pts, Amp = 1pt, Amplified = 5pts
+ *
  * @param {Object} entry - Scouting data entry
  * @returns {number} - Total teleop points
  */
 export function calculateTeleopPoints(entry) {
   if (!entry) return 0;
+
+  // 2026 REBUILT™ scoring
+  if (entry.teleopFuelActive !== undefined) {
+    return (entry.teleopFuelActive || 0) * 1;
+    // Note: teleopFuelInactive doesn't score but is tracked
+  }
+
+  // 2024 Crescendo scoring (backwards compatibility)
   const speaker = (entry.teleopSpeaker || 0) * 2;
   const amp = (entry.teleopAmp || 0) * 1;
   const amplified = (entry.amplifiedScored || 0) * 5;
   return speaker + amp + amplified;
+}
+
+/**
+ * CALCULATE ENDGAME POINTS FROM SCOUTING ENTRY
+ * ---------------------------------------------
+ * 2026 REBUILT™ scoring:
+ * - Tower Level 1 (off carpet): 15 pts
+ * - Tower Level 2 (above low rung): 0 pts match, 20 RP
+ * - Tower Level 3 (above mid rung): 30 pts
+ *
+ * Also supports 2024 Crescendo for backwards compatibility:
+ * - Parked: 1 pt, Onstage: 3 pts, Spotlit: 4 pts
+ * - Trap: 5 pts, Harmony: 2 pts
+ *
+ * @param {Object} entry - Scouting data entry
+ * @returns {number} - Total endgame points
+ */
+export function calculateEndgamePoints(entry) {
+  if (!entry) return 0;
+
+  // 2026 REBUILT™ scoring
+  if (entry.endgameTowerLevel !== undefined) {
+    switch (entry.endgameTowerLevel) {
+      case 'level1': return 15;
+      case 'level2': return 0; // Only gives RP, not match points
+      case 'level3': return 30;
+      default: return 0;
+    }
+  }
+
+  // 2024 Crescendo scoring (backwards compatibility)
+  let points = 0;
+  switch (entry.climbStatus) {
+    case 'parked': points = 1; break;
+    case 'onstage': points = 3; break;
+    case 'spotlit': points = 4; break;
+    default: points = 0;
+  }
+  if (entry.trapScored) points += 5;
+  if (entry.harmony) points += 2;
+  return points;
+}
+
+/**
+ * CALCULATE RANKING POINTS CONTRIBUTION FROM SCOUTING ENTRY
+ * ----------------------------------------------------------
+ * 2026 REBUILT™ RP from tower:
+ * - Tower Level 1: 10 RP
+ * - Tower Level 2: 20 RP
+ *
+ * @param {Object} entry - Scouting data entry
+ * @returns {number} - RP contribution from this robot
+ */
+export function calculateTowerRP(entry) {
+  if (!entry || !entry.endgameTowerLevel) return 0;
+
+  switch (entry.endgameTowerLevel) {
+    case 'level1': return 10;
+    case 'level2': return 20;
+    default: return 0;
+  }
 }
 

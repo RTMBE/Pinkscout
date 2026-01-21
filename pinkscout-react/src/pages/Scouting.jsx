@@ -2,7 +2,7 @@
  * =============================================================================
  * SCOUTING.JSX - Match Scouting Form
  * =============================================================================
- * 
+ *
  * WHAT IS THIS PAGE?
  * The main scouting form for recording match data:
  * - Team and match info
@@ -10,15 +10,21 @@
  * - Teleop period scoring
  * - Endgame actions
  * - Notes and observations
- * 
- * FORM FIELDS (2024 Crescendo):
+ *
+ * FORM FIELDS (2026 REBUILT™):
  * - Team Number, Match Number, Event Key
  * - Alliance Color (Red/Blue)
- * - Auto: Speaker, Amp, Mobility
- * - Teleop: Speaker, Amp, Amplified
- * - Endgame: Climb, Trap, Harmony
+ * - Auto: Fuel scored, Tower climb
+ * - Teleop: Fuel scored (active Hub), cycle tracking
+ * - Endgame: Tower climb level (L1=15pts, L3=30pts)
  * - Notes
- * 
+ *
+ * SCORING (2026 REBUILT™):
+ * - Fuel in active Hub: 1 pt each
+ * - Tower Level 1 (off carpet): 15 pts
+ * - Tower Level 3 (above mid rung): 30 pts
+ * - Bonus RPs: Energized, Supercharged, Traversal
+ *
  * =============================================================================
  */
 
@@ -68,22 +74,21 @@ export default function Scouting() {
     matchNumber: '',
     allianceColor: 'red',
 
-    // Auto Period
-    autoSpeaker: 0,
-    autoAmp: 0,
-    autoMobility: false,
+    // Auto Period (2026 REBUILT™) - 20 seconds
+    autoFuelScored: 0,          // Fuel scored in active Hub (1 pt each)
+    autoTowerClimb: 'none',     // Tower climb in auto (none, level1, level3)
 
-    // Teleop Period
-    teleopSpeaker: 0,
-    teleopAmp: 0,
-    amplifiedScored: 0,
+    // Teleop Period (2026 REBUILT™) - 2:20 with Alliance Shifts
+    teleopFuelActive: 0,        // Fuel scored when Hub active (1 pt each)
+    teleopFuelInactive: 0,      // Fuel scored when Hub inactive (0 pts, but track for strategy)
+    teleopCycleCount: 0,        // Number of complete cycles (collect + score)
 
-    // Endgame
-    climbStatus: 'none',
-    trapScored: false,
-    harmony: false,
+    // Endgame - Tower Climb (final 30 seconds)
+    endgameTowerLevel: 'none',  // none, level1 (15pts), level2 (RP only), level3 (30pts)
 
-    // Notes
+    // Performance Notes
+    hubControlFirst: false,     // Did this alliance control Hub first in auto?
+    defenseRating: 0,           // 0-5 rating for defense played
     notes: ''
   });
 
@@ -238,15 +243,14 @@ export default function Scouting() {
           teamNumber: '',
           matchNumber: '',
           allianceColor: 'red',
-          autoSpeaker: 0,
-          autoAmp: 0,
-          autoMobility: false,
-          teleopSpeaker: 0,
-          teleopAmp: 0,
-          amplifiedScored: 0,
-          climbStatus: 'none',
-          trapScored: false,
-          harmony: false,
+          autoFuelScored: 0,
+          autoTowerClimb: 'none',
+          teleopFuelActive: 0,
+          teleopFuelInactive: 0,
+          teleopCycleCount: 0,
+          endgameTowerLevel: 'none',
+          hubControlFirst: false,
+          defenseRating: 0,
           notes: ''
         });
         setSuccess(false);
@@ -483,110 +487,133 @@ export default function Scouting() {
           </div>
         </div>
 
-        {/* Auto Period Section */}
+        {/* Auto Period Section (20 seconds) */}
         <div className="content-card form-section">
-          <h3>🤖 Auto Period</h3>
-          <div className="form-grid">
-            <div className="form-group counter-group">
-              <label>Speaker (5 pts each)</label>
-              <div className="counter">
-                <button type="button" onClick={() => handleIncrement('autoSpeaker', -1)}>−</button>
-                <span>{formData.autoSpeaker}</span>
-                <button type="button" onClick={() => handleIncrement('autoSpeaker', 1)}>+</button>
-              </div>
-            </div>
-            <div className="form-group counter-group">
-              <label>Amp (2 pts each)</label>
-              <div className="counter">
-                <button type="button" onClick={() => handleIncrement('autoAmp', -1)}>−</button>
-                <span>{formData.autoAmp}</span>
-                <button type="button" onClick={() => handleIncrement('autoAmp', 1)}>+</button>
-              </div>
-            </div>
-            <div className="form-group checkbox-group">
-              <label>
-                <input
-                  type="checkbox"
-                  name="autoMobility"
-                  checked={formData.autoMobility}
-                  onChange={handleChange}
-                />
-                Left Starting Zone (2 pts)
-              </label>
-            </div>
-          </div>
-        </div>
+          <h3>🤖 Auto Period <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>(20 sec)</span></h3>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+            Fuel scored in auto determines which Hub goes inactive first in Teleop
+          </p>
 
-        {/* Teleop Period Section */}
-        <div className="content-card form-section">
-          <h3>🎮 Teleop Period</h3>
           <div className="form-grid">
+            {/* Fuel Scored */}
             <div className="form-group counter-group">
-              <label>Speaker (2 pts each)</label>
+              <label>⚽ Fuel Scored (1 pt each)</label>
               <div className="counter">
-                <button type="button" onClick={() => handleIncrement('teleopSpeaker', -1)}>−</button>
-                <span>{formData.teleopSpeaker}</span>
-                <button type="button" onClick={() => handleIncrement('teleopSpeaker', 1)}>+</button>
+                <button type="button" onClick={() => handleIncrement('autoFuelScored', -1)}>−</button>
+                <span>{formData.autoFuelScored}</span>
+                <button type="button" onClick={() => handleIncrement('autoFuelScored', 1)}>+</button>
               </div>
             </div>
-            <div className="form-group counter-group">
-              <label>Amp (1 pt each)</label>
-              <div className="counter">
-                <button type="button" onClick={() => handleIncrement('teleopAmp', -1)}>−</button>
-                <span>{formData.teleopAmp}</span>
-                <button type="button" onClick={() => handleIncrement('teleopAmp', 1)}>+</button>
-              </div>
-            </div>
-            <div className="form-group counter-group">
-              <label>Amplified Speaker (5 pts each)</label>
-              <div className="counter">
-                <button type="button" onClick={() => handleIncrement('amplifiedScored', -1)}>−</button>
-                <span>{formData.amplifiedScored}</span>
-                <button type="button" onClick={() => handleIncrement('amplifiedScored', 1)}>+</button>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Endgame Section */}
-        <div className="content-card form-section">
-          <h3>🏁 Endgame</h3>
-          <div className="form-grid">
+            {/* Tower Climb in Auto */}
             <div className="form-group">
-              <label htmlFor="climbStatus">Climb Status</label>
+              <label htmlFor="autoTowerClimb">🗼 Tower Climb (Auto)</label>
               <select
-                id="climbStatus"
-                name="climbStatus"
-                value={formData.climbStatus}
+                id="autoTowerClimb"
+                name="autoTowerClimb"
+                value={formData.autoTowerClimb}
                 onChange={handleChange}
               >
                 <option value="none">None</option>
-                <option value="parked">Parked (1 pt)</option>
-                <option value="onstage">Onstage (3 pts)</option>
-                <option value="spotlit">Spotlit (4 pts)</option>
+                <option value="level1">Level 1 - Off Carpet (15 pts)</option>
+                <option value="level3">Level 3 - Above Mid Rung (30 pts)</option>
               </select>
             </div>
+
+            {/* Hub Control */}
             <div className="form-group checkbox-group">
               <label>
                 <input
                   type="checkbox"
-                  name="trapScored"
-                  checked={formData.trapScored}
+                  name="hubControlFirst"
+                  checked={formData.hubControlFirst}
                   onChange={handleChange}
                 />
-                Trap Scored (5 pts)
+                🎯 Alliance controlled Hub first
               </label>
             </div>
-            <div className="form-group checkbox-group">
-              <label>
-                <input
-                  type="checkbox"
-                  name="harmony"
-                  checked={formData.harmony}
-                  onChange={handleChange}
-                />
-                Harmony (2 pts)
-              </label>
+          </div>
+        </div>
+
+        {/* Teleop Period Section (2:20 with Alliance Shifts) */}
+        <div className="content-card form-section">
+          <h3>🎮 Teleop Period <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>(2:20)</span></h3>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+            Alliance Shifts alternate which Hub is active. Only active Hub scores count!
+          </p>
+
+          <div className="form-grid">
+            {/* Fuel Scored in Active Hub */}
+            <div className="form-group counter-group">
+              <label>⚽ Fuel in Active Hub (1 pt each)</label>
+              <div className="counter">
+                <button type="button" onClick={() => handleIncrement('teleopFuelActive', -1)}>−</button>
+                <span>{formData.teleopFuelActive}</span>
+                <button type="button" onClick={() => handleIncrement('teleopFuelActive', 1)}>+</button>
+              </div>
+            </div>
+
+            {/* Fuel Scored in Inactive Hub (for tracking) */}
+            <div className="form-group counter-group">
+              <label>🚫 Fuel in Inactive Hub (0 pts)</label>
+              <div className="counter">
+                <button type="button" onClick={() => handleIncrement('teleopFuelInactive', -1)}>−</button>
+                <span>{formData.teleopFuelInactive}</span>
+                <button type="button" onClick={() => handleIncrement('teleopFuelInactive', 1)}>+</button>
+              </div>
+            </div>
+
+            {/* Cycle Count */}
+            <div className="form-group counter-group">
+              <label>🔄 Cycle Count (collect + score)</label>
+              <div className="counter">
+                <button type="button" onClick={() => handleIncrement('teleopCycleCount', -1)}>−</button>
+                <span>{formData.teleopCycleCount}</span>
+                <button type="button" onClick={() => handleIncrement('teleopCycleCount', 1)}>+</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Endgame Section - Tower Climb */}
+        <div className="content-card form-section">
+          <h3>🏁 Endgame <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>(Final 30 sec - All Hubs Active)</span></h3>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+            Tower climb for big points. Level 2 earns Ranking Points only.
+          </p>
+
+          <div className="form-grid">
+            <div className="form-group">
+              <label htmlFor="endgameTowerLevel">🗼 Tower Climb Level</label>
+              <select
+                id="endgameTowerLevel"
+                name="endgameTowerLevel"
+                value={formData.endgameTowerLevel}
+                onChange={handleChange}
+              >
+                <option value="none">None (0 pts)</option>
+                <option value="level1">Level 1 - Off Carpet (15 pts, 10 RP)</option>
+                <option value="level2">Level 2 - Above Low Rung (0 pts, 20 RP)</option>
+                <option value="level3">Level 3 - Above Mid Rung (30 pts)</option>
+              </select>
+            </div>
+
+            {/* Defense Rating */}
+            <div className="form-group">
+              <label htmlFor="defenseRating">🛡️ Defense Rating (0-5)</label>
+              <select
+                id="defenseRating"
+                name="defenseRating"
+                value={formData.defenseRating}
+                onChange={handleChange}
+              >
+                <option value={0}>0 - No defense played</option>
+                <option value={1}>1 - Minimal defense</option>
+                <option value={2}>2 - Some defense</option>
+                <option value={3}>3 - Moderate defense</option>
+                <option value={4}>4 - Strong defense</option>
+                <option value={5}>5 - Elite defender</option>
+              </select>
             </div>
           </div>
         </div>

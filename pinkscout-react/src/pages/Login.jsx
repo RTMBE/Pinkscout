@@ -13,7 +13,7 @@
  * If incorrect, show clear error message
  * 
  * ON SUCCESS:
- * - Stores user profile in Firestore (users/{uid})
+ * - Stores user profile in Supabase (profiles table)
  * - Redirects to dashboard
  * 
  * NO SIDEBAR:
@@ -34,7 +34,10 @@ export default function Login() {
   
   // Toggle between sign-in and sign-up modes
   const [isLoginMode, setIsLoginMode] = useState(true);
-  
+
+  // Account type: 'member' (default) or 'teamLead'
+  const [accountType, setAccountType] = useState('member');
+
   // Form fields
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -42,6 +45,9 @@ export default function Login() {
   const [username, setUsername] = useState('');
   const [signupCode, setSignupCode] = useState('');
   const [teamNumber, setTeamNumber] = useState('');
+
+  // Generated team code for Team Lead signup
+  const [generatedCode, setGeneratedCode] = useState('');
   
   // UI state
   const [error, setError] = useState('');
@@ -68,6 +74,8 @@ export default function Login() {
   
   const toggleMode = () => {
     setIsLoginMode(!isLoginMode);
+    setAccountType('member'); // Reset to member when toggling
+    setGeneratedCode('');
     setError('');
     setSuccess('');
   };
@@ -75,11 +83,12 @@ export default function Login() {
   // ==========================================================================
   // FORM SUBMISSION HANDLER
   // ==========================================================================
-  
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
+    setGeneratedCode('');
     setLoading(true);
 
     try {
@@ -87,36 +96,57 @@ export default function Login() {
         // ====== SIGN IN ======
         await login(email, password);
         // Navigation handled by useEffect above
-        
+
       } else {
         // ====== SIGN UP ======
-        
+
         // Validate passwords match
         if (password !== confirmPassword) {
           throw new Error('Passwords do not match.');
         }
-        
+
         // Validate password length
         if (password.length < 6) {
           throw new Error('Password must be at least 6 characters.');
         }
-        
+
         // Validate username
         if (username.length < 2) {
           throw new Error('Username must be at least 2 characters.');
         }
-        
-        // Signup (includes code validation)
-        await signup(email, password, username, signupCode, teamNumber || null);
-        setSuccess('Account created! Redirecting...');
-        
-        // Short delay to show success
-        setTimeout(() => {
-          navigate('/dashboard', { replace: true });
-        }, 1000);
+
+        const isTeamLead = accountType === 'teamLead';
+
+        // Signup with appropriate account type
+        const result = await signup(
+          email,
+          password,
+          username,
+          signupCode,
+          teamNumber || null,
+          isTeamLead
+        );
+
+        if (isTeamLead && result.teamCode) {
+          // Show the generated code to Team Lead
+          setGeneratedCode(result.teamCode);
+          setSuccess(`Team Lead account created! Your team code is: ${result.teamCode}`);
+
+          // Longer delay to allow user to see and copy code
+          setTimeout(() => {
+            navigate('/dashboard', { replace: true });
+          }, 3000);
+        } else {
+          setSuccess('Account created! Redirecting...');
+
+          // Short delay to show success
+          setTimeout(() => {
+            navigate('/dashboard', { replace: true });
+          }, 1000);
+        }
       }
     } catch (err) {
-      // Convert Firebase error codes to user-friendly messages
+      // Convert Supabase error codes to user-friendly messages
       setError(getErrorMessage(err));
     } finally {
       setLoading(false);
@@ -157,20 +187,34 @@ export default function Login() {
     <>
       {/* SEO Meta Tags */}
       <Helmet>
-        <title>Login - PinkScout</title>
-        <meta name="description" content="Sign in to PinkScout FRC scouting application" />
+        <title>Login - PinkScout | FRC Team Scouting Tool</title>
+        <meta name="description" content="PinkScout - Official scouting application for FIRST Robotics Competition teams. Securely track match data and team performance." />
       </Helmet>
 
       <div className="auth-container">
         <div className="auth-card auth-card-large">
+          {/* Security Badge */}
+          <div className="security-badge">
+            🔒 Secure Login • Powered by Supabase Authentication
+          </div>
+
           {/* Header */}
           <div className="auth-header">
-            <h1>🤖 Pinkscout</h1>
-            <p>
-              {isLoginMode
-                ? 'Sign in to access your scouting dashboard'
-                : 'Create a new account to start scouting'}
+            <h1>🤖 PinkScout</h1>
+            <p className="auth-subtitle">
+              <strong>FIRST Robotics Competition Scouting Tool</strong>
             </p>
+            <p className="auth-description">
+              {isLoginMode
+                ? 'Sign in to access your team\'s scouting dashboard'
+                : 'Create a team account to start scouting matches'}
+            </p>
+          </div>
+
+          {/* FRC Disclaimer */}
+          <div className="frc-notice">
+            <span className="frc-icon">🤖</span>
+            <span>Built for FRC teams to track robot performance at competitions</span>
           </div>
 
           {/* Success Message */}
@@ -211,6 +255,34 @@ export default function Login() {
             {/* Sign Up Only Fields */}
             {!isLoginMode && (
               <>
+                {/* Account Type Selection */}
+                <div className="form-group">
+                  <label>Account Type</label>
+                  <div className="account-type-toggle" style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      type="button"
+                      className={`btn ${accountType === 'member' ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => setAccountType('member')}
+                      style={{ flex: 1 }}
+                    >
+                      👤 Member
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn ${accountType === 'teamLead' ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => setAccountType('teamLead')}
+                      style={{ flex: 1 }}
+                    >
+                      👑 Team Lead
+                    </button>
+                  </div>
+                  <small className="form-hint">
+                    {accountType === 'teamLead'
+                      ? 'Create a team and invite members with your code'
+                      : 'Join an existing team with a code from your Team Lead'}
+                  </small>
+                </div>
+
                 {/* Confirm Password */}
                 <div className="form-group">
                   <label htmlFor="confirmPassword">Confirm Password</label>
@@ -255,19 +327,52 @@ export default function Login() {
                   <small className="form-hint">This enables the "My Matches" feature</small>
                 </div>
 
-                {/* Sign Up Code */}
-                <div className="form-group">
-                  <label htmlFor="signupCode">Sign-Up Code</label>
-                  <input
-                    type="text"
-                    id="signupCode"
-                    value={signupCode}
-                    onChange={(e) => setSignupCode(e.target.value)}
-                    required
-                    placeholder="Enter team code"
-                  />
-                  <small className="form-hint">Ask your team lead for the sign-up code</small>
-                </div>
+                {/* Team Code - Only for Members */}
+                {accountType === 'member' && (
+                  <div className="form-group">
+                    <label htmlFor="signupCode">Team Code</label>
+                    <input
+                      type="text"
+                      id="signupCode"
+                      value={signupCode}
+                      onChange={(e) => setSignupCode(e.target.value.toUpperCase())}
+                      required
+                      placeholder="Enter 6-character code"
+                      maxLength={6}
+                      style={{ textTransform: 'uppercase', letterSpacing: '0.1em' }}
+                    />
+                    <small className="form-hint">Get this code from your Team Lead</small>
+                  </div>
+                )}
+
+                {/* Generated Code Display - After Team Lead signup */}
+                {generatedCode && (
+                  <div className="form-group" style={{
+                    background: 'var(--success-bg, #d4edda)',
+                    padding: '1rem',
+                    borderRadius: '0.5rem',
+                    border: '2px solid var(--success, #28a745)'
+                  }}>
+                    <label style={{ color: 'var(--success, #155724)', fontWeight: 'bold' }}>
+                      🎉 Your Team Code
+                    </label>
+                    <div style={{
+                      fontSize: '1.5rem',
+                      fontWeight: 'bold',
+                      letterSpacing: '0.2em',
+                      textAlign: 'center',
+                      padding: '0.5rem',
+                      background: 'white',
+                      borderRadius: '0.25rem',
+                      marginTop: '0.5rem'
+                    }}>
+                      {generatedCode}
+                    </div>
+                    <small style={{ color: 'var(--success, #155724)' }}>
+                      Share this code with your team members so they can join!
+                    </small>
+                  </div>
+                )}
               </>
             )}
 
@@ -297,6 +402,30 @@ export default function Login() {
               {isLoginMode ? 'Create one' : 'Sign in'}
             </a>
           </div>
+
+          {/* Privacy Footer */}
+          <div className="privacy-footer">
+            <div className="privacy-info">
+              <span className="privacy-icon">🛡️</span>
+              <div className="privacy-text">
+                <strong>Your Privacy Matters</strong>
+                <p>PinkScout only collects data necessary for FRC match scouting. Your information is stored securely using Supabase and is never shared with third parties.</p>
+              </div>
+            </div>
+            <div className="data-notice">
+              <p><strong>Data We Collect:</strong> Email, display name, team number, and match scouting entries you submit.</p>
+              <p><strong>Purpose:</strong> To help your FRC team track robot performance at competitions.</p>
+            </div>
+          </div>
+        </div>
+
+        {/* External Footer */}
+        <div className="auth-external-footer">
+          <p>© 2026 PinkScout • Created for FIRST® Robotics Competition Teams</p>
+          <p className="frc-disclaimer">
+            FIRST® and FIRST Robotics Competition are registered trademarks of For Inspiration and Recognition of Science and Technology (FIRST).
+            PinkScout is not affiliated with or endorsed by FIRST.
+          </p>
         </div>
       </div>
     </>

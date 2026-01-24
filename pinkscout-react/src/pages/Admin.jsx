@@ -34,7 +34,7 @@ const ALLOWED_ADMIN_EMAILS = [
 ];
 
 export default function Admin() {
-  const { user } = useAuth();
+  const { user, roleContext } = useAuth();
 
   // ==========================================================================
   // ACCESS CONTROL - Check if user's email is in allowed list
@@ -80,7 +80,7 @@ export default function Admin() {
       const [adminList, status, allScoutingData] = await Promise.all([
         getAdminList(),
         getAPIStatus(),
-        getAllScoutingData()
+        getAllScoutingData(roleContext)
       ]);
 
       setAdmins(adminList);
@@ -444,10 +444,10 @@ export default function Admin() {
             <h3>Quick Actions</h3>
             <div className="admin-actions">
               <button
-                onClick={() => window.open('https://console.firebase.google.com', '_blank')}
+                onClick={() => window.open('https://supabase.com/dashboard', '_blank')}
                 className="btn btn-secondary"
               >
-                🔥 Firebase Console
+                ⚡ Supabase Dashboard
               </button>
               <button
                 onClick={() => window.open('https://www.thebluealliance.com', '_blank')}
@@ -518,9 +518,9 @@ export default function Admin() {
       {/* ================================================================== */}
       {activeTab === 'admins' && (
         <div className="content-card">
-          <h3>Admin Users (Firestore)</h3>
+          <h3>Admin Users (Database)</h3>
           <p style={{ color: 'var(--text-muted)', marginBottom: '1rem', fontSize: '0.875rem' }}>
-            These admins are stored in Firestore and have elevated permissions within the app.
+            These admins are stored in Supabase and have elevated permissions within the app.
           </p>
           <form onSubmit={handleAddAdmin} className="add-admin-form">
             <input
@@ -537,7 +537,7 @@ export default function Admin() {
 
           <div className="admin-list">
             {admins.length === 0 ? (
-              <p>No additional admins configured in Firestore.</p>
+              <p>No additional admins configured in the database.</p>
             ) : (
               <ul>
                 {admins.map(email => (

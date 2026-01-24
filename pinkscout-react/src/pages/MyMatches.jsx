@@ -26,7 +26,7 @@ import { getEventScoutingData } from '../services/scoutingService';
 import { classifyEPA, calculateAutoPoints, calculateTeleopPoints } from '../utils/epaUtils';
 
 export default function MyMatches() {
-  const { userProfile } = useAuth();
+  const { userProfile, roleContext } = useAuth();
   const navigate = useNavigate();
   const teamNumber = userProfile?.teamNumber;
 
@@ -132,7 +132,7 @@ export default function MyMatches() {
         getTeamEventMatches(teamNumber, event.key),
         getEventTeams(event.key),
         getEventTeamStats(event.key),
-        getEventScoutingData(event.key),
+        getEventScoutingData(event.key, roleContext),
         getEventRankings(event.key)
       ]);
 

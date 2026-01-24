@@ -1,37 +1,23 @@
 /**
  * =============================================================================
- * ADMINSERVICE.JS - Admin Panel Firestore Operations
+ * ADMINSERVICE.JS - Admin Panel Database Operations
  * =============================================================================
- * 
+ *
  * WHAT IS THIS FILE?
  * Handles admin-specific operations:
  * - Question management (CRUD)
  * - Admin list management
  * - Data statistics
  * - API status checks
- * 
- * FIRESTORE COLLECTIONS:
- * - questions/{docId} - Scouting form questions
- * - settings/admins - Admin email list
- * 
+ *
+ * SUPABASE TABLES:
+ * - questions - Scouting form questions
+ * - admins - Admin email list
+ *
  * =============================================================================
  */
 
-import {
-  collection,
-  addDoc,
-  getDocs,
-  getDoc,
-  doc,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  orderBy,
-  arrayUnion,
-  arrayRemove
-} from 'firebase/firestore';
-import { db, API_KEYS } from './firebase';
+import { supabase, API_KEYS } from './supabase';
 
 // =============================================================================
 // QUESTION MANAGEMENT
@@ -39,69 +25,103 @@ import { db, API_KEYS } from './firebase';
 
 /**
  * Get all scouting questions, ordered by their display order
- * 
+ *
  * @returns {Array} - Array of question objects with IDs
  */
 export async function getAllQuestions() {
   try {
-    const q = query(collection(db, 'questions'), orderBy('order', 'asc'));
-    const snapshot = await getDocs(q);
-    
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    const { data, error } = await supabase
+      .from('questions')
+      .select('*')
+      .order('order', { ascending: true });
+
+    if (error) throw error;
+
+    return data || [];
   } catch (error) {
-    console.error('Error fetching questions:', error);
-    throw error;
+    if (import.meta.env.DEV) {
+      console.error('Error fetching questions:', error);
+    }
+    throw new Error('Failed to load questions. Please try again.');
   }
 }
 
 /**
  * Add a new scouting question
- * 
+ *
  * @param {Object} question - Question object { text, category, type, order }
  * @returns {string} - The document ID of the new question
  */
 export async function addQuestion(question) {
   try {
-    const docRef = await addDoc(collection(db, 'questions'), question);
-    console.log('✅ Question added:', docRef.id);
-    return docRef.id;
+    const { data, error } = await supabase
+      .from('questions')
+      .insert(question)
+      .select('id')
+      .single();
+
+    if (error) throw error;
+
+    if (import.meta.env.DEV) {
+      console.log('✅ Question added:', data.id);
+    }
+    return data.id;
   } catch (error) {
-    console.error('Error adding question:', error);
-    throw error;
+    if (import.meta.env.DEV) {
+      console.error('Error adding question:', error);
+    }
+    throw new Error('Failed to add question. Please try again.');
   }
 }
 
 /**
  * Update an existing question
- * 
+ *
  * @param {string} docId - The document ID to update
  * @param {Object} data - The data to update
  */
-export async function updateQuestion(docId, data) {
+export async function updateQuestion(docId, updateData) {
   try {
-    await updateDoc(doc(db, 'questions', docId), data);
-    console.log('✅ Question updated:', docId);
+    const { error } = await supabase
+      .from('questions')
+      .update(updateData)
+      .eq('id', docId);
+
+    if (error) throw error;
+
+    if (import.meta.env.DEV) {
+      console.log('✅ Question updated:', docId);
+    }
   } catch (error) {
-    console.error('Error updating question:', error);
-    throw error;
+    if (import.meta.env.DEV) {
+      console.error('Error updating question:', error);
+    }
+    throw new Error('Failed to update question. Please try again.');
   }
 }
 
 /**
  * Delete a question
- * 
+ *
  * @param {string} docId - The document ID to delete
  */
 export async function deleteQuestion(docId) {
   try {
-    await deleteDoc(doc(db, 'questions', docId));
-    console.log('✅ Question deleted:', docId);
+    const { error } = await supabase
+      .from('questions')
+      .delete()
+      .eq('id', docId);
+
+    if (error) throw error;
+
+    if (import.meta.env.DEV) {
+      console.log('✅ Question deleted:', docId);
+    }
   } catch (error) {
-    console.error('Error deleting question:', error);
-    throw error;
+    if (import.meta.env.DEV) {
+      console.error('Error deleting question:', error);
+    }
+    throw new Error('Failed to delete question. Please try again.');
   }
 }
 
@@ -111,53 +131,88 @@ export async function deleteQuestion(docId) {
 
 /**
  * Get the list of admin emails
- * 
+ *
  * @returns {Array} - Array of admin email strings
  */
 export async function getAdminList() {
   try {
-    const adminsDoc = await getDoc(doc(db, 'settings', 'admins'));
-    if (adminsDoc.exists()) {
-      return adminsDoc.data().emails || [];
-    }
-    return [];
+    const { data, error } = await supabase
+      .from('admins')
+      .select('email');
+
+    if (error) throw error;
+
+    return (data || []).map(row => row.email);
   } catch (error) {
-    console.error('Error fetching admin list:', error);
-    throw error;
+    if (import.meta.env.DEV) {
+      console.error('Error fetching admin list:', error);
+    }
+    throw new Error('Failed to load admin list. Please try again.');
   }
 }
 
 /**
  * Add an email to the admin list
- * 
+ *
  * @param {string} email - Email to add as admin
  */
 export async function addAdmin(email) {
   try {
-    await setDoc(doc(db, 'settings', 'admins'), {
-      emails: arrayUnion(email.toLowerCase())
-    }, { merge: true });
-    console.log('✅ Admin added:', email);
+    const normalizedEmail = email.toLowerCase();
+
+    // Check if already exists
+    const { data: existing } = await supabase
+      .from('admins')
+      .select('email')
+      .eq('email', normalizedEmail)
+      .single();
+
+    if (existing) {
+      if (import.meta.env.DEV) {
+        console.log('Admin already exists:', email);
+      }
+      return;
+    }
+
+    const { error } = await supabase
+      .from('admins')
+      .insert({ email: normalizedEmail });
+
+    if (error) throw error;
+
+    if (import.meta.env.DEV) {
+      console.log('✅ Admin added:', email);
+    }
   } catch (error) {
-    console.error('Error adding admin:', error);
-    throw error;
+    if (import.meta.env.DEV) {
+      console.error('Error adding admin:', error);
+    }
+    throw new Error('Failed to add admin. Please try again.');
   }
 }
 
 /**
  * Remove an email from the admin list
- * 
+ *
  * @param {string} email - Email to remove from admins
  */
 export async function removeAdmin(email) {
   try {
-    await setDoc(doc(db, 'settings', 'admins'), {
-      emails: arrayRemove(email)
-    }, { merge: true });
-    console.log('✅ Admin removed:', email);
+    const { error } = await supabase
+      .from('admins')
+      .delete()
+      .eq('email', email.toLowerCase());
+
+    if (error) throw error;
+
+    if (import.meta.env.DEV) {
+      console.log('✅ Admin removed:', email);
+    }
   } catch (error) {
-    console.error('Error removing admin:', error);
-    throw error;
+    if (import.meta.env.DEV) {
+      console.error('Error removing admin:', error);
+    }
+    throw new Error('Failed to remove admin. Please try again.');
   }
 }
 
@@ -201,19 +256,30 @@ export async function getAPIStatus() {
  */
 export async function wipeAllScoutingData() {
   try {
-    const snapshot = await getDocs(collection(db, 'scouting'));
-    let deleted = 0;
+    // Get count first
+    const { count, error: countError } = await supabase
+      .from('scouting')
+      .select('*', { count: 'exact', head: true });
 
-    for (const docSnap of snapshot.docs) {
-      await deleteDoc(doc(db, 'scouting', docSnap.id));
-      deleted++;
+    if (countError) throw countError;
+
+    // Delete all records
+    const { error } = await supabase
+      .from('scouting')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all (neq to non-existent id)
+
+    if (error) throw error;
+
+    if (import.meta.env.DEV) {
+      console.log(`✅ Wiped ${count || 0} scouting records`);
     }
-
-    console.log(`✅ Wiped ${deleted} scouting records`);
-    return { deleted };
+    return { deleted: count || 0 };
   } catch (error) {
-    console.error('Error wiping scouting data:', error);
-    throw error;
+    if (import.meta.env.DEV) {
+      console.error('Error wiping scouting data:', error);
+    }
+    throw new Error('Failed to wipe scouting data. Please try again.');
   }
 }
 
@@ -225,25 +291,37 @@ export async function wipeAllScoutingData() {
  */
 export async function wipeAllUserData(preserveEmail = 'rtmbe20@gmail.com') {
   try {
-    const snapshot = await getDocs(collection(db, 'users'));
-    let deleted = 0;
-    let preserved = 0;
+    // Get count before delete
+    const { data: allUsers, error: fetchError } = await supabase
+      .from('profiles')
+      .select('id, email');
 
-    for (const docSnap of snapshot.docs) {
-      const userData = docSnap.data();
-      if (userData.email?.toLowerCase() === preserveEmail.toLowerCase()) {
-        preserved++;
-        continue; // Skip the primary admin
-      }
-      await deleteDoc(doc(db, 'users', docSnap.id));
-      deleted++;
+    if (fetchError) throw fetchError;
+
+    const usersToDelete = (allUsers || []).filter(
+      u => u.email?.toLowerCase() !== preserveEmail.toLowerCase()
+    );
+    const preserved = (allUsers || []).length - usersToDelete.length;
+
+    // Delete non-admin users
+    if (usersToDelete.length > 0) {
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .neq('email', preserveEmail.toLowerCase());
+
+      if (error) throw error;
     }
 
-    console.log(`✅ Wiped ${deleted} user profiles, preserved ${preserved}`);
-    return { deleted, preserved };
+    if (import.meta.env.DEV) {
+      console.log(`✅ Wiped ${usersToDelete.length} user profiles, preserved ${preserved}`);
+    }
+    return { deleted: usersToDelete.length, preserved };
   } catch (error) {
-    console.error('Error wiping user data:', error);
-    throw error;
+    if (import.meta.env.DEV) {
+      console.error('Error wiping user data:', error);
+    }
+    throw new Error('Failed to wipe user data. Please try again.');
   }
 }
 
@@ -254,13 +332,29 @@ export async function wipeAllUserData(preserveEmail = 'rtmbe20@gmail.com') {
  */
 export async function ensureAdminExists(adminEmail = 'rtmbe20@gmail.com') {
   try {
-    await setDoc(doc(db, 'settings', 'admins'), {
-      emails: [adminEmail.toLowerCase()]
-    }, { merge: false }); // Overwrite to ensure clean state
-    console.log(`✅ Admin settings reset with: ${adminEmail}`);
+    const normalizedEmail = adminEmail.toLowerCase();
+
+    // Delete all admins first
+    await supabase
+      .from('admins')
+      .delete()
+      .neq('email', normalizedEmail);
+
+    // Upsert the primary admin
+    const { error } = await supabase
+      .from('admins')
+      .upsert({ email: normalizedEmail }, { onConflict: 'email' });
+
+    if (error) throw error;
+
+    if (import.meta.env.DEV) {
+      console.log(`✅ Admin settings reset with: ${adminEmail}`);
+    }
   } catch (error) {
-    console.error('Error ensuring admin exists:', error);
-    throw error;
+    if (import.meta.env.DEV) {
+      console.error('Error ensuring admin exists:', error);
+    }
+    throw new Error('Failed to update admin settings. Please try again.');
   }
 }
 
@@ -289,11 +383,15 @@ export async function performCompleteDataWipe() {
     // Ensure admin settings are correct
     await ensureAdminExists('rtmbe20@gmail.com');
 
-    console.log('✅ Complete data wipe finished:', results);
+    if (import.meta.env.DEV) {
+      console.log('✅ Complete data wipe finished:', results);
+    }
     return results;
   } catch (error) {
-    console.error('Error during complete data wipe:', error);
-    throw error;
+    if (import.meta.env.DEV) {
+      console.error('Error during complete data wipe:', error);
+    }
+    throw new Error('Failed to complete data wipe. Please try again.');
   }
 }
 

@@ -639,6 +639,7 @@ a:hover {
 .auth-container {
   min-height: 100vh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: var(--spacing-lg);
@@ -726,6 +727,119 @@ a:hover {
 
 .auth-switch a {
   margin-left: var(--spacing-sm);
+}
+
+/* Security & Privacy Elements */
+.security-badge {
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.15) 0%, rgba(76, 175, 80, 0.05) 100%);
+  border: 1px solid rgba(76, 175, 80, 0.3);
+  color: var(--success-color);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  text-align: center;
+  font-size: 0.85rem;
+  margin-bottom: var(--spacing-lg);
+  font-weight: 500;
+}
+
+.auth-subtitle {
+  color: var(--primary-color) !important;
+  font-size: 0.95rem;
+  margin-bottom: var(--spacing-xs);
+}
+
+.auth-description {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.frc-notice {
+  background-color: rgba(233, 30, 99, 0.1);
+  border: 1px solid rgba(233, 30, 99, 0.2);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.frc-icon {
+  font-size: 1.2rem;
+}
+
+.privacy-footer {
+  margin-top: var(--spacing-xl);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.privacy-info {
+  display: flex;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.privacy-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.privacy-text {
+  font-size: 0.85rem;
+}
+
+.privacy-text strong {
+  color: var(--text-primary);
+  display: block;
+  margin-bottom: var(--spacing-xs);
+}
+
+.privacy-text p {
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.data-notice {
+  background-color: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-md);
+  font-size: 0.8rem;
+}
+
+.data-notice p {
+  margin: 0 0 var(--spacing-xs) 0;
+  color: var(--text-muted);
+}
+
+.data-notice p:last-child {
+  margin-bottom: 0;
+}
+
+.data-notice strong {
+  color: var(--text-secondary);
+}
+
+.auth-external-footer {
+  text-align: center;
+  margin-top: var(--spacing-lg);
+  padding: var(--spacing-md);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.auth-external-footer p {
+  margin: 0 0 var(--spacing-xs) 0;
+}
+
+.frc-disclaimer {
+  font-size: 0.7rem;
+  max-width: 400px;
+  margin: 0 auto;
+  line-height: 1.4;
 }
 
 /* Home Page - Quick Actions */

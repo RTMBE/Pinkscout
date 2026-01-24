@@ -1,6 +1,6 @@
 # 🩷 PinkScout - FRC Scouting Application
 
-A web-based scouting application for FIRST Robotics Competition (FRC) teams. Built with vanilla HTML, CSS, and JavaScript, hosted on Firebase.
+A web-based scouting application for FIRST Robotics Competition (FRC) teams. Built with React 18 + Vite, powered by Supabase, and deployed on Vercel.
 
 ## Features
 
@@ -9,6 +9,8 @@ A web-based scouting application for FIRST Robotics Competition (FRC) teams. Bui
 - **Events**: Browse TBA events, view teams, and match predictions
 - **Analytics**: Compare teams and view performance charts
 - **User Profiles**: Track your scouting contributions
+- **Team Lead/Member System**: Invite codes for team organization
+- **Role-Based Access Control**: Scout, Scout Lead, and Master Admin tiers
 
 ---
 
@@ -16,32 +18,26 @@ A web-based scouting application for FIRST Robotics Competition (FRC) teams. Bui
 
 ```
 Pinkscout/
-├── firebase.json          # Firebase Hosting configuration
-├── .firebaserc            # Firebase project alias
-├── firestore.rules        # Firestore security rules
-├── README.md              # This file
+├── README.md                    # This file
 │
-└── public/                # All website files (served by Firebase)
-    ├── css/
-    │   └── style.css      # Main stylesheet
-    ├── js/
-    │   ├── firebase.js    # Firebase initialization & API keys
-    │   ├── app.js         # Shared utilities & API functions
-    │   ├── scouting.js    # Scouting form handling
-    │   ├── teams.js       # Team search & stats
-    │   ├── events.js      # Event browser
-    │   ├── analytics.js   # Charts & comparison
-    │   ├── scouterProfile.js # User profile
-    │   ├── admin.js       # Admin functions
-    │   └── user.js        # User profile helpers
-    ├── index.html         # Home page
-    ├── login.html         # Sign in / Sign up page
-    ├── teams.html         # Team search & leaderboard
-    ├── events.html        # Event browser
-    ├── analytics.html     # Analytics & charts
-    ├── scouterProfile.html # User profile
-    ├── admin.html         # Admin controls & diagnostics
-    └── newscounting.html  # Match scouting form
+└── pinkscout-react/             # React application
+    ├── src/
+    │   ├── components/          # Reusable UI components
+    │   ├── contexts/            # React contexts (Auth, etc.)
+    │   ├── pages/               # Page components
+    │   ├── services/            # API and backend services
+    │   │   ├── supabase.js      # Supabase client configuration
+    │   │   ├── scoutingService.js
+    │   │   ├── roleService.js
+    │   │   └── ...
+    │   ├── utils/               # Utility functions
+    │   ├── App.jsx              # Main app component
+    │   └── main.jsx             # Entry point
+    ├── .env.local               # Environment variables (not committed)
+    ├── vercel.json              # Vercel deployment configuration
+    ├── supabase-schema.sql      # Database schema for Supabase
+    ├── package.json             # Dependencies
+    └── vite.config.js           # Vite configuration
 ```
 
 ---
@@ -50,146 +46,105 @@ Pinkscout/
 
 ### Prerequisites
 
-1. **Node.js** - Download from [nodejs.org](https://nodejs.org/)
-2. **Firebase CLI** - Install globally:
-   ```bash
-   npm install -g firebase-tools
-   ```
+1. **Node.js 18+** - Download from [nodejs.org](https://nodejs.org/)
+2. **Supabase Account** - Create at [supabase.com](https://supabase.com/)
+3. **Vercel Account** (optional) - For deployment at [vercel.com](https://vercel.com/)
 
-### Step 1: Firebase Login
-
-Authenticate with your Firebase account:
+### Step 1: Clone and Install
 
 ```bash
-firebase login
+cd pinkscout-react
+npm install
 ```
 
-This opens a browser window for Google sign-in.
+### Step 2: Create Supabase Project
 
-### Step 2: Create Firebase Project
+1. Go to [Supabase Dashboard](https://supabase.com/dashboard)
+2. Click **"New Project"**
+3. Name it (e.g., `pinkscout`)
+4. Set a secure database password
+5. Select a region close to your users
+6. Wait for project creation
 
-1. Go to [Firebase Console](https://console.firebase.google.com/)
-2. Click **"Create a project"**
-3. Name it (e.g., `team254-scouting-2024`)
-4. Enable Google Analytics (optional)
-5. Wait for project creation
+### Step 3: Setup Database Schema
 
-### Step 3: Enable Services
+1. In Supabase Dashboard, go to **SQL Editor**
+2. Copy the contents of `supabase-schema.sql`
+3. Paste and run to create all tables and RLS policies
 
-In Firebase Console, enable these services:
+### Step 4: Get Supabase Credentials
 
-#### Authentication:
-1. Go to **Authentication** > **Sign-in method**
-2. Enable **Email/Password**
-3. Click **Save**
+1. Go to **Settings** → **API**
+2. Copy the **Project URL** and **anon public key**
 
-#### Firestore Database:
-1. Go to **Firestore Database**
-2. Click **Create database**
-3. Choose **Start in test mode** (for development)
-4. Select a location close to you
-5. Click **Enable**
+### Step 5: Configure Environment
 
-### Step 4: Get Firebase Config
+Create `.env.local` in the `pinkscout-react` folder:
 
-1. Go to **Project Settings** (gear icon)
-2. Scroll to **"Your apps"**
-3. Click **Web** icon (`</>`)
-4. Register app (name it anything)
-5. Copy the `firebaseConfig` object
-6. Paste it in `public/js/firebase.js`
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
 
-### Step 5: Update Project ID
-
-Edit `.firebaserc` and replace `my-frc-scouting-app` with your project ID:
-
-```json
-{
-  "projects": {
-    "default": "your-actual-project-id"
-  }
-}
+VITE_TBA_API_KEY=your-tba-api-key
+VITE_NEXUS_API_KEY=your-nexus-api-key
+VITE_PRIMARY_ADMIN_EMAIL=your-admin@email.com
 ```
 
 ### Step 6: Run Locally
 
-Start the local development server:
-
 ```bash
-firebase serve
+npm run dev
 ```
 
-Open [http://localhost:5000](http://localhost:5000) in your browser.
+Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-### Step 7: Deploy to Web
+### Step 7: Deploy to Vercel
 
-When ready to publish:
-
+Option A - Via Vercel CLI:
 ```bash
-firebase deploy --only hosting
+npx vercel --prod
 ```
 
-Your app will be live at: `https://your-project-id.web.app`
+Option B - Via GitHub:
+1. Push your code to GitHub
+2. Import the repository in [Vercel Dashboard](https://vercel.com/dashboard)
+3. Set environment variables in Vercel project settings
+4. Deploy automatically on push
 
 ---
 
 ## 📄 Page Descriptions
 
-| Page | URL | Description |
-|------|-----|-------------|
-| Home | `index.html` | Welcome page with links to all sections |
-| Login | `login.html` | Sign in or create an account |
-| Dashboard | `dashboard.html` | View scouting data and charts |
-| Scouting | `newscounting.html` | Enter match scouting data |
-| Admin | `admin.html` | Run diagnostics, manage settings |
+| Page | Route | Description |
+|------|-------|-------------|
+| Home | `/` | Welcome page with navigation |
+| Login | `/login` | Sign in or create an account |
+| Dashboard | `/dashboard` | View scouting data overview |
+| Scouting | `/scouting` | Enter match scouting data |
+| Events | `/events` | Browse TBA events and matches |
+| Teams | `/teams` | Team search and leaderboard |
+| Analytics | `/analytics` | Charts and team comparison |
+| Profile | `/profile` | User profile and settings |
+| Admin | `/admin` | Admin controls (admin only) |
 
 ---
 
-## 🔧 Diagnostics
+## 🔒 Security (Row Level Security)
 
-The Admin page includes a **Diagnostics** button that checks:
+Supabase RLS policies control data access:
 
-1. ✅ Firebase initialized correctly
-2. ✅ Firestore can read data
-3. ✅ Firestore can write/delete data
-4. ✅ Authentication is available
-
-Results appear in both the UI and browser console (F12 > Console).
-
----
-
-## 🔒 Security Rules
-
-The `firestore.rules` file controls who can read/write data:
-
-- **Authenticated users**: Can read/write to `scouting` collection
+- **Authenticated users**: Can read/write their own scouting data
+- **Team members**: Can view team data based on team codes
+- **Admins**: Full access to all data
 - **Unauthenticated users**: No access
 
-Deploy rules with:
-```bash
-firebase deploy --only firestore:rules
-```
-
----
-
-## 🛠️ Troubleshooting
-
-### "Firebase not initialized"
-- Check that `firebase.js` has your config
-- Ensure Firestore is enabled in Firebase Console
-
-### "Permission denied"
-- User might not be signed in
-- Check `firestore.rules` allows the operation
-
-### "Cannot find module"
-- Ensure scripts load in order: `firebase.js` → `app.js` → page script
+RLS policies are defined in `supabase-schema.sql`.
 
 ---
 
 ## 🔑 API Keys
 
-Update `public/js/firebase.js` with your API keys:
+Configure in `.env.local`:
 
 - **Blue Alliance API**: Get from [thebluealliance.com/account](https://www.thebluealliance.com/account)
 - **Statbotics API**: No key required (public API)
@@ -199,7 +154,7 @@ Update `public/js/firebase.js` with your API keys:
 
 ## 📊 EPA Scaling
 
-The app uses Statbotics EPA (Expected Points Added) data. EPA values are scaled for display:
+The app uses Statbotics EPA (Expected Points Added) data with weighted adjustments:
 
 | Percentile | Classification | Display |
 |------------|----------------|---------|
@@ -208,22 +163,23 @@ The app uses Statbotics EPA (Expected Points Added) data. EPA values are scaled 
 | 30-69% | ✅ Normal | Green badge |
 | <30% | 📈 Below Avg | Gray badge |
 
-**Scaling Formula**: `displayEPA = percentile * 50` (0-100 percentile → 0-50 EPA)
-
 ---
 
 ## 🔐 Access Control
 
-- **Signup Code**: New users need code `1551` to create an account
-- **Admin Access**: Requires email ending in `@1551.org` or listed in `ADMIN_EMAILS`
+- **Signup Code**: New users need team code `1551` to create an account
+- **Master Admin**: Email configured in `VITE_PRIMARY_ADMIN_EMAIL`
+- **Team Leads**: Can generate invite codes for their team
+- **Team Members**: Join via invite codes from Team Leads
 
 ---
 
 ## 📚 Learn More
 
-- [Firebase Documentation](https://firebase.google.com/docs)
-- [Firestore Guide](https://firebase.google.com/docs/firestore)
-- [Firebase Auth Guide](https://firebase.google.com/docs/auth)
+- [Supabase Documentation](https://supabase.com/docs)
+- [React Documentation](https://react.dev/)
+- [Vite Documentation](https://vitejs.dev/)
+- [Vercel Documentation](https://vercel.com/docs)
 - [The Blue Alliance API](https://www.thebluealliance.com/apidocs)
 - [Statbotics API](https://www.statbotics.io/api)
 
@@ -231,6 +187,6 @@ The app uses Statbotics EPA (Expected Points Added) data. EPA values are scaled 
 
 ## 👥 For FRC Teams
 
-This app is designed for scouting at FRC competitions. Customize the form in `newscounting.html` to match your scouting needs for the current game.
+This app is designed for scouting at FRC competitions. Customize the scouting form questions in the Admin panel to match your needs for the current game.
 
 **Happy Scouting! 🎯 - Built for FRC Team 1551**

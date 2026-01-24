@@ -21,8 +21,10 @@ import { getStatboticsTeam, getTeamYearStats } from '../services/statboticsAPI';
 import { getTeamInfo, getTeamAllAwards, getTeamAwardsForYear, getTeamMatchesForYear, getTeamYearsParticipated } from '../services/blueAllianceAPI';
 import { getTeamScoutingData } from '../services/scoutingService';
 import { scaleStatboticsEPA, classifyEPA, getEPAPercentile, calculateAutoPoints, calculateTeleopPoints } from '../utils/epaUtils';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Teams() {
+  const { roleContext } = useAuth();
   // ==========================================================================
   // STATE
   // ==========================================================================
@@ -94,7 +96,7 @@ export default function Teams() {
       const [statboticsResult, tbaResult, scoutingResult, awardsResult, thisYearMatchesResult, thisYearStatsResult] = await Promise.allSettled([
         getStatboticsTeam(number),
         getTeamInfo(number),
-        getTeamScoutingData(number),
+        getTeamScoutingData(number, { roleContext }),
         getTeamAllAwards(number),
         getTeamMatchesForYear(number, currentYear),
         getTeamYearStats(number, currentYear)

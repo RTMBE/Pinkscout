@@ -12,7 +12,7 @@
  * DATA SOURCES:
  * - The Blue Alliance API for event data
  * - Statbotics API for team EPA at events
- * - Firestore for scouting data
+ * - Supabase for scouting data
  *
  * =============================================================================
  */
@@ -24,8 +24,10 @@ import { getEventList, getEventTeams, getEventMatches, getEventRankings, getEven
 import { getEventTeamStats } from '../services/statboticsAPI';
 import { getEventScoutingData } from '../services/scoutingService';
 import { classifyEPA, getEPAPercentile, calculateAutoPoints, calculateTeleopPoints } from '../utils/epaUtils';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Events() {
+  const { roleContext } = useAuth();
   // ==========================================================================
   // STATE
   // ==========================================================================
@@ -96,7 +98,7 @@ export default function Events() {
       getEventMatches(event.key),
       getEventRankings(event.key),
       getEventTeamStats(event.key),
-      getEventScoutingData(event.key),
+      getEventScoutingData(event.key, roleContext),
       getEventAwards(event.key)
     ]);
 

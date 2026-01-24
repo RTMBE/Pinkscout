@@ -17,10 +17,10 @@ import { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../contexts/AuthContext';
 import { getAllScoutingData } from '../services/scoutingService';
-import { updateProfile } from 'firebase/auth';
+import { getTeamMembers, regenerateTeamCode, getTeamLeadCode } from '../services/teamCodeService';
 
 export default function Profile() {
-  const { user, userProfile, isAdmin, updateUserProfile } = useAuth();
+  const { user, userProfile, isAdmin, roleContext, updateUserProfile } = useAuth();
 
   // ==========================================================================
   // STATE
@@ -34,6 +34,13 @@ export default function Profile() {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
 
+  // Team Admin state (for Team Leads only)
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [teamCode, setTeamCode] = useState('');
+  const [loadingTeam, setLoadingTeam] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+  const [teamStats, setTeamStats] = useState({ members: 0, totalEntries: 0 });
+
   // Update form when userProfile loads
   useEffect(() => {
     if (userProfile) {
@@ -45,26 +52,94 @@ export default function Profile() {
   // ==========================================================================
   // LOAD USER STATS
   // ==========================================================================
-  
+
   useEffect(() => {
     loadStats();
-  }, [user]);
+  }, [user, roleContext]);
 
   const loadStats = async () => {
-    if (!user) return;
-    
+    if (!user || !roleContext?.userUid) return;
+
     try {
-      const allData = await getAllScoutingData();
+      // Pass roleContext to get only the entries the user has access to
+      // For Profile page, we want to show the user's own stats regardless of role
+      // So we filter by scouterUid after getting accessible data
+      const allData = await getAllScoutingData(roleContext);
       const userEntries = allData.filter(e => e.scouterUid === user.uid);
-      
+
       setStats({
         entries: userEntries.length,
         teams: new Set(userEntries.map(e => e.teamNumber)).size
       });
+
+      // If Team Lead, also calculate team stats
+      if (roleContext.isTeamLead) {
+        setTeamStats({
+          members: teamMembers.length,
+          totalEntries: allData.length
+        });
+      }
     } catch (err) {
       console.error('Error loading stats:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ==========================================================================
+  // LOAD TEAM DATA (Team Leads only)
+  // ==========================================================================
+
+  useEffect(() => {
+    if (roleContext?.isTeamLead && user) {
+      loadTeamData();
+    }
+  }, [roleContext?.isTeamLead, user]);
+
+  const loadTeamData = async () => {
+    if (!user || !roleContext?.isTeamLead) return;
+    setLoadingTeam(true);
+
+    try {
+      // Get team code
+      const code = await getTeamLeadCode(user.uid);
+      setTeamCode(code || roleContext.teamCode || '');
+
+      // Get team members
+      const members = await getTeamMembers(user.uid);
+      setTeamMembers(members);
+
+      // Update team stats
+      const allData = await getAllScoutingData(roleContext);
+      setTeamStats({
+        members: members.length,
+        totalEntries: allData.length
+      });
+    } catch (err) {
+      console.error('Error loading team data:', err);
+    } finally {
+      setLoadingTeam(false);
+    }
+  };
+
+  // Handle regenerating team code
+  const handleRegenerateCode = async () => {
+    if (!confirm('Are you sure you want to regenerate your team code? The old code will stop working.')) {
+      return;
+    }
+
+    setRegenerating(true);
+    setError('');
+
+    try {
+      const newCode = await regenerateTeamCode(user.uid, user.email);
+      setTeamCode(newCode);
+      setSuccess('Team code regenerated successfully!');
+    } catch (err) {
+      console.error('Error regenerating code:', err);
+      setError('Failed to regenerate team code. Please try again.');
+    } finally {
+      setRegenerating(false);
     }
   };
 
@@ -91,10 +166,7 @@ export default function Profile() {
     setSuccess('');
 
     try {
-      // Update Firebase Auth profile
-      await updateProfile(user, { displayName: displayName.trim() });
-
-      // Update Firestore profile with team number
+      // Update Supabase profile with display name and team number
       const updates = {
         displayName: displayName.trim()
       };
@@ -151,6 +223,111 @@ export default function Profile() {
           <div className="stat-label">Admin Status</div>
         </div>
       </div>
+
+      {/* Team Admin Section (Team Leads only) */}
+      {roleContext?.isTeamLead && (
+        <div className="content-card" style={{ borderLeft: '4px solid var(--primary)', marginBottom: '1.5rem' }}>
+          <h3>👥 Team Management</h3>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+            You are a <strong>Team Lead</strong>. Share your team code with members so they can join your team.
+          </p>
+
+          {/* Team Code Display */}
+          <div style={{
+            background: 'var(--surface-alt)',
+            padding: '1.5rem',
+            borderRadius: '8px',
+            textAlign: 'center',
+            marginBottom: '1.5rem'
+          }}>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+              Your Team Code
+            </div>
+            <div style={{
+              fontSize: '2rem',
+              fontWeight: 'bold',
+              fontFamily: 'monospace',
+              letterSpacing: '0.3em',
+              color: 'var(--primary)'
+            }}>
+              {loadingTeam ? '...' : (teamCode || 'No code found')}
+            </div>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={handleRegenerateCode}
+              disabled={regenerating || loadingTeam}
+              style={{ marginTop: '1rem' }}
+            >
+              {regenerating ? 'Regenerating...' : '🔄 Regenerate Code'}
+            </button>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+              Warning: Regenerating will invalidate the old code
+            </p>
+          </div>
+
+          {/* Team Stats */}
+          <div className="stats-grid" style={{ marginBottom: '1.5rem' }}>
+            <div className="stat-card">
+              <div className="stat-value">{loadingTeam ? '...' : teamStats.members}</div>
+              <div className="stat-label">Team Members</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-value">{loadingTeam ? '...' : teamStats.totalEntries}</div>
+              <div className="stat-label">Total Team Entries</div>
+            </div>
+          </div>
+
+          {/* Team Members List */}
+          <h4 style={{ marginBottom: '0.75rem' }}>Team Members</h4>
+          {loadingTeam ? (
+            <p style={{ color: 'var(--text-secondary)' }}>Loading team members...</p>
+          ) : teamMembers.length === 0 ? (
+            <p style={{ color: 'var(--text-secondary)' }}>
+              No members yet. Share your team code to invite scouts!
+            </p>
+          ) : (
+            <div style={{
+              background: 'var(--surface-alt)',
+              borderRadius: '8px',
+              overflow: 'hidden'
+            }}>
+              {teamMembers.map((member, index) => (
+                <div
+                  key={member.uid}
+                  style={{
+                    padding: '0.75rem 1rem',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    borderBottom: index < teamMembers.length - 1 ? '1px solid var(--border)' : 'none'
+                  }}
+                >
+                  <div>
+                    <strong>{member.displayName || 'Unnamed'}</strong>
+                    <span style={{
+                      color: 'var(--text-secondary)',
+                      fontSize: '0.85rem',
+                      marginLeft: '0.5rem'
+                    }}>
+                      {member.email}
+                    </span>
+                  </div>
+                  <span style={{
+                    fontSize: '0.75rem',
+                    color: 'var(--text-secondary)',
+                    background: 'var(--surface)',
+                    padding: '0.25rem 0.5rem',
+                    borderRadius: '4px'
+                  }}>
+                    Member
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Profile Form */}
       <div className="content-card">

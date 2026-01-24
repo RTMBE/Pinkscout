@@ -18,24 +18,83 @@
  * =============================================================================
  */
 
-import { API_KEYS, API_URLS } from './firebase';
+import { API_KEYS, API_URLS } from './supabase';
 
 // =============================================================================
-// HELPER: Make authenticated request to TBA
+// IN-MEMORY CACHE FOR PERFORMANCE
 // =============================================================================
 
-async function tbaFetch(endpoint) {
+const cache = new Map();
+const CACHE_TTL = {
+  events: 5 * 60 * 1000,      // 5 minutes for event list
+  eventDetails: 10 * 60 * 1000, // 10 minutes for event details
+  teams: 30 * 60 * 1000,      // 30 minutes for team data (rarely changes)
+  matches: 2 * 60 * 1000      // 2 minutes for matches (updates during events)
+};
+
+/**
+ * Get cached data or null if expired/missing
+ */
+function getFromCache(key, ttl) {
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < ttl) {
+    return cached.data;
+  }
+  return null;
+}
+
+/**
+ * Store data in cache with timestamp
+ */
+function setCache(key, data) {
+  cache.set(key, { data, timestamp: Date.now() });
+}
+
+/**
+ * Clear specific cache key or all cache
+ */
+export function clearCache(key = null) {
+  if (key) {
+    cache.delete(key);
+  } else {
+    cache.clear();
+  }
+}
+
+// =============================================================================
+// HELPER: Make authenticated request to TBA (with caching)
+// =============================================================================
+
+async function tbaFetch(endpoint, cacheTTL = null) {
+  // Check cache first
+  if (cacheTTL) {
+    const cached = getFromCache(endpoint, cacheTTL);
+    if (cached) {
+      if (import.meta.env.DEV) {
+        console.log(`📦 Cache hit: ${endpoint}`);
+      }
+      return cached;
+    }
+  }
+
   const response = await fetch(`${API_URLS.TBA}${endpoint}`, {
     headers: {
       'X-TBA-Auth-Key': API_KEYS.TBA
     }
   });
-  
+
   if (!response.ok) {
     throw new Error(`TBA API error: ${response.status}`);
   }
-  
-  return response.json();
+
+  const data = await response.json();
+
+  // Cache the response
+  if (cacheTTL) {
+    setCache(endpoint, data);
+  }
+
+  return data;
 }
 
 // =============================================================================
@@ -50,14 +109,16 @@ async function tbaFetch(endpoint) {
  */
 export async function getEventList(year) {
   try {
-    const events = await tbaFetch(`/events/${year}`);
-    
+    const events = await tbaFetch(`/events/${year}`, CACHE_TTL.events);
+
     // Sort by start date
-    return events.sort((a, b) => 
+    return events.sort((a, b) =>
       new Date(a.start_date) - new Date(b.start_date)
     );
   } catch (error) {
-    console.error('Error fetching events:', error);
+    if (import.meta.env.DEV) {
+      console.error('Error fetching events:', error);
+    }
     return [];
   }
 }
@@ -68,15 +129,17 @@ export async function getEventList(year) {
 
 /**
  * Fetch detailed information about a specific event
- * 
+ *
  * @param {string} eventKey - Event key (e.g., "2024casj")
  * @returns {Object} - Event details
  */
 export async function getEventDetails(eventKey) {
   try {
-    return await tbaFetch(`/event/${eventKey}`);
+    return await tbaFetch(`/event/${eventKey}`, CACHE_TTL.eventDetails);
   } catch (error) {
-    console.error('Error fetching event details:', error);
+    if (import.meta.env.DEV) {
+      console.error('Error fetching event details:', error);
+    }
     return null;
   }
 }
@@ -87,15 +150,17 @@ export async function getEventDetails(eventKey) {
 
 /**
  * Fetch all teams attending an event
- * 
+ *
  * @param {string} eventKey - Event key (e.g., "2024casj")
  * @returns {Array} - Array of team objects
  */
 export async function getEventTeams(eventKey) {
   try {
-    return await tbaFetch(`/event/${eventKey}/teams`);
+    return await tbaFetch(`/event/${eventKey}/teams`, CACHE_TTL.teams);
   } catch (error) {
-    console.error('Error fetching event teams:', error);
+    if (import.meta.env.DEV) {
+      console.error('Error fetching event teams:', error);
+    }
     return [];
   }
 }
@@ -112,21 +177,23 @@ export async function getEventTeams(eventKey) {
  */
 export async function getEventMatches(eventKey) {
   try {
-    const matches = await tbaFetch(`/event/${eventKey}/matches`);
-    
+    const matches = await tbaFetch(`/event/${eventKey}/matches`, CACHE_TTL.matches);
+
     // Sort matches by competition level and match number
     const levelOrder = { qm: 0, ef: 1, qf: 2, sf: 3, f: 4 };
     return matches.sort((a, b) => {
       const levelDiff = (levelOrder[a.comp_level] || 0) - (levelOrder[b.comp_level] || 0);
       if (levelDiff !== 0) return levelDiff;
-      
+
       const setDiff = (a.set_number || 0) - (b.set_number || 0);
       if (setDiff !== 0) return setDiff;
-      
+
       return (a.match_number || 0) - (b.match_number || 0);
     });
   } catch (error) {
-    console.error('Error fetching event matches:', error);
+    if (import.meta.env.DEV) {
+      console.error('Error fetching event matches:', error);
+    }
     return [];
   }
 }
@@ -137,15 +204,17 @@ export async function getEventMatches(eventKey) {
 
 /**
  * Fetch information about a specific team
- * 
+ *
  * @param {string|number} teamNumber - FRC team number
  * @returns {Object|null} - Team information or null if not found
  */
 export async function getTeamInfo(teamNumber) {
   try {
-    return await tbaFetch(`/team/frc${teamNumber}`);
+    return await tbaFetch(`/team/frc${teamNumber}`, CACHE_TTL.teams);
   } catch (error) {
-    console.error('Error fetching team info:', error);
+    if (import.meta.env.DEV) {
+      console.error('Error fetching team info:', error);
+    }
     return null;
   }
 }
@@ -162,10 +231,12 @@ export async function getTeamInfo(teamNumber) {
  */
 export async function getEventRankings(eventKey) {
   try {
-    const data = await tbaFetch(`/event/${eventKey}/rankings`);
+    const data = await tbaFetch(`/event/${eventKey}/rankings`, CACHE_TTL.matches);
     return data?.rankings || [];
   } catch (error) {
-    console.error('Error fetching event rankings:', error);
+    if (import.meta.env.DEV) {
+      console.error('Error fetching event rankings:', error);
+    }
     return [];
   }
 }
@@ -189,9 +260,11 @@ export async function getEventRankings(eventKey) {
  */
 export async function getEventAwards(eventKey) {
   try {
-    return await tbaFetch(`/event/${eventKey}/awards`);
+    return await tbaFetch(`/event/${eventKey}/awards`, CACHE_TTL.eventDetails);
   } catch (error) {
-    console.error('Error fetching event awards:', error);
+    if (import.meta.env.DEV) {
+      console.error('Error fetching event awards:', error);
+    }
     return [];
   }
 }
@@ -209,14 +282,16 @@ export async function getEventAwards(eventKey) {
  */
 export async function getTeamEvents(teamNumber, year) {
   try {
-    const events = await tbaFetch(`/team/frc${teamNumber}/events/${year}`);
+    const events = await tbaFetch(`/team/frc${teamNumber}/events/${year}`, CACHE_TTL.events);
 
     // Sort by start date
     return events.sort((a, b) =>
       new Date(a.start_date) - new Date(b.start_date)
     );
   } catch (error) {
-    console.error('Error fetching team events:', error);
+    if (import.meta.env.DEV) {
+      console.error('Error fetching team events:', error);
+    }
     return [];
   }
 }
@@ -234,7 +309,7 @@ export async function getTeamEvents(teamNumber, year) {
  */
 export async function getTeamEventMatches(teamNumber, eventKey) {
   try {
-    const matches = await tbaFetch(`/team/frc${teamNumber}/event/${eventKey}/matches`);
+    const matches = await tbaFetch(`/team/frc${teamNumber}/event/${eventKey}/matches`, CACHE_TTL.matches);
 
     // Sort matches by competition level and match number
     const levelOrder = { qm: 0, ef: 1, qf: 2, sf: 3, f: 4 };
@@ -248,7 +323,9 @@ export async function getTeamEventMatches(teamNumber, eventKey) {
       return (a.match_number || 0) - (b.match_number || 0);
     });
   } catch (error) {
-    console.error('Error fetching team event matches:', error);
+    if (import.meta.env.DEV) {
+      console.error('Error fetching team event matches:', error);
+    }
     return [];
   }
 }
@@ -273,9 +350,11 @@ export async function getTeamEventMatches(teamNumber, eventKey) {
  */
 export async function getTeamAwardsForYear(teamNumber, year) {
   try {
-    return await tbaFetch(`/team/frc${teamNumber}/awards/${year}`);
+    return await tbaFetch(`/team/frc${teamNumber}/awards/${year}`, CACHE_TTL.eventDetails);
   } catch (error) {
-    console.error('Error fetching team awards for year:', error);
+    if (import.meta.env.DEV) {
+      console.error('Error fetching team awards for year:', error);
+    }
     return [];
   }
 }
@@ -292,11 +371,13 @@ export async function getTeamAwardsForYear(teamNumber, year) {
  */
 export async function getTeamAllAwards(teamNumber) {
   try {
-    const awards = await tbaFetch(`/team/frc${teamNumber}/awards`);
+    const awards = await tbaFetch(`/team/frc${teamNumber}/awards`, CACHE_TTL.teams);
     // Sort by year descending
     return awards.sort((a, b) => b.year - a.year);
   } catch (error) {
-    console.error('Error fetching all team awards:', error);
+    if (import.meta.env.DEV) {
+      console.error('Error fetching all team awards:', error);
+    }
     return [];
   }
 }
@@ -314,11 +395,13 @@ export async function getTeamAllAwards(teamNumber) {
  */
 export async function getTeamMatchesForYear(teamNumber, year) {
   try {
-    const matches = await tbaFetch(`/team/frc${teamNumber}/matches/${year}`);
+    const matches = await tbaFetch(`/team/frc${teamNumber}/matches/${year}`, CACHE_TTL.matches);
     // Sort by actual_time or predicted_time
     return matches.sort((a, b) => (a.actual_time || a.predicted_time || 0) - (b.actual_time || b.predicted_time || 0));
   } catch (error) {
-    console.error('Error fetching team matches for year:', error);
+    if (import.meta.env.DEV) {
+      console.error('Error fetching team matches for year:', error);
+    }
     return [];
   }
 }
@@ -335,10 +418,12 @@ export async function getTeamMatchesForYear(teamNumber, year) {
  */
 export async function getTeamYearsParticipated(teamNumber) {
   try {
-    const years = await tbaFetch(`/team/frc${teamNumber}/years_participated`);
+    const years = await tbaFetch(`/team/frc${teamNumber}/years_participated`, CACHE_TTL.teams);
     return years.sort((a, b) => b - a);
   } catch (error) {
-    console.error('Error fetching team years participated:', error);
+    if (import.meta.env.DEV) {
+      console.error('Error fetching team years participated:', error);
+    }
     return [];
   }
 }
@@ -364,7 +449,9 @@ export async function getFullEventData(eventKey) {
 
     return { event, teams, matches, rankings };
   } catch (error) {
-    console.error('Error fetching full event data:', error);
+    if (import.meta.env.DEV) {
+      console.error('Error fetching full event data:', error);
+    }
     return { event: null, teams: [], matches: [], rankings: [] };
   }
 }

@@ -41,7 +41,7 @@ const STORAGE_KEY_EVENT = 'pinkscout_scouting_event';
 
 export default function Scouting() {
   const navigate = useNavigate();
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, roleContext } = useAuth();
 
   // ==========================================================================
   // EVENT SELECTION STATE
@@ -223,16 +223,31 @@ export default function Scouting() {
         throw new Error('Please select an event');
       }
 
-      // Add scouter info and event key
+      // Check for either scoutingId (legacy) OR teamLeadUid (new team system)
+      if (!roleContext?.scoutingId && !roleContext?.teamLeadUid) {
+        throw new Error('Your account is not linked to a team. Please update your profile or join a team.');
+      }
+
+      // Add scouter info, event key, and isolation IDs
       const dataToSave = {
         ...formData,
         teamNumber: parseInt(formData.teamNumber),
-        matchNumber: parseInt(formData.matchNumber) || null,
+        matchNumber: parseInt(formData.matchNumber) || 0,
         eventKey: selectedEvent,
         eventYear: selectedYear,
         scouterName: userProfile?.displayName || user?.displayName || user?.email,
         scouterUid: user?.uid
       };
+
+      // Include scoutingId if available (legacy system)
+      if (roleContext.scoutingId) {
+        dataToSave.scoutingId = roleContext.scoutingId;
+      }
+
+      // Include teamLeadUid if available (new team system)
+      if (roleContext.teamLeadUid) {
+        dataToSave.teamLeadUid = roleContext.teamLeadUid;
+      }
 
       await saveScoutingData(dataToSave);
       setSuccess(true);

@@ -2,19 +2,19 @@
  * =============================================================================
  * MAIN.JSX - React Application Entry Point
  * =============================================================================
- * 
+ *
  * WHAT IS THIS FILE?
  * This is the entry point for the React application. It:
  * 1. Creates the React root element
  * 2. Wraps the app with necessary providers (Auth, Router, Helmet)
  * 3. Mounts the App component to the DOM
- * 
+ *
  * PROVIDER HIERARCHY:
  * - HelmetProvider: For SEO meta tags
  * - BrowserRouter: For client-side routing
- * - AuthProvider: For Firebase authentication state
+ * - AuthProvider: For Supabase authentication state
  * - App: The main application component
- * 
+ *
  * =============================================================================
  */
 
@@ -26,7 +26,7 @@ import { HelmetProvider } from 'react-helmet-async'
 // Import the main App component
 import App from './App.jsx'
 
-// Import the Auth context provider for Firebase authentication
+// Import the Auth context provider for Supabase authentication
 import { AuthProvider } from './contexts/AuthContext.jsx'
 
 // Import global styles (ported from existing style.css)
@@ -45,7 +45,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <HelmetProvider>
       {/* BrowserRouter enables client-side routing */}
       <BrowserRouter>
-        {/* AuthProvider manages Firebase auth state globally */}
+        {/* AuthProvider manages Supabase auth state globally */}
         <AuthProvider>
           <App />
         </AuthProvider>

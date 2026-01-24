@@ -22,8 +22,10 @@ import { Helmet } from 'react-helmet-async';
 import { getStatboticsTeam } from '../services/statboticsAPI';
 import { getTeamScoutingData } from '../services/scoutingService';
 import { scaleStatboticsEPA, classifyEPA, getEPAPercentile } from '../utils/epaUtils';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Analytics() {
+  const { roleContext } = useAuth();
   // ==========================================================================
   // STATE
   // ==========================================================================
@@ -56,7 +58,7 @@ export default function Analytics() {
       // Use Promise.allSettled to handle individual failures gracefully
       const [statboticsResult, scoutingResult] = await Promise.allSettled([
         getStatboticsTeam(teamNumber),
-        getTeamScoutingData(teamNumber)
+        getTeamScoutingData(teamNumber, { roleContext })
       ]);
 
       const statbotics = statboticsResult.status === 'fulfilled' ? statboticsResult.value : null;

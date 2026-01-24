@@ -220,6 +220,103 @@ export async function getTeamInfo(teamNumber) {
 }
 
 // =============================================================================
+// GET SEARCH INDEX (for team name search)
+// =============================================================================
+
+/**
+ * Fetch the search index containing all teams and events
+ * Used for team name search functionality
+ *
+ * @returns {Object} - { teams: [{key, nickname}], events: [{key, name}] }
+ */
+export async function getSearchIndex() {
+  try {
+    return await tbaFetch('/search_index', CACHE_TTL.teams);
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error('Error fetching search index:', error);
+    }
+    return { teams: [], events: [] };
+  }
+}
+
+/**
+ * Search teams by name or number
+ * Returns ranked results: exact team number match first, then partial number, then name matches
+ *
+ * @param {string} query - Search query (team number or team name)
+ * @param {number} maxResults - Maximum number of results to return (default: 10)
+ * @returns {Array} - Array of { teamNumber, nickname, matchType } sorted by relevance
+ */
+export async function searchTeams(query, maxResults = 10) {
+  if (!query || !query.trim()) return [];
+
+  const searchQuery = query.trim().toLowerCase();
+  const isNumeric = /^\d+$/.test(searchQuery);
+
+  // Get search index
+  const searchIndex = await getSearchIndex();
+  if (!searchIndex.teams || searchIndex.teams.length === 0) {
+    return [];
+  }
+
+  const results = [];
+
+  for (const team of searchIndex.teams) {
+    // Extract team number from key (e.g., "frc254" -> "254")
+    const teamNumber = team.key.replace('frc', '');
+    const nickname = team.nickname || '';
+
+    let matchType = null;
+    let score = 0;
+
+    if (isNumeric) {
+      // Numeric search - prioritize team number matches
+      if (teamNumber === searchQuery) {
+        matchType = 'exact_number';
+        score = 100;
+      } else if (teamNumber.startsWith(searchQuery)) {
+        matchType = 'partial_number_start';
+        score = 80;
+      } else if (teamNumber.includes(searchQuery)) {
+        matchType = 'partial_number';
+        score = 60;
+      }
+    } else {
+      // Text search - search by team name (case-insensitive)
+      const nicknameLower = nickname.toLowerCase();
+      if (nicknameLower === searchQuery) {
+        matchType = 'exact_name';
+        score = 90;
+      } else if (nicknameLower.startsWith(searchQuery)) {
+        matchType = 'partial_name_start';
+        score = 70;
+      } else if (nicknameLower.includes(searchQuery)) {
+        matchType = 'partial_name';
+        score = 50;
+      }
+    }
+
+    if (matchType) {
+      results.push({
+        teamNumber,
+        nickname,
+        matchType,
+        score
+      });
+    }
+  }
+
+  // Sort by score (descending), then by team number (ascending)
+  results.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return parseInt(a.teamNumber) - parseInt(b.teamNumber);
+  });
+
+  return results.slice(0, maxResults);
+}
+
+// =============================================================================
 // GET EVENT RANKINGS
 // =============================================================================
 

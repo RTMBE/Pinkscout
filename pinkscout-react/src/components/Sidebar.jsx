@@ -27,8 +27,11 @@ import ThemeToggle from './ThemeToggle';
  *
  * Displays navigation links and user information.
  * Uses NavLink from React Router for automatic active class.
+ *
+ * @param {boolean} isOpen - Whether sidebar is open on mobile (ignored on desktop)
+ * @param {function} onClose - Callback to close sidebar on mobile
  */
-export default function Sidebar() {
+export default function Sidebar({ isOpen = false, onClose }) {
   // Get auth state from context
   const { user, userProfile, logout } = useAuth();
 
@@ -43,7 +46,7 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isOpen ? 'mobile-open' : ''}`}>
       {/* ================================================================
           SIDEBAR HEADER - App Branding
           ================================================================ */}

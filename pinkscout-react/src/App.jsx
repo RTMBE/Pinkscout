@@ -25,7 +25,7 @@
 
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 
 // Import layout components
 import Sidebar from './components/Sidebar';
@@ -108,11 +108,49 @@ function AdminRoute({ children }) {
 // =============================================================================
 /**
  * Main layout with sidebar (used for all pages except login)
+ * Includes mobile sidebar toggle functionality
  */
 function Layout({ children }) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const location = useLocation();
+
+  // Close mobile menu when route changes
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
+
+  // Close mobile menu when clicking overlay
+  const handleOverlayClick = () => {
+    setMobileMenuOpen(false);
+  };
+
+  // Toggle mobile menu
+  const toggleMobileMenu = () => {
+    setMobileMenuOpen(prev => !prev);
+  };
+
   return (
     <div className="app-container">
-      <Sidebar />
+      {/* Mobile hamburger button - only visible on mobile */}
+      <button
+        className="mobile-menu-btn"
+        onClick={toggleMobileMenu}
+        aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+        aria-expanded={mobileMenuOpen}
+      >
+        {mobileMenuOpen ? '✕' : '☰'}
+      </button>
+
+      {/* Overlay for mobile - closes sidebar when clicked */}
+      {mobileMenuOpen && (
+        <div
+          className="mobile-sidebar-overlay"
+          onClick={handleOverlayClick}
+          aria-hidden="true"
+        />
+      )}
+
+      <Sidebar isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
       <main className="main-content">
         {children}
       </main>

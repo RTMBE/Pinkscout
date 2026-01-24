@@ -14,11 +14,11 @@
  * =============================================================================
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { getStatboticsTeam, getTeamYearStats } from '../services/statboticsAPI';
-import { getTeamInfo, getTeamAllAwards, getTeamAwardsForYear, getTeamMatchesForYear, getTeamYearsParticipated } from '../services/blueAllianceAPI';
+import { getTeamInfo, getTeamAllAwards, getTeamAwardsForYear, getTeamMatchesForYear, getTeamYearsParticipated, searchTeams } from '../services/blueAllianceAPI';
 import { getTeamScoutingData } from '../services/scoutingService';
 import { scaleStatboticsEPA, classifyEPA, getEPAPercentile, calculateAutoPoints, calculateTeleopPoints } from '../utils/epaUtils';
 import { useAuth } from '../contexts/AuthContext';
@@ -36,6 +36,13 @@ export default function Teams() {
   const [scoutingData, setScoutingData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Search suggestions state
+  const [searchResults, setSearchResults] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchingTeams, setSearchingTeams] = useState(false);
+  const searchInputRef = useRef(null);
+  const suggestionsRef = useRef(null);
 
   // Awards state
   const [allAwards, setAllAwards] = useState([]);
@@ -65,6 +72,52 @@ export default function Teams() {
   }, [searchParams]);
 
   // ==========================================================================
+  // SEARCH SUGGESTIONS (debounced team name/number search)
+  // ==========================================================================
+
+  useEffect(() => {
+    const query = teamNumber.trim();
+    if (query.length < 2) {
+      setSearchResults([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    // Debounce the search
+    const timer = setTimeout(async () => {
+      setSearchingTeams(true);
+      try {
+        const results = await searchTeams(query, 8);
+        setSearchResults(results);
+        setShowSuggestions(results.length > 0);
+      } catch (err) {
+        console.error('Error searching teams:', err);
+        setSearchResults([]);
+      } finally {
+        setSearchingTeams(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [teamNumber]);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (
+        suggestionsRef.current &&
+        !suggestionsRef.current.contains(e.target) &&
+        searchInputRef.current &&
+        !searchInputRef.current.contains(e.target)
+      ) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // ==========================================================================
   // SEARCH HANDLER
   // ==========================================================================
 
@@ -72,12 +125,20 @@ export default function Teams() {
     e.preventDefault();
     if (!teamNumber.trim()) return;
 
+    setShowSuggestions(false);
     // Update URL
     setSearchParams({ team: teamNumber.trim() });
     searchTeam(teamNumber.trim());
   };
 
-  const searchTeam = async (number) => {
+  const handleSelectSuggestion = (result) => {
+    setTeamNumber(result.teamNumber);
+    setShowSuggestions(false);
+    setSearchParams({ team: result.teamNumber });
+    searchTeam(result.teamNumber);
+  };
+
+  const searchTeam = async (query) => {
     setLoading(true);
     setError(null);
     setTeamData(null);
@@ -91,15 +152,39 @@ export default function Teams() {
     setSelectedYear('all');
     setSelectedEvent('all');
 
+    // Check if query is a valid team number
+    const isNumeric = /^\d+$/.test(query);
+
+    // If not numeric, try to find a matching team first
+    let teamNumberToSearch = query;
+    if (!isNumeric) {
+      try {
+        const results = await searchTeams(query, 1);
+        if (results.length > 0) {
+          teamNumberToSearch = results[0].teamNumber;
+          setTeamNumber(teamNumberToSearch);
+        } else {
+          setError(`No team found matching "${query}". Try searching by team number or select from suggestions.`);
+          setLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.error('Error searching for team:', err);
+        setError(`Could not search for "${query}". Please enter a team number directly.`);
+        setLoading(false);
+        return;
+      }
+    }
+
     try {
       // Fetch data from all sources in parallel, handling individual failures
       const [statboticsResult, tbaResult, scoutingResult, awardsResult, thisYearMatchesResult, thisYearStatsResult] = await Promise.allSettled([
-        getStatboticsTeam(number),
-        getTeamInfo(number),
-        getTeamScoutingData(number, { roleContext }),
-        getTeamAllAwards(number),
-        getTeamMatchesForYear(number, currentYear),
-        getTeamYearStats(number, currentYear)
+        getStatboticsTeam(teamNumberToSearch),
+        getTeamInfo(teamNumberToSearch),
+        getTeamScoutingData(teamNumberToSearch, { roleContext }),
+        getTeamAllAwards(teamNumberToSearch),
+        getTeamMatchesForYear(teamNumberToSearch, currentYear),
+        getTeamYearStats(teamNumberToSearch, currentYear)
       ]);
 
       const statbotics = statboticsResult.status === 'fulfilled' ? statboticsResult.value : null;
@@ -110,7 +195,7 @@ export default function Teams() {
       const yearStats = thisYearStatsResult.status === 'fulfilled' ? thisYearStatsResult.value : null;
 
       if (!statbotics && !tba) {
-        setError(`Team ${number} not found. Please check the team number.`);
+        setError(`Team ${teamNumberToSearch} not found. Please check the team number.`);
         return;
       }
 
@@ -287,16 +372,84 @@ export default function Teams() {
       {/* Search Bar */}
       <div className="content-card search-card">
         <form onSubmit={handleSearch} className="search-form">
-          <input
-            type="text"
-            value={teamNumber}
-            onChange={(e) => setTeamNumber(e.target.value)}
-            placeholder="Enter team number (e.g., 254)"
-            pattern="[0-9]+"
-            title="Enter a team number"
-            className="search-input"
-            style={{ flex: 1 }}
-          />
+          <div style={{ flex: 1, position: 'relative' }}>
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={teamNumber}
+              onChange={(e) => setTeamNumber(e.target.value)}
+              onFocus={() => searchResults.length > 0 && setShowSuggestions(true)}
+              placeholder="Search by team number or name (e.g., 254 or Cheesy Poofs)"
+              title="Enter a team number or team name"
+              className="search-input"
+              style={{ width: '100%' }}
+              autoComplete="off"
+            />
+            {/* Search Suggestions Dropdown */}
+            {showSuggestions && searchResults.length > 0 && (
+              <div
+                ref={suggestionsRef}
+                className="search-suggestions"
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  backgroundColor: 'var(--card-bg)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-md)',
+                  boxShadow: 'var(--shadow-lg)',
+                  zIndex: 100,
+                  marginTop: '4px',
+                  maxHeight: '300px',
+                  overflowY: 'auto'
+                }}
+              >
+                {searchResults.map((result, idx) => (
+                  <div
+                    key={result.teamNumber}
+                    onClick={() => handleSelectSuggestion(result)}
+                    style={{
+                      padding: 'var(--spacing-sm) var(--spacing-md)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      borderBottom: idx < searchResults.length - 1 ? '1px solid var(--border-color)' : 'none',
+                      transition: 'background-color 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--hover-bg)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <span>
+                      <strong style={{ color: 'var(--primary-color)' }}>#{result.teamNumber}</strong>
+                      {' '}
+                      <span style={{ color: 'var(--text-secondary)' }}>{result.nickname}</span>
+                    </span>
+                    <span style={{
+                      fontSize: '0.75rem',
+                      color: 'var(--text-muted)',
+                      textTransform: 'capitalize'
+                    }}>
+                      {result.matchType.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {searchingTeams && teamNumber.length >= 2 && (
+              <div style={{
+                position: 'absolute',
+                right: '12px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                fontSize: '0.8rem',
+                color: 'var(--text-muted)'
+              }}>
+                ...
+              </div>
+            )}
+          </div>
           <button type="submit" className="btn btn-primary" disabled={loading}>
             {loading ? 'Searching...' : 'Search'}
           </button>

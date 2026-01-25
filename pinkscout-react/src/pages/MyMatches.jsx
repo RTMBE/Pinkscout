@@ -22,7 +22,7 @@ import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../contexts/AuthContext';
 import { getTeamEvents, getTeamEventMatches, getEventTeams, getEventRankings } from '../services/blueAllianceAPI';
 import { getEventTeamStats } from '../services/statboticsAPI';
-import { getEventScoutingData } from '../services/scoutingService';
+import { getEventScoutingData, getCrossEventScoutingData } from '../services/scoutingService';
 import { classifyEPA, calculateAutoPoints, calculateTeleopPoints } from '../utils/epaUtils';
 import { predictMatch } from '../utils/predictionUtils';
 
@@ -41,6 +41,7 @@ export default function MyMatches() {
   const [eventTeams, setEventTeams] = useState([]);
   const [teamStats, setTeamStats] = useState([]);
   const [scoutingData, setScoutingData] = useState([]);
+  const [crossEventScoutingData, setCrossEventScoutingData] = useState({});  // Cross-event scouting data by team number
   const [loading, setLoading] = useState(true);
   const [loadingMatches, setLoadingMatches] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState(null);
@@ -127,6 +128,7 @@ export default function MyMatches() {
     setLoadingMatches(true);
     setMatches([]);
     setTeamRanking(null);
+    setCrossEventScoutingData({});  // Reset cross-event data
 
     try {
       const [matchData, teams, stats, scouting, rankings] = await Promise.allSettled([
@@ -137,8 +139,10 @@ export default function MyMatches() {
         getEventRankings(event.key)
       ]);
 
+      const loadedTeams = teams.status === 'fulfilled' ? teams.value : [];
+
       setMatches(matchData.status === 'fulfilled' ? matchData.value : []);
-      setEventTeams(teams.status === 'fulfilled' ? teams.value : []);
+      setEventTeams(loadedTeams);
       setTeamStats(stats.status === 'fulfilled' ? stats.value : []);
       setScoutingData(scouting.status === 'fulfilled' ? scouting.value : []);
 
@@ -146,6 +150,23 @@ export default function MyMatches() {
       if (rankings.status === 'fulfilled' && rankings.value) {
         const ourRanking = rankings.value.find(r => r.team_key === `frc${teamNumber}`);
         setTeamRanking(ourRanking || null);
+      }
+
+      // Fetch cross-event scouting data for all teams at this event (async, non-blocking)
+      // This enables cross-event scouting decay for match predictions
+      if (loadedTeams.length > 0) {
+        const teamNumbers = loadedTeams.map(t => t.team_number).filter(Boolean);
+        getCrossEventScoutingData(teamNumbers, roleContext)
+          .then(crossEventData => {
+            setCrossEventScoutingData(crossEventData);
+            if (import.meta.env.DEV) {
+              const totalEntries = Object.values(crossEventData).reduce((sum, arr) => sum + arr.length, 0);
+              console.log(`Cross-event scouting loaded: ${totalEntries} entries for ${Object.keys(crossEventData).length} teams`);
+            }
+          })
+          .catch(err => {
+            console.warn('Failed to load cross-event scouting data:', err);
+          });
       }
     } catch (error) {
       console.error('Error loading event matches:', error);
@@ -211,8 +232,11 @@ export default function MyMatches() {
   };
 
   // Generate match prediction
+  // Supports cross-event scouting with decay for teams with sparse current-event data
   const getMatchPrediction = (match) => {
     if (!match || isMatchPlayed(match)) return null;
+
+    const currentEventKey = selectedEvent?.key;
 
     const buildAllianceData = (teamKeys) => {
       return {
@@ -220,10 +244,17 @@ export default function MyMatches() {
           const teamNum = parseInt(key.replace('frc', ''));
           const teamScoutingEntries = scoutingData.filter(d => d.teamNumber === teamNum);
           const statboticsTeamData = teamStats.find(t => t.team === teamNum);
+
+          // Get cross-event scouting data for this team (all events)
+          const allScoutingEntries = crossEventScoutingData[teamNum] || [];
+
           return {
             teamKey: key,
             scoutingEntries: teamScoutingEntries,
-            statboticsData: statboticsTeamData
+            statboticsData: statboticsTeamData,
+            // Cross-event scouting fields - used when current event data is sparse
+            allScoutingEntries: allScoutingEntries.length > 0 ? allScoutingEntries : null,
+            currentEventKey: currentEventKey
           };
         })
       };

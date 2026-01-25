@@ -630,3 +630,67 @@ export async function getPaginatedScoutingData(options = {}) {
   }
 }
 
+// =============================================================================
+// CROSS-EVENT SCOUTING DATA
+// =============================================================================
+
+/**
+ * Get all scouting entries for multiple teams across all events
+ * Used for cross-event scouting decay in match predictions
+ * Returns a map of teamNumber -> [all scouting entries]
+ *
+ * @param {Array<number>} teamNumbers - Array of team numbers to fetch data for
+ * @param {Object} roleContext - Role context for filtering
+ * @returns {Object} - Map of teamNumber -> entries array
+ */
+export async function getCrossEventScoutingData(teamNumbers, roleContext = null) {
+  if (!teamNumbers || teamNumbers.length === 0) {
+    return {};
+  }
+
+  try {
+    // Build query for all specified teams
+    let query = supabase
+      .from(SCOUTING_COLLECTION)
+      .select('*')
+      .in('team_number', teamNumbers)
+      .order('created_at', { ascending: false });
+
+    // Apply role-based filtering
+    if (roleContext?.isMasterAdmin) {
+      // Master admin sees all - no filter
+    } else if (roleContext?.teamLeadUid) {
+      query = query.eq('team_lead_uid', roleContext.teamLeadUid);
+    } else if (roleContext?.canViewAll && roleContext?.scoutingId) {
+      query = query.eq('scouting_id', roleContext.scoutingId);
+    } else if (roleContext?.userUid) {
+      query = query.eq('scouter_uid', roleContext.userUid);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    // Group entries by team number
+    const result = {};
+    for (const entry of (data || [])) {
+      const camelEntry = {
+        id: entry.id,
+        ...convertToCamelCase(entry)
+      };
+      const teamNum = camelEntry.teamNumber;
+      if (!result[teamNum]) {
+        result[teamNum] = [];
+      }
+      result[teamNum].push(camelEntry);
+    }
+
+    return result;
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error('❌ Error fetching cross-event scouting data:', error);
+    }
+    // Return empty object on error - cross-event data is optional
+    return {};
+  }
+}

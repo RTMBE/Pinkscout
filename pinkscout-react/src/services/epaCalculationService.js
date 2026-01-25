@@ -39,24 +39,32 @@ const ADJUSTED_EPA_COLLECTION = 'adjustedEPA';
 const EPA_CONFIG = {
   // Minimum matches before scouting data influences EPA
   MIN_MATCHES_FOR_ADJUSTMENT: 1,
-  
+
   // Base weight for scouting influence (increases with match count)
   BASE_SCOUTING_WEIGHT: 0.1,
-  
-  // Maximum scouting weight (after many matches)
-  MAX_SCOUTING_WEIGHT: 0.95,
-  
+
+  // Maximum scouting weight (after many matches) - can reach 1.0 for full scouting dominance
+  MAX_SCOUTING_WEIGHT: 1.0,
+
   // Matches needed to reach max weight
   MATCHES_FOR_MAX_WEIGHT: 12,
-  
-  // Maximum adjustment as percentage of baseline EPA
-  MAX_ADJUSTMENT_PERCENT: 0.15, // 15%
-  
+
+  // Matches for full scouting dominance (100% scouting, 0% Statbotics)
+  MATCHES_FOR_FULL_DOMINANCE: 16,
+
   // Minimum baseline EPA to prevent division issues
   MIN_BASELINE_EPA: 1.0,
-  
+
   // Cache expiry in milliseconds (1 hour)
-  CACHE_EXPIRY_MS: 60 * 60 * 1000
+  CACHE_EXPIRY_MS: 60 * 60 * 1000,
+
+  // Reliability thresholds
+  RELIABILITY: {
+    HIGH_THRESHOLD: 0.75,      // 75%+ success rate = high reliability
+    MEDIUM_THRESHOLD: 0.50,   // 50%+ success rate = medium reliability
+    HIGH_BONUS: 1.05,          // 5% bonus for high reliability
+    LOW_PENALTY: 0.92          // 8% penalty for low reliability
+  }
 };
 
 // =============================================================================
@@ -288,16 +296,30 @@ function calculateConsistency(entries) {
 /**
  * Calculate weight for scouting data based on match count
  * More matches = higher confidence = higher weight
+ * With sufficient matches (16+), scouting data fully dominates (100% weight)
  *
  * @param {number} matchCount - Number of scouting entries
- * @returns {number} - Weight between BASE and MAX
+ * @returns {number} - Weight between 0 and 1.0 (full dominance at 16+ matches)
  */
 function calculateScoutingWeight(matchCount) {
   if (matchCount < EPA_CONFIG.MIN_MATCHES_FOR_ADJUSTMENT) {
     return 0; // Not enough data
   }
 
-  const { BASE_SCOUTING_WEIGHT, MAX_SCOUTING_WEIGHT, MATCHES_FOR_MAX_WEIGHT } = EPA_CONFIG;
+  const {
+    BASE_SCOUTING_WEIGHT,
+    MAX_SCOUTING_WEIGHT,
+    MATCHES_FOR_MAX_WEIGHT,
+    MATCHES_FOR_FULL_DOMINANCE
+  } = EPA_CONFIG;
+
+  // Two-phase weight progression:
+  // Phase 1: 1-12 matches → 0.1 to 1.0 weight (linear interpolation)
+  // Phase 2: 16+ matches → full 1.0 weight (scouting fully dominates)
+
+  if (matchCount >= MATCHES_FOR_FULL_DOMINANCE) {
+    return 1.0; // Full scouting dominance - Statbotics has no influence
+  }
 
   // Linear interpolation from base to max weight
   const progress = Math.min(1, matchCount / MATCHES_FOR_MAX_WEIGHT);
@@ -306,7 +328,8 @@ function calculateScoutingWeight(matchCount) {
 
 /**
  * Calculate EPA adjustment from scouting metrics
- * Returns a delta value to add to baseline EPA
+ * With sufficient scouting data (16+ matches), scouting fully overrides Statbotics
+ * No hard cap on adjustments - weight determines blend
  *
  * @param {Object} scoutingMetrics - Analyzed scouting data
  * @param {Object} baseline - Baseline EPA data
@@ -335,28 +358,33 @@ function calculateEPAAdjustment(scoutingMetrics, baseline) {
   const rawTotalAdjust = scoutedTotal - (baseline.epaTotal || 0);
 
   // Apply weight and consistency bonus
+  // Consistency multiplier: low consistency (0) = 0.8x, high consistency (1) = 1.2x
   const consistencyMultiplier = 0.8 + (0.4 * scoutingMetrics.consistency);
 
-  // Calculate weighted adjustments
+  // Calculate weighted adjustments - NO CLAMPING
+  // With 16+ matches (weight = 1.0), scouting data fully determines EPA
+  // The adjustment is now purely weight-based, allowing scouting to override Statbotics
   const weightedTotal = rawTotalAdjust * weight * consistencyMultiplier;
   const weightedAuto = rawAutoAdjust * weight * consistencyMultiplier;
   const weightedTeleop = rawTeleopAdjust * weight * consistencyMultiplier;
   const weightedEndgame = rawEndgameAdjust * weight * consistencyMultiplier;
 
-  // Clamp adjustments to prevent extreme swings
-  const maxAdjust = Math.max(
-    EPA_CONFIG.MIN_BASELINE_EPA,
-    (baseline.epaTotal || 0) * EPA_CONFIG.MAX_ADJUSTMENT_PERCENT
-  );
-
+  // Return unclamped adjustments - scouting data can now fully override Statbotics
   return {
-    total: clamp(weightedTotal, -maxAdjust, maxAdjust),
-    auto: clamp(weightedAuto, -maxAdjust / 3, maxAdjust / 3),
-    teleop: clamp(weightedTeleop, -maxAdjust / 2, maxAdjust / 2),
-    endgame: clamp(weightedEndgame, -maxAdjust / 3, maxAdjust / 3),
+    total: weightedTotal,
+    auto: weightedAuto,
+    teleop: weightedTeleop,
+    endgame: weightedEndgame,
     weight,
     matchCount: scoutingMetrics.matchCount,
-    consistency: scoutingMetrics.consistency
+    consistency: scoutingMetrics.consistency,
+    // Store scouted values for transparency
+    scoutedPoints: {
+      auto: scoutedAutoPoints,
+      teleop: scoutedTeleopPoints,
+      endgame: scoutedEndgamePoints,
+      total: scoutedTotal
+    }
   };
 }
 

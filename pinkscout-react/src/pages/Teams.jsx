@@ -20,7 +20,7 @@ import { Helmet } from 'react-helmet-async';
 import { getStatboticsTeam, getTeamYearStats } from '../services/statboticsAPI';
 import { getTeamInfo, getTeamAllAwards, getTeamAwardsForYear, getTeamMatchesForYear, getTeamYearsParticipated, searchTeams } from '../services/blueAllianceAPI';
 import { getTeamScoutingData } from '../services/scoutingService';
-import { scaleStatboticsEPA, classifyEPA, getEPAPercentile, calculateAutoPoints, calculateTeleopPoints } from '../utils/epaUtils';
+import { scaleStatboticsEPA, classifyEPA, getEPAPercentile, calculateAutoPoints, calculateTeleopPoints, EPA_TYPES, EPA_TYPE_LABELS, getEPAByType, calculateTrueEPA } from '../utils/epaUtils';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Teams() {
@@ -58,6 +58,9 @@ export default function Teams() {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState('all');
   const [selectedEvent, setSelectedEvent] = useState('all');
+
+  // EPA type state (for dropdown selector)
+  const [epaType, setEpaType] = useState(EPA_TYPES.OVERALL);
 
   // ==========================================================================
   // SEARCH ON URL PARAM CHANGE
@@ -316,7 +319,34 @@ export default function Teams() {
   // COMPUTED VALUES
   // ==========================================================================
 
-  const epaValue = teamData ? scaleStatboticsEPA(teamData) : 0;
+  // Calculate True EPA from scouting data (independent of Statbotics)
+  const trueEPA = useMemo(() => calculateTrueEPA(filteredScoutingData), [filteredScoutingData]);
+
+  // Get EPA value based on selected type
+  const epaValue = useMemo(() => {
+    if (epaType === EPA_TYPES.TRUE) {
+      return trueEPA.hasData ? trueEPA.total : null;
+    }
+    return teamData ? getEPAByType(teamData, epaType) : 0;
+  }, [teamData, epaType, trueEPA]);
+
+  // Get component EPA values for True EPA display
+  const epaComponentValue = useMemo(() => {
+    if (epaType === EPA_TYPES.TRUE) {
+      return trueEPA.hasData ? trueEPA.total : null;
+    }
+    if (epaType === EPA_TYPES.AUTO) {
+      return epaType === EPA_TYPES.TRUE ? trueEPA.auto : getEPAByType(teamData, EPA_TYPES.AUTO);
+    }
+    if (epaType === EPA_TYPES.TELEOP) {
+      return epaType === EPA_TYPES.TRUE ? trueEPA.teleop : getEPAByType(teamData, EPA_TYPES.TELEOP);
+    }
+    if (epaType === EPA_TYPES.ENDGAME) {
+      return epaType === EPA_TYPES.TRUE ? trueEPA.endgame : getEPAByType(teamData, EPA_TYPES.ENDGAME);
+    }
+    return epaValue;
+  }, [teamData, epaType, trueEPA, epaValue]);
+
   const epaPercentile = teamData ? getEPAPercentile(teamData) : 0;
   const classification = classifyEPA(epaPercentile);
 
@@ -513,18 +543,51 @@ export default function Teams() {
             <div className="content-card">
               <h3>📊 Team Overview</h3>
               <div className="overview-cards">
-                {/* EPA Rating Card */}
-                <div className="overview-card epa-card" style={{ borderLeftColor: classification.color }}>
+                {/* EPA Rating Card with Dropdown */}
+                <div className="overview-card epa-card" style={{ borderLeftColor: epaType === EPA_TYPES.TRUE ? (trueEPA.hasData ? '#4CAF50' : '#9E9E9E') : classification.color }}>
                   <div className="overview-card-header">
                     <span className="overview-icon">📊</span>
-                    <span>EPA Rating</span>
+                    <select
+                      value={epaType}
+                      onChange={(e) => setEpaType(e.target.value)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'inherit',
+                        fontSize: 'inherit',
+                        fontWeight: 'inherit',
+                        cursor: 'pointer',
+                        padding: '0',
+                        marginLeft: '-4px'
+                      }}
+                    >
+                      {Object.entries(EPA_TYPE_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
                   </div>
-                  <div className="overview-card-value">{epaValue.toFixed(1)}</div>
+                  <div className="overview-card-value">
+                    {epaType === EPA_TYPES.TRUE ? (
+                      trueEPA.hasData ? trueEPA.total.toFixed(1) : '—'
+                    ) : (
+                      epaValue !== null ? epaValue.toFixed(1) : '0.0'
+                    )}
+                  </div>
                   <div className="overview-card-sub">
-                    Percentile: {epaPercentile.toFixed(0)}%
-                    <span className="mini-badge" style={{ color: classification.color }}>
-                      {classification.emoji} {classification.label}
-                    </span>
+                    {epaType === EPA_TYPES.TRUE ? (
+                      trueEPA.hasData ? (
+                        <span>{trueEPA.matchCount} match{trueEPA.matchCount !== 1 ? 'es' : ''} scouted</span>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)' }}>Insufficient scouting data</span>
+                      )
+                    ) : (
+                      <>
+                        Percentile: {epaPercentile.toFixed(0)}%
+                        <span className="mini-badge" style={{ color: classification.color }}>
+                          {classification.emoji} {classification.label}
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -578,14 +641,32 @@ export default function Teams() {
               <div className="split-pane">
                 <div className="content-card data-source-card">
                   <h3>📈 Statbotics Data</h3>
-                  <p className="pane-subtitle">External EPA rankings and statistics</p>
+                  <p className="pane-subtitle">External EPA rankings and statistics (points per match)</p>
                   {teamData ? (
                     <div className="stat-boxes-grid">
                       <div className="stat-box epa-box">
                         <div className="stat-box-value" style={{ color: '#e91e63' }}>
-                          {epaValue.toFixed(1)}
+                          {getEPAByType(teamData, EPA_TYPES.OVERALL)?.toFixed(1) || '0.0'}
                         </div>
-                        <div className="stat-box-label">EPA</div>
+                        <div className="stat-box-label">Overall EPA</div>
+                      </div>
+                      <div className="stat-box">
+                        <div className="stat-box-value" style={{ color: '#2196F3' }}>
+                          {getEPAByType(teamData, EPA_TYPES.AUTO)?.toFixed(1) || '0.0'}
+                        </div>
+                        <div className="stat-box-label">Auto EPA</div>
+                      </div>
+                      <div className="stat-box">
+                        <div className="stat-box-value" style={{ color: '#4CAF50' }}>
+                          {getEPAByType(teamData, EPA_TYPES.TELEOP)?.toFixed(1) || '0.0'}
+                        </div>
+                        <div className="stat-box-label">Teleop EPA</div>
+                      </div>
+                      <div className="stat-box">
+                        <div className="stat-box-value" style={{ color: '#FF9800' }}>
+                          {getEPAByType(teamData, EPA_TYPES.ENDGAME)?.toFixed(1) || '0.0'}
+                        </div>
+                        <div className="stat-box-label">Endgame EPA</div>
                       </div>
                       <div className="stat-box">
                         <div className="stat-box-value" style={{ color: '#e91e63' }}>
@@ -595,25 +676,9 @@ export default function Teams() {
                       </div>
                       <div className="stat-box">
                         <div className="stat-box-value">
-                          {teamData?.rank || 'N/A'}
-                        </div>
-                        <div className="stat-box-label">Rank</div>
-                      </div>
-                      <div className="stat-box">
-                        <div className="stat-box-value" style={{ color: '#e91e63' }}>
                           {wins}-{losses}-{ties}
                         </div>
                         <div className="stat-box-label">Record</div>
-                      </div>
-                      <div className="stat-box">
-                        <div className="stat-box-value">
-                          {tbaData?.rookie_year || teamData?.rookie_year || 'N/A'}
-                        </div>
-                        <div className="stat-box-label">Rookie Year</div>
-                      </div>
-                      <div className="stat-box">
-                        <div className="stat-box-value">{teamNumber}</div>
-                        <div className="stat-box-label">Team Number</div>
                       </div>
                     </div>
                   ) : (

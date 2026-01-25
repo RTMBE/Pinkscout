@@ -320,3 +320,106 @@ export function calculateTowerRP(entry) {
   }
 }
 
+// =============================================================================
+// EPA TYPE CONSTANTS
+// =============================================================================
+
+export const EPA_TYPES = {
+  OVERALL: 'overall',
+  AUTO: 'auto',
+  TELEOP: 'teleop',
+  ENDGAME: 'endgame',
+  TRUE: 'true'
+};
+
+export const EPA_TYPE_LABELS = {
+  [EPA_TYPES.OVERALL]: 'Overall EPA',
+  [EPA_TYPES.AUTO]: 'Auto EPA',
+  [EPA_TYPES.TELEOP]: 'Teleop EPA',
+  [EPA_TYPES.ENDGAME]: 'Endgame EPA',
+  [EPA_TYPES.TRUE]: 'True EPA (Scouting)'
+};
+
+/**
+ * GET EPA VALUE BY TYPE FROM STATBOTICS DATA
+ * -------------------------------------------
+ * Returns the appropriate EPA value based on the selected type.
+ * All values are in match points (Expected Points Added per match).
+ *
+ * @param {Object} statboticsData - Raw Statbotics API response
+ * @param {string} epaType - One of EPA_TYPES values
+ * @returns {number} - EPA value in points
+ */
+export function getEPAByType(statboticsData, epaType) {
+  if (!statboticsData) return 0;
+
+  // Get breakdown values (points-based)
+  const breakdown = statboticsData.epa?.breakdown || {};
+  const totalPoints = statboticsData.epa?.total_points?.mean || breakdown.total_points || 0;
+
+  switch (epaType) {
+    case EPA_TYPES.OVERALL:
+      return totalPoints;
+    case EPA_TYPES.AUTO:
+      return breakdown.auto_points || 0;
+    case EPA_TYPES.TELEOP:
+      return breakdown.teleop_points || 0;
+    case EPA_TYPES.ENDGAME:
+      return breakdown.endgame_points || 0;
+    case EPA_TYPES.TRUE:
+      // True EPA is calculated from scouting data, not Statbotics
+      return null;
+    default:
+      return totalPoints;
+  }
+}
+
+/**
+ * CALCULATE TRUE EPA FROM SCOUTING DATA
+ * --------------------------------------
+ * True EPA is calculated exclusively from internal scouting data.
+ * It represents the average actual points added by a team per match.
+ *
+ * This is independent of Statbotics and opponent strength.
+ *
+ * @param {Array} scoutingEntries - Array of scouting data entries for a team
+ * @returns {Object} - { total, auto, teleop, endgame, matchCount, hasData }
+ */
+export function calculateTrueEPA(scoutingEntries) {
+  if (!scoutingEntries || scoutingEntries.length === 0) {
+    return {
+      total: null,
+      auto: null,
+      teleop: null,
+      endgame: null,
+      matchCount: 0,
+      hasData: false
+    };
+  }
+
+  let totalAuto = 0;
+  let totalTeleop = 0;
+  let totalEndgame = 0;
+
+  for (const entry of scoutingEntries) {
+    totalAuto += calculateAutoPoints(entry);
+    totalTeleop += calculateTeleopPoints(entry);
+    totalEndgame += calculateEndgamePoints(entry);
+  }
+
+  const matchCount = scoutingEntries.length;
+  const avgAuto = totalAuto / matchCount;
+  const avgTeleop = totalTeleop / matchCount;
+  const avgEndgame = totalEndgame / matchCount;
+  const avgTotal = avgAuto + avgTeleop + avgEndgame;
+
+  return {
+    total: avgTotal,
+    auto: avgAuto,
+    teleop: avgTeleop,
+    endgame: avgEndgame,
+    matchCount,
+    hasData: true
+  };
+}
+

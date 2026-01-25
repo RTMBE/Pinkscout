@@ -195,12 +195,11 @@ export default function Profile() {
   // ==========================================================================
 
   const handleTeamLeadToggle = async (becomeTeamLead) => {
-    const confirmMessage = becomeTeamLead
-      ? 'Become a Team Lead? You will get a team code to share with members.'
-      : 'Remove Team Lead status? You will lose access to team management features.';
-
-    if (!confirm(confirmMessage)) {
-      return;
+    // Only show confirmation when stopping being a team lead
+    if (!becomeTeamLead) {
+      if (!confirm('Are you sure you want to stop being a team lead? You will lose access to team management features.')) {
+        return;
+      }
     }
 
     setIsTogglingTeamLead(true);

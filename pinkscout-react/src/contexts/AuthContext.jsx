@@ -33,6 +33,20 @@ import {
 } from '../services/teamCodeService';
 
 // =============================================================================
+// UTILITY: Convert snake_case to camelCase
+// =============================================================================
+
+function snakeToCamelCase(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  const result = {};
+  for (const [key, value] of Object.entries(obj)) {
+    const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    result[camelKey] = value;
+  }
+  return result;
+}
+
+// =============================================================================
 // CREATE CONTEXT
 // =============================================================================
 
@@ -119,7 +133,8 @@ export function AuthProvider({ children }) {
           .single();
 
         if (profile && !error) {
-          setUserProfile(profile);
+          // Convert snake_case keys to camelCase for consistent access
+          setUserProfile(snakeToCamelCase(profile));
         }
       } catch (error) {
         if (import.meta.env.DEV) {
@@ -301,8 +316,8 @@ export function AuthProvider({ children }) {
 
     if (error) throw error;
 
-    // Update local profile state
-    setUserProfile(prev => ({ ...prev, ...snakeCaseUpdates }));
+    // Update local profile state with camelCase keys for consistent access
+    setUserProfile(prev => ({ ...prev, ...updates }));
 
     return true;
   }
@@ -314,6 +329,33 @@ export function AuthProvider({ children }) {
   async function logout() {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+  }
+
+  // =========================================================================
+  // REFRESH ROLE CONTEXT
+  // =========================================================================
+
+  async function refreshRoleContext() {
+    if (!user) return;
+    try {
+      const context = await getRoleContext(user);
+      setRoleContext(context);
+
+      // Also refresh user profile
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (profile && !error) {
+        setUserProfile(snakeToCamelCase(profile));
+      }
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('Error refreshing role context:', error);
+      }
+    }
   }
 
   // =========================================================================
@@ -330,7 +372,8 @@ export function AuthProvider({ children }) {
     login,              // Function: login(email, password)
     signup,             // Function: signup(email, password, username, signupCode, teamNumber)
     logout,             // Function: logout()
-    updateUserProfile   // Function: updateUserProfile(updates)
+    updateUserProfile,  // Function: updateUserProfile(updates)
+    refreshRoleContext  // Function: refreshRoleContext() - call after role changes
   };
 
   // Don't render children until auth state is determined

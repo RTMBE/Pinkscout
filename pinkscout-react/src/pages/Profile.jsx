@@ -17,10 +17,10 @@ import { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../contexts/AuthContext';
 import { getAllScoutingData } from '../services/scoutingService';
-import { getTeamMembers, regenerateTeamCode, getTeamLeadCode } from '../services/teamCodeService';
+import { getTeamMembers, regenerateTeamCode, getTeamLeadCode, generateTeamCode } from '../services/teamCodeService';
 
 export default function Profile() {
-  const { user, userProfile, isAdmin, roleContext, updateUserProfile } = useAuth();
+  const { user, userProfile, isAdmin, roleContext, updateUserProfile, refreshRoleContext } = useAuth();
 
   // ==========================================================================
   // STATE
@@ -40,6 +40,9 @@ export default function Profile() {
   const [loadingTeam, setLoadingTeam] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [teamStats, setTeamStats] = useState({ members: 0, totalEntries: 0 });
+
+  // Team Lead toggle state
+  const [isTogglingTeamLead, setIsTogglingTeamLead] = useState(false);
 
   // Update form when userProfile loads
   useEffect(() => {
@@ -188,6 +191,46 @@ export default function Profile() {
   };
 
   // ==========================================================================
+  // TEAM LEAD TOGGLE
+  // ==========================================================================
+
+  const handleTeamLeadToggle = async (becomeTeamLead) => {
+    const confirmMessage = becomeTeamLead
+      ? 'Become a Team Lead? You will get a team code to share with members.'
+      : 'Remove Team Lead status? You will lose access to team management features.';
+
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
+    setIsTogglingTeamLead(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      if (becomeTeamLead) {
+        // Becoming a Team Lead - generate team code
+        await generateTeamCode(user.id, user.email);
+        await refreshRoleContext();
+        setSuccess('You are now a Team Lead! Your team code is shown above.');
+        loadTeamData();
+      } else {
+        // Removing Team Lead status
+        await updateUserProfile({ isTeamLead: false, teamLeadUid: null, teamCode: null });
+        await refreshRoleContext();
+        setTeamCode('');
+        setTeamMembers([]);
+        setSuccess('Team Lead status removed.');
+      }
+    } catch (err) {
+      console.error('Error toggling team lead:', err);
+      setError('Failed to update team lead status');
+    } finally {
+      setIsTogglingTeamLead(false);
+    }
+  };
+
+  // ==========================================================================
   // RENDER
   // ==========================================================================
   
@@ -222,6 +265,29 @@ export default function Profile() {
           <div className="stat-value">{isAdmin ? '✅' : '❌'}</div>
           <div className="stat-label">Admin Status</div>
         </div>
+      </div>
+
+      {/* Account Type Toggle */}
+      <div className="content-card" style={{ marginBottom: '1.5rem' }}>
+        <h3>🔧 Account Type</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '1rem' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: isTogglingTeamLead ? 'not-allowed' : 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={roleContext?.isTeamLead || false}
+              onChange={(e) => handleTeamLeadToggle(e.target.checked)}
+              disabled={isTogglingTeamLead}
+              style={{ width: '18px', height: '18px', cursor: isTogglingTeamLead ? 'not-allowed' : 'pointer' }}
+            />
+            <span style={{ fontWeight: 500 }}>Team Lead Account</span>
+          </label>
+          {isTogglingTeamLead && <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Updating...</span>}
+        </div>
+        <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '0.5rem' }}>
+          {roleContext?.isTeamLead
+            ? 'As a Team Lead, you can manage team members and view all team data.'
+            : 'Enable to create a team and invite members to share scouting data.'}
+        </small>
       </div>
 
       {/* Team Admin Section (Team Leads only) */}

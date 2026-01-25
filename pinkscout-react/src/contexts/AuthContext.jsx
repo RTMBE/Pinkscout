@@ -135,6 +135,34 @@ export function AuthProvider({ children }) {
         if (profile && !error) {
           // Convert snake_case keys to camelCase for consistent access
           setUserProfile(snakeToCamelCase(profile));
+        } else if (error?.code === 'PGRST116') {
+          // Profile doesn't exist - create it automatically
+          // This can happen if profile creation failed during signup
+          if (import.meta.env.DEV) {
+            console.log('Creating missing profile for user:', supabaseUser.id);
+          }
+          const newProfile = {
+            id: supabaseUser.id,
+            email: supabaseUser.email,
+            display_name: supabaseUser.user_metadata?.display_name || supabaseUser.email?.split('@')[0] || '',
+            role: ROLES.SCOUT,
+            is_team_lead: false
+          };
+
+          const { data: createdProfile, error: createError } = await supabase
+            .from('profiles')
+            .insert(newProfile)
+            .select()
+            .single();
+
+          if (createdProfile && !createError) {
+            setUserProfile(snakeToCamelCase(createdProfile));
+            if (import.meta.env.DEV) {
+              console.log('✅ Auto-created profile for user:', supabaseUser.id);
+            }
+          } else if (import.meta.env.DEV) {
+            console.error('Error auto-creating profile:', createError);
+          }
         }
       } catch (error) {
         if (import.meta.env.DEV) {

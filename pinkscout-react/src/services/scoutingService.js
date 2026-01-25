@@ -67,7 +67,7 @@ function sanitizeString(str, maxLength = 500) {
  * @returns {Object} - Validated and sanitized data
  * @throws {Error} - If validation fails
  */
-function validateScoutingData(data) {
+async function validateScoutingData(data) {
   const errors = [];
 
   // Required fields validation
@@ -91,6 +91,19 @@ function validateScoutingData(data) {
   // OR teamLeadUid for new team-based isolation
   if (!data.scoutingId && !data.teamLeadUid) {
     errors.push('Either Scouting ID or Team Lead UID is required');
+  }
+
+  // Verify user profile exists (required for foreign key constraint)
+  if (data.scouterUid) {
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', data.scouterUid)
+      .single();
+
+    if (profileError || !profile) {
+      errors.push('User profile not found. Please refresh the page or re-login.');
+    }
   }
 
   if (errors.length > 0) {
@@ -147,8 +160,8 @@ function validateScoutingData(data) {
  */
 export async function saveScoutingData(scoutingData) {
   try {
-    // Validate and sanitize input data
-    const validatedData = validateScoutingData(scoutingData);
+    // Validate and sanitize input data (async - checks profile existence)
+    const validatedData = await validateScoutingData(scoutingData);
 
     // Convert camelCase to snake_case for Supabase
     const snakeCaseData = convertToSnakeCase(validatedData);
@@ -159,7 +172,18 @@ export async function saveScoutingData(scoutingData) {
       .select('id')
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // Provide more specific error messages for common issues
+      if (error.code === '23503') {
+        // Foreign key violation
+        throw new Error('Validation failed: User profile not found. Please refresh the page or re-login.');
+      }
+      if (error.code === '42501') {
+        // RLS policy violation
+        throw new Error('Permission denied. Please ensure you are logged in.');
+      }
+      throw error;
+    }
 
     // Only log in development mode
     if (import.meta.env.DEV) {
@@ -180,6 +204,9 @@ export async function saveScoutingData(scoutingData) {
     // Throw a user-friendly error message
     if (error.message?.startsWith('Validation failed')) {
       throw error; // Keep validation errors as-is
+    }
+    if (error.message?.startsWith('Permission denied')) {
+      throw error; // Keep permission errors as-is
     }
     throw new Error('Failed to save scouting data. Please try again.');
   }

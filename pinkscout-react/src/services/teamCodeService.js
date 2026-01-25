@@ -56,6 +56,17 @@ function generateRandomCode() {
 export async function generateTeamCode(teamLeadUid, teamLeadEmail) {
   if (!teamLeadUid) throw new Error('Team Lead UID is required');
 
+  // Verify user profile exists first (required for foreign key constraint)
+  const { data: profile, error: profileCheckError } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('id', teamLeadUid)
+    .single();
+
+  if (profileCheckError || !profile) {
+    throw new Error('User profile not found. Please refresh the page or re-login.');
+  }
+
   // Check if user already has a code
   const existingCode = await getTeamLeadCode(teamLeadUid);
   if (existingCode) {
@@ -93,7 +104,16 @@ export async function generateTeamCode(teamLeadUid, teamLeadEmail) {
       active: true
     });
 
-  if (codeError) throw codeError;
+  if (codeError) {
+    // Provide more specific error messages for common issues
+    if (codeError.code === '23503') {
+      throw new Error('User profile not found. Please refresh the page or re-login.');
+    }
+    if (codeError.code === '42501') {
+      throw new Error('Permission denied. Please ensure you are logged in.');
+    }
+    throw codeError;
+  }
 
   // Update user profile to mark as Team Lead
   const { error: profileError } = await supabase
@@ -106,6 +126,7 @@ export async function generateTeamCode(teamLeadUid, teamLeadEmail) {
 
   if (profileError) {
     console.error('Error updating profile:', profileError);
+    // Don't throw - the team code was created, profile update is secondary
   }
 
   if (import.meta.env.DEV) {

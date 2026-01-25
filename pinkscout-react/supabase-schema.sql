@@ -188,11 +188,25 @@ CREATE POLICY "Team leads can view team members" ON profiles
 CREATE POLICY "Anyone can validate team codes" ON team_codes
   FOR SELECT USING (active = TRUE);
 
-CREATE POLICY "Team leads can manage their codes" ON team_codes
-  FOR ALL USING (team_lead_uid = auth.uid());
+-- Allow users to create their own team codes (becoming a Team Lead)
+CREATE POLICY "Users can create team codes" ON team_codes
+  FOR INSERT WITH CHECK (team_lead_uid = auth.uid());
+
+-- Team leads can view their own codes
+CREATE POLICY "Team leads can view their codes" ON team_codes
+  FOR SELECT USING (team_lead_uid = auth.uid());
+
+-- Team leads can update their own codes
+CREATE POLICY "Team leads can update their codes" ON team_codes
+  FOR UPDATE USING (team_lead_uid = auth.uid());
+
+-- Team leads can delete their own codes
+CREATE POLICY "Team leads can delete their codes" ON team_codes
+  FOR DELETE USING (team_lead_uid = auth.uid());
 
 CREATE POLICY "Master admin full access to team_codes" ON team_codes
-  FOR ALL USING (is_master_admin(auth.email()));
+  FOR ALL USING (is_master_admin(auth.email()))
+  WITH CHECK (is_master_admin(auth.email()));
 
 -- =============================================================================
 -- SCOUTING POLICIES (matching Firestore rules)

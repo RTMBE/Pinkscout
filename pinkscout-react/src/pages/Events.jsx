@@ -24,6 +24,7 @@ import { getEventList, getEventTeams, getEventMatches, getEventRankings, getEven
 import { getEventTeamStats } from '../services/statboticsAPI';
 import { getEventScoutingData } from '../services/scoutingService';
 import { classifyEPA, getEPAPercentile, calculateAutoPoints, calculateTeleopPoints } from '../utils/epaUtils';
+import { predictMatch } from '../utils/predictionUtils';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Events() {
@@ -382,6 +383,39 @@ export default function Events() {
       avgTeleop: avgTeleop.toFixed(1),
       avgTotal: (avgAuto + avgTeleop).toFixed(1)
     };
+  };
+
+  // ==========================================================================
+  // MATCH PREDICTION
+  // ==========================================================================
+
+  /**
+   * Generate match prediction for the selected match
+   * @param {Object} match - Match object from TBA
+   * @returns {Object|null} - Prediction or null if match already played
+   */
+  const getMatchPrediction = (match) => {
+    if (!match || isMatchPlayed(match)) return null;
+
+    const buildAllianceData = (teamKeys) => {
+      return {
+        teams: (teamKeys || []).map(key => {
+          const teamNum = parseInt(key.replace('frc', ''));
+          const teamScoutingEntries = scoutingData.filter(d => d.teamNumber === teamNum);
+          const statboticsTeamData = teamStats.find(t => t.team === teamNum);
+          return {
+            teamKey: key,
+            scoutingEntries: teamScoutingEntries,
+            statboticsData: statboticsTeamData
+          };
+        })
+      };
+    };
+
+    const redAlliance = buildAllianceData(match.alliances?.red?.team_keys);
+    const blueAlliance = buildAllianceData(match.alliances?.blue?.team_keys);
+
+    return predictMatch(redAlliance, blueAlliance);
   };
 
   // ==========================================================================
@@ -883,9 +917,65 @@ export default function Events() {
                 )}
               </>
             ) : (
-              <div className="match-upcoming-notice">
-                <span>⏳ Match has not been played yet</span>
-              </div>
+              (() => {
+                const prediction = getMatchPrediction(selectedMatch);
+                if (!prediction) {
+                  return (
+                    <div className="match-upcoming-notice">
+                      <span>⏳ Match has not been played yet</span>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="match-prediction">
+                    <div className="prediction-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                      <span style={{ fontSize: '1rem', fontWeight: '600' }}>🔮 Match Prediction</span>
+                      <span
+                        style={{
+                          fontSize: '0.8rem',
+                          padding: '0.2rem 0.5rem',
+                          borderRadius: '0.25rem',
+                          backgroundColor: prediction.confidence.color + '20',
+                          color: prediction.confidence.color
+                        }}
+                        title={`Average ${prediction.confidence.avgMatches?.toFixed(1) || 0} scouted matches per team`}
+                      >
+                        {prediction.confidence.emoji} {prediction.confidence.label}
+                      </span>
+                    </div>
+                    <div className="match-result-summary">
+                      <div className={`result-alliance red ${prediction.winner === 'red' ? 'winner' : ''}`}>
+                        <span className="result-label">Red Alliance</span>
+                        <span className="result-score">{prediction.red.score}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          {Math.round(prediction.red.winProbability * 100)}% win
+                        </span>
+                      </div>
+                      <div className="result-vs">vs</div>
+                      <div className={`result-alliance blue ${prediction.winner === 'blue' ? 'winner' : ''}`}>
+                        <span className="result-label">Blue Alliance</span>
+                        <span className="result-score">{prediction.blue.score}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          {Math.round(prediction.blue.winProbability * 100)}% win
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ color: '#ef4444' }}>Auto: {prediction.red.auto} | Teleop: {prediction.red.teleop} | End: {prediction.red.endgame}</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ color: '#3b82f6' }}>Auto: {prediction.blue.auto} | Teleop: {prediction.blue.teleop} | End: {prediction.blue.endgame}</div>
+                      </div>
+                    </div>
+                    {(prediction.red.synergy !== 1 || prediction.blue.synergy !== 1) && (
+                      <div style={{ textAlign: 'center', marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        Synergy: Red {prediction.red.synergy.toFixed(2)}x | Blue {prediction.blue.synergy.toFixed(2)}x
+                      </div>
+                    )}
+                  </div>
+                );
+              })()
             )}
 
             {/* Red Alliance Teams */}

@@ -38,13 +38,13 @@ const ADJUSTED_EPA_COLLECTION = 'adjustedEPA';
 
 const EPA_CONFIG = {
   // Minimum matches before scouting data influences EPA
-  MIN_MATCHES_FOR_ADJUSTMENT: 2,
+  MIN_MATCHES_FOR_ADJUSTMENT: 1,
   
   // Base weight for scouting influence (increases with match count)
   BASE_SCOUTING_WEIGHT: 0.1,
   
   // Maximum scouting weight (after many matches)
-  MAX_SCOUTING_WEIGHT: 0.5,
+  MAX_SCOUTING_WEIGHT: 0.95,
   
   // Matches needed to reach max weight
   MATCHES_FOR_MAX_WEIGHT: 12,

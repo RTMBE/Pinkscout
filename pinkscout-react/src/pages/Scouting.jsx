@@ -89,6 +89,7 @@ export default function Scouting() {
     // Performance Notes
     hubControlFirst: false,     // Did this alliance control Hub first in auto?
     defenseRating: 0,           // 0-5 rating for defense played
+    robotRole: '',              // Robot role: shooter, cycler, or defense
     notes: ''
   });
 
@@ -266,6 +267,7 @@ export default function Scouting() {
           endgameTowerLevel: 'none',
           hubControlFirst: false,
           defenseRating: 0,
+          robotRole: '',
           notes: ''
         });
         setSuccess(false);
@@ -629,6 +631,75 @@ export default function Scouting() {
                 <option value={4}>4 - Strong defense</option>
                 <option value={5}>5 - Elite defender</option>
               </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Robot Role Section */}
+        <div className="content-card form-section">
+          <h3>🎯 Robot Role</h3>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+            Select the primary role this robot played during the match (required for predictions)
+          </p>
+          <div className="form-group">
+            <div className="role-toggle" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className={`role-btn ${formData.robotRole === 'shooter' ? 'active' : ''}`}
+                onClick={() => setFormData(prev => ({ ...prev, robotRole: 'shooter' }))}
+                style={{
+                  flex: '1',
+                  minWidth: '100px',
+                  padding: '0.75rem 1rem',
+                  border: formData.robotRole === 'shooter' ? '2px solid #e91e63' : '2px solid var(--border-color)',
+                  borderRadius: '0.5rem',
+                  background: formData.robotRole === 'shooter' ? 'rgba(233, 30, 99, 0.1)' : 'var(--card-bg)',
+                  color: formData.robotRole === 'shooter' ? '#e91e63' : 'var(--text-color)',
+                  cursor: 'pointer',
+                  fontWeight: formData.robotRole === 'shooter' ? '600' : '400',
+                  transition: 'all 0.2s'
+                }}
+              >
+                🎯 Shooter
+              </button>
+              <button
+                type="button"
+                className={`role-btn ${formData.robotRole === 'cycler' ? 'active' : ''}`}
+                onClick={() => setFormData(prev => ({ ...prev, robotRole: 'cycler' }))}
+                style={{
+                  flex: '1',
+                  minWidth: '100px',
+                  padding: '0.75rem 1rem',
+                  border: formData.robotRole === 'cycler' ? '2px solid #4CAF50' : '2px solid var(--border-color)',
+                  borderRadius: '0.5rem',
+                  background: formData.robotRole === 'cycler' ? 'rgba(76, 175, 80, 0.1)' : 'var(--card-bg)',
+                  color: formData.robotRole === 'cycler' ? '#4CAF50' : 'var(--text-color)',
+                  cursor: 'pointer',
+                  fontWeight: formData.robotRole === 'cycler' ? '600' : '400',
+                  transition: 'all 0.2s'
+                }}
+              >
+                🔄 Cycler
+              </button>
+              <button
+                type="button"
+                className={`role-btn ${formData.robotRole === 'defense' ? 'active' : ''}`}
+                onClick={() => setFormData(prev => ({ ...prev, robotRole: 'defense' }))}
+                style={{
+                  flex: '1',
+                  minWidth: '100px',
+                  padding: '0.75rem 1rem',
+                  border: formData.robotRole === 'defense' ? '2px solid #2196F3' : '2px solid var(--border-color)',
+                  borderRadius: '0.5rem',
+                  background: formData.robotRole === 'defense' ? 'rgba(33, 150, 243, 0.1)' : 'var(--card-bg)',
+                  color: formData.robotRole === 'defense' ? '#2196F3' : 'var(--text-color)',
+                  cursor: 'pointer',
+                  fontWeight: formData.robotRole === 'defense' ? '600' : '400',
+                  transition: 'all 0.2s'
+                }}
+              >
+                🛡️ Defense
+              </button>
             </div>
           </div>
         </div>

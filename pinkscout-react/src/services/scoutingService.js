@@ -103,7 +103,8 @@ function validateScoutingData(data) {
     eventKey: sanitizeString(data.eventKey, 50),
     scouterName: sanitizeString(data.scouterName || '', 100),
     notes: sanitizeString(data.notes || '', 1000),
-    allianceColor: ['red', 'blue'].includes(data.allianceColor) ? data.allianceColor : 'red'
+    allianceColor: ['red', 'blue'].includes(data.allianceColor) ? data.allianceColor : 'red',
+    robotRole: ['shooter', 'cycler', 'defense'].includes(data.robotRole) ? data.robotRole : null
   };
 
   // Normalize scoutingId if present (legacy support)

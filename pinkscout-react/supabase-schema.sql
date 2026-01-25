@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS scouting (
   endgame_tower_level TEXT,
   defense_rating INTEGER DEFAULT 0,
   hub_control_first BOOLEAN DEFAULT FALSE,
+  robot_role TEXT CHECK (robot_role IN ('shooter', 'cycler', 'defense')),
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );

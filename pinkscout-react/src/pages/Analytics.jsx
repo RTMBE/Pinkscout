@@ -17,10 +17,11 @@
  * =============================================================================
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { getStatboticsTeam } from '../services/statboticsAPI';
 import { getTeamScoutingData } from '../services/scoutingService';
+import { searchTeams } from '../services/blueAllianceAPI';
 import { scaleStatboticsEPA, classifyEPA, getEPAPercentile } from '../utils/epaUtils';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -29,30 +30,133 @@ export default function Analytics() {
   // ==========================================================================
   // STATE
   // ==========================================================================
-  
+
   const [teamInput, setTeamInput] = useState('');
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Autocomplete state
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+  const [searchingTeams, setSearchingTeams] = useState(false);
+  const inputRef = useRef(null);
+  const suggestionsRef = useRef(null);
+  const debounceTimerRef = useRef(null);
+
+  // ==========================================================================
+  // AUTOCOMPLETE: Search teams as user types
+  // ==========================================================================
+
+  const searchTeamsDebounced = useCallback(async (query) => {
+    if (!query || query.trim().length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    setSearchingTeams(true);
+    try {
+      const results = await searchTeams(query, 8);
+      setSuggestions(results);
+      setShowSuggestions(results.length > 0);
+      setSelectedSuggestionIndex(-1);
+    } catch (err) {
+      console.error('Error searching teams:', err);
+      setSuggestions([]);
+    } finally {
+      setSearchingTeams(false);
+    }
+  }, []);
+
+  // Handle input change with debounce
+  const handleInputChange = (e) => {
+    const value = e.target.value;
+    setTeamInput(value);
+    setError('');
+
+    // Clear previous debounce timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // Debounce search by 300ms
+    debounceTimerRef.current = setTimeout(() => {
+      searchTeamsDebounced(value);
+    }, 300);
+  };
+
+  // Handle keyboard navigation in suggestions
+  const handleKeyDown = (e) => {
+    if (!showSuggestions || suggestions.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedSuggestionIndex(prev =>
+        prev < suggestions.length - 1 ? prev + 1 : prev
+      );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : -1);
+    } else if (e.key === 'Enter' && selectedSuggestionIndex >= 0) {
+      e.preventDefault();
+      selectSuggestion(suggestions[selectedSuggestionIndex]);
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+      setSelectedSuggestionIndex(-1);
+    }
+  };
+
+  // Select a suggestion
+  const selectSuggestion = (suggestion) => {
+    setTeamInput(suggestion.teamNumber);
+    setShowSuggestions(false);
+    setSelectedSuggestionIndex(-1);
+    // Focus the input for form submission
+    inputRef.current?.focus();
+  };
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (
+        inputRef.current &&
+        !inputRef.current.contains(e.target) &&
+        suggestionsRef.current &&
+        !suggestionsRef.current.contains(e.target)
+      ) {
+        setShowSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
+
   // ==========================================================================
   // ADD TEAM TO COMPARISON
   // ==========================================================================
-  
-  const addTeam = async (e) => {
-    e.preventDefault();
-    if (!teamInput.trim()) return;
-    
-    const teamNumber = parseInt(teamInput.trim());
-    
+
+  const addTeamByNumber = async (teamNumber) => {
     // Check if already added
     if (teams.some(t => t.teamNumber === teamNumber)) {
       setError('Team already added');
       return;
     }
-    
+
     setLoading(true);
     setError('');
+    setShowSuggestions(false);
 
     try {
       // Use Promise.allSettled to handle individual failures gracefully
@@ -93,6 +197,20 @@ export default function Analytics() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const addTeam = async (e) => {
+    e.preventDefault();
+    if (!teamInput.trim()) return;
+
+    const teamNumber = parseInt(teamInput.trim());
+
+    if (isNaN(teamNumber)) {
+      setError('Please enter a valid team number or select from suggestions');
+      return;
+    }
+
+    await addTeamByNumber(teamNumber);
   };
 
   // ==========================================================================
@@ -155,15 +273,101 @@ export default function Analytics() {
       <div className="content-card">
         <h3>Compare Teams</h3>
         <form onSubmit={addTeam} className="add-team-form">
-          <input
-            type="number"
-            value={teamInput}
-            onChange={(e) => setTeamInput(e.target.value)}
-            placeholder="Enter team number"
-            className="search-input"
-            min="1"
-            max="99999"
-          />
+          <div className="autocomplete-container" style={{ position: 'relative', flex: 1 }}>
+            <input
+              ref={inputRef}
+              type="text"
+              value={teamInput}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+              placeholder="Enter team number or name (e.g., 254 or Cheesy Poofs)"
+              className="search-input"
+              autoComplete="off"
+              style={{ width: '100%' }}
+            />
+            {searchingTeams && (
+              <span className="autocomplete-loading" style={{
+                position: 'absolute',
+                right: '10px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                fontSize: '12px',
+                color: '#888'
+              }}>
+                🔍
+              </span>
+            )}
+            {showSuggestions && suggestions.length > 0 && (
+              <ul
+                ref={suggestionsRef}
+                className="autocomplete-suggestions"
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  zIndex: 1000,
+                  backgroundColor: 'var(--surface-color, #fff)',
+                  border: '1px solid var(--border-color, #ddd)',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  listStyle: 'none',
+                  margin: '4px 0 0 0',
+                  padding: '4px 0',
+                  maxHeight: '300px',
+                  overflowY: 'auto'
+                }}
+              >
+                {suggestions.map((suggestion, index) => (
+                  <li
+                    key={suggestion.teamNumber}
+                    onClick={() => selectSuggestion(suggestion)}
+                    style={{
+                      padding: '10px 14px',
+                      cursor: 'pointer',
+                      backgroundColor: index === selectedSuggestionIndex
+                        ? 'var(--primary-color, #e91e63)'
+                        : 'transparent',
+                      color: index === selectedSuggestionIndex
+                        ? 'white'
+                        : 'inherit',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      transition: 'background-color 0.15s'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (index !== selectedSuggestionIndex) {
+                        e.currentTarget.style.backgroundColor = 'var(--hover-color, #f5f5f5)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (index !== selectedSuggestionIndex) {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }
+                    }}
+                  >
+                    <span>
+                      <strong>{suggestion.teamNumber}</strong>
+                      {suggestion.nickname && (
+                        <span style={{ marginLeft: '8px', opacity: 0.8 }}>
+                          {suggestion.nickname}
+                        </span>
+                      )}
+                    </span>
+                    <span style={{
+                      fontSize: '11px',
+                      opacity: 0.6,
+                      textTransform: 'capitalize'
+                    }}>
+                      {suggestion.matchType?.replace(/_/g, ' ')}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           <button type="submit" className="btn btn-primary" disabled={loading}>
             {loading ? 'Adding...' : '+ Add Team'}
           </button>

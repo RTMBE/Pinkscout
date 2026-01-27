@@ -76,7 +76,7 @@ export default function Scouting() {
 
     // Auto Period (2026 REBUILT™) - 20 seconds
     autoFuelScored: 0,          // Fuel scored in active Hub (1 pt each)
-    autoTowerClimb: 'none',     // Tower climb in auto (none, level1, level2, level3)
+    autoTowerClimb: 'none',     // Tower climb in auto (none, level1 only - 10 pts, 2 max)
 
     // Teleop Period (2026 REBUILT™) - 2:20 with Alliance Shifts
     teleopFuelActive: 0,        // Fuel scored when Hub active (1 pt each)
@@ -572,9 +572,7 @@ export default function Scouting() {
                 onChange={handleChange}
               >
                 <option value="none">None</option>
-                <option value="level1">Level 1 - Off Carpet (15 pts)</option>
-                <option value="level2">Level 2 - Above Low Rung (20 pts)</option>
-                <option value="level3">Level 3 - Above Mid Rung (30 pts)</option>
+                <option value="level1">Level 1 - Off Carpet (10 pts, 2 max)</option>
               </select>
             </div>
 

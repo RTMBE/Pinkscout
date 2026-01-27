@@ -556,11 +556,13 @@ export function calculateTeamAggregates(entries) {
   for (const entry of entries) {
     totalAutoFuel += entry.autoFuelScored || 0;
     totalTeleopFuel += (entry.teleopFuelActive || 0) + (entry.teleopFuelInactive || 0);
-    totalCycles += entry.teleopCycleCount || 0;
-    totalDefense += entry.defenseRating || 0;
+    // Support both old (teleopCycleCount) and new (teleopBallsCycled) field names
+    totalCycles += entry.teleopBallsCycled || entry.teleopCycleCount || 0;
+    // Add endgame fuel scoring (replacing defense rating)
+    totalDefense += entry.endgameFuelScored || entry.defenseRating || 0;
 
-    // Count successful climbs (level1 or level3)
-    if (entry.endgameTowerLevel === 'level1' || entry.endgameTowerLevel === 'level3') {
+    // Count successful climbs (level1, level2, or level3)
+    if (entry.endgameTowerLevel === 'level1' || entry.endgameTowerLevel === 'level2' || entry.endgameTowerLevel === 'level3') {
       climbCount++;
     }
 

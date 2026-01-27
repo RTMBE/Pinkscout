@@ -76,19 +76,19 @@ export default function Scouting() {
 
     // Auto Period (2026 REBUILT™) - 20 seconds
     autoFuelScored: 0,          // Fuel scored in active Hub (1 pt each)
-    autoTowerClimb: 'none',     // Tower climb in auto (none, level1, level3)
+    autoTowerClimb: 'none',     // Tower climb in auto (none, level1, level2, level3)
 
     // Teleop Period (2026 REBUILT™) - 2:20 with Alliance Shifts
     teleopFuelActive: 0,        // Fuel scored when Hub active (1 pt each)
     teleopFuelInactive: 0,      // Fuel scored when Hub inactive (0 pts, but track for strategy)
-    teleopCycleCount: 0,        // Number of complete cycles (collect + score)
+    teleopBallsCycled: 0,       // Balls cycled (shooting balls to your side)
 
     // Endgame - Tower Climb (final 30 seconds)
-    endgameTowerLevel: 'none',  // none, level1 (15pts), level2 (RP only), level3 (30pts)
+    endgameTowerLevel: 'none',  // none, level1 (15pts), level2 (20pts), level3 (30pts)
+    endgameFuelScored: 0,       // Fuel scored during endgame (all Hubs active)
 
     // Performance Notes
     hubControlFirst: false,     // Did this alliance control Hub first in auto?
-    defenseRating: 0,           // 0-5 rating for defense played
     robotRole: '',              // Robot role: shooter, cycler, or defense
     notes: ''
   });
@@ -573,6 +573,7 @@ export default function Scouting() {
               >
                 <option value="none">None</option>
                 <option value="level1">Level 1 - Off Carpet (15 pts)</option>
+                <option value="level2">Level 2 - Above Low Rung (20 pts)</option>
                 <option value="level3">Level 3 - Above Mid Rung (30 pts)</option>
               </select>
             </div>
@@ -620,13 +621,13 @@ export default function Scouting() {
               </div>
             </div>
 
-            {/* Cycle Count */}
+            {/* Balls Cycled */}
             <div className="form-group counter-group">
-              <label>🔄 Cycle Count (collect + score)</label>
+              <label>🔄 Balls Cycled (shooting to your side)</label>
               <div className="counter">
-                <button type="button" onClick={() => handleIncrement('teleopCycleCount', -1)}>−</button>
-                <span>{formData.teleopCycleCount}</span>
-                <button type="button" onClick={() => handleIncrement('teleopCycleCount', 1)}>+</button>
+                <button type="button" onClick={() => handleIncrement('teleopBallsCycled', -1)}>−</button>
+                <span>{formData.teleopBallsCycled}</span>
+                <button type="button" onClick={() => handleIncrement('teleopBallsCycled', 1)}>+</button>
               </div>
             </div>
           </div>
@@ -636,7 +637,7 @@ export default function Scouting() {
         <div className="content-card form-section">
           <h3>🏁 Endgame <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>(Final 30 sec - All Hubs Active)</span></h3>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-            Tower climb for big points. Level 2 earns Ranking Points only.
+            Tower climb for big points. All Hubs are active for fuel scoring.
           </p>
 
           <div className="form-grid">
@@ -649,28 +650,20 @@ export default function Scouting() {
                 onChange={handleChange}
               >
                 <option value="none">None (0 pts)</option>
-                <option value="level1">Level 1 - Off Carpet (15 pts, 10 RP)</option>
-                <option value="level2">Level 2 - Above Low Rung (0 pts, 20 RP)</option>
+                <option value="level1">Level 1 - Off Carpet (15 pts)</option>
+                <option value="level2">Level 2 - Above Low Rung (20 pts)</option>
                 <option value="level3">Level 3 - Above Mid Rung (30 pts)</option>
               </select>
             </div>
 
-            {/* Defense Rating */}
-            <div className="form-group">
-              <label htmlFor="defenseRating">🛡️ Defense Rating (0-5)</label>
-              <select
-                id="defenseRating"
-                name="defenseRating"
-                value={formData.defenseRating}
-                onChange={handleChange}
-              >
-                <option value={0}>0 - No defense played</option>
-                <option value={1}>1 - Minimal defense</option>
-                <option value={2}>2 - Some defense</option>
-                <option value={3}>3 - Moderate defense</option>
-                <option value={4}>4 - Strong defense</option>
-                <option value={5}>5 - Elite defender</option>
-              </select>
+            {/* Endgame Fuel Scored */}
+            <div className="form-group counter-group">
+              <label>⚽ Fuel Scored (Endgame)</label>
+              <div className="counter">
+                <button type="button" onClick={() => handleIncrement('endgameFuelScored', -1)}>−</button>
+                <span>{formData.endgameFuelScored}</span>
+                <button type="button" onClick={() => handleIncrement('endgameFuelScored', 1)}>+</button>
+              </div>
             </div>
           </div>
         </div>

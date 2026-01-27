@@ -88,10 +88,18 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const supabaseUser = session?.user || null;
-      handleAuthChange(supabaseUser);
-    });
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        const supabaseUser = session?.user || null;
+        handleAuthChange(supabaseUser);
+      })
+      .catch((error) => {
+        // Ensure loading is set to false even on error
+        if (import.meta.env.DEV) {
+          console.error('Error getting session:', error);
+        }
+        setLoading(false);
+      });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -107,84 +115,94 @@ export function AuthProvider({ children }) {
 
   // Handle auth state changes
   async function handleAuthChange(supabaseUser) {
-    setUser(supabaseUser);
+    try {
+      setUser(supabaseUser);
 
-    if (supabaseUser) {
-      // Check admin rights
-      const adminStatus = await checkAdminRights(supabaseUser);
-      setIsAdmin(adminStatus);
-
-      // Load role context for RBAC
-      try {
-        const context = await getRoleContext(supabaseUser);
-        setRoleContext(context);
-      } catch (error) {
-        if (import.meta.env.DEV) {
-          console.error('Error loading role context:', error);
-        }
-      }
-
-      // Load user profile from Supabase
-      try {
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', supabaseUser.id)
-          .single();
-
-        if (profile && !error) {
-          // Convert snake_case keys to camelCase for consistent access
-          setUserProfile(snakeToCamelCase(profile));
-        } else if (error?.code === 'PGRST116') {
-          // Profile doesn't exist - create it automatically
-          // This can happen if profile creation failed during signup
+      if (supabaseUser) {
+        // Check admin rights
+        try {
+          const adminStatus = await checkAdminRights(supabaseUser);
+          setIsAdmin(adminStatus);
+        } catch (error) {
           if (import.meta.env.DEV) {
-            console.log('Creating missing profile for user:', supabaseUser.id);
+            console.error('Error checking admin rights:', error);
           }
-          const newProfile = {
-            id: supabaseUser.id,
-            email: supabaseUser.email,
-            display_name: supabaseUser.user_metadata?.display_name || supabaseUser.email?.split('@')[0] || '',
-            role: ROLES.SCOUT,
-            is_team_lead: false
-          };
+          setIsAdmin(false);
+        }
 
-          const { data: createdProfile, error: createError } = await supabase
+        // Load role context for RBAC
+        try {
+          const context = await getRoleContext(supabaseUser);
+          setRoleContext(context);
+        } catch (error) {
+          if (import.meta.env.DEV) {
+            console.error('Error loading role context:', error);
+          }
+        }
+
+        // Load user profile from Supabase
+        try {
+          const { data: profile, error } = await supabase
             .from('profiles')
-            .insert(newProfile)
-            .select()
+            .select('*')
+            .eq('id', supabaseUser.id)
             .single();
 
-          if (createdProfile && !createError) {
-            setUserProfile(snakeToCamelCase(createdProfile));
+          if (profile && !error) {
+            // Convert snake_case keys to camelCase for consistent access
+            setUserProfile(snakeToCamelCase(profile));
+          } else if (error?.code === 'PGRST116') {
+            // Profile doesn't exist - create it automatically
+            // This can happen if profile creation failed during signup
             if (import.meta.env.DEV) {
-              console.log('✅ Auto-created profile for user:', supabaseUser.id);
+              console.log('Creating missing profile for user:', supabaseUser.id);
             }
-          } else if (import.meta.env.DEV) {
-            console.error('Error auto-creating profile:', createError);
+            const newProfile = {
+              id: supabaseUser.id,
+              email: supabaseUser.email,
+              display_name: supabaseUser.user_metadata?.display_name || supabaseUser.email?.split('@')[0] || '',
+              role: ROLES.SCOUT,
+              is_team_lead: false
+            };
+
+            const { data: createdProfile, error: createError } = await supabase
+              .from('profiles')
+              .insert(newProfile)
+              .select()
+              .single();
+
+            if (createdProfile && !createError) {
+              setUserProfile(snakeToCamelCase(createdProfile));
+              if (import.meta.env.DEV) {
+                console.log('✅ Auto-created profile for user:', supabaseUser.id);
+              }
+            } else if (import.meta.env.DEV) {
+              console.error('Error auto-creating profile:', createError);
+            }
+          }
+        } catch (error) {
+          if (import.meta.env.DEV) {
+            console.error('Error loading user profile:', error);
           }
         }
-      } catch (error) {
-        if (import.meta.env.DEV) {
-          console.error('Error loading user profile:', error);
-        }
+      } else {
+        setIsAdmin(false);
+        setUserProfile(null);
+        setRoleContext({
+          role: null,
+          scoutingId: null,
+          userUid: null,
+          isMasterAdmin: false,
+          canViewAll: false,
+          isTeamLead: false,
+          teamLeadUid: null,
+          teamCode: null
+        });
       }
-    } else {
-      setIsAdmin(false);
-      setUserProfile(null);
-      setRoleContext({
-        role: null,
-        scoutingId: null,
-        userUid: null,
-        isMasterAdmin: false,
-        canViewAll: false,
-        isTeamLead: false,
-        teamLeadUid: null,
-        teamCode: null
-      });
+    } finally {
+      // Always set loading to false, even if errors occur
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   // =========================================================================

@@ -87,30 +87,48 @@ export function AuthProvider({ children }) {
   // Listens for Supabase auth state changes and updates context
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession()
-      .then(({ data: { session } }) => {
-        const supabaseUser = session?.user || null;
-        handleAuthChange(supabaseUser);
-      })
-      .catch((error) => {
-        // Ensure loading is set to false even on error
-        if (import.meta.env.DEV) {
-          console.error('Error getting session:', error);
-        }
-        setLoading(false);
-      });
+    let isMounted = true;
 
-    // Listen for auth changes
+    // Get initial session first, then set up listener
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+
+        if (isMounted) {
+          const supabaseUser = session?.user || null;
+          await handleAuthChange(supabaseUser);
+        }
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error('Error getting initial session:', error);
+        }
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    initializeAuth();
+
+    // Listen for subsequent auth changes (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        const supabaseUser = session?.user || null;
-        await handleAuthChange(supabaseUser);
+        // Skip INITIAL_SESSION since we handle it above with getSession()
+        if (event === 'INITIAL_SESSION') return;
+
+        if (isMounted) {
+          const supabaseUser = session?.user || null;
+          await handleAuthChange(supabaseUser);
+        }
       }
     );
 
-    // Cleanup subscription on unmount
-    return () => subscription.unsubscribe();
+    // Cleanup
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Handle auth state changes

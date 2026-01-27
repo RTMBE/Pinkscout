@@ -27,6 +27,56 @@ import { classifyEPA, getEPAPercentile, calculateAutoPoints, calculateTeleopPoin
 import { predictMatch } from '../utils/predictionUtils';
 import { useAuth } from '../contexts/AuthContext';
 
+// =============================================================================
+// TEAM LOGO COMPONENT - Shows team logo with fallback avatar
+// =============================================================================
+/**
+ * Shows the team logo from The Blue Alliance, or a fallback avatar with
+ * the first digit of the team number if the logo fails to load.
+ */
+function TeamLogo({ teamNumber, year, className = 'team-logo', alt }) {
+  const [hasError, setHasError] = useState(false);
+  const logoUrl = `https://www.thebluealliance.com/avatar/${year}/frc${teamNumber}.png`;
+
+  // Get first digit of team number for fallback
+  const firstDigit = String(teamNumber).charAt(0);
+
+  // Generate a consistent color based on team number
+  const colors = ['#e74c3c', '#3498db', '#2ecc71', '#9b59b6', '#f39c12', '#1abc9c', '#e91e63', '#00bcd4', '#ff5722', '#607d8b'];
+  const colorIndex = teamNumber % colors.length;
+  const bgColor = colors[colorIndex];
+
+  if (hasError) {
+    return (
+      <div
+        className={`${className} team-logo-fallback`}
+        style={{
+          backgroundColor: bgColor,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'white',
+          fontWeight: 'bold',
+          fontSize: className.includes('small') ? '0.75rem' : '1rem',
+          borderRadius: '4px'
+        }}
+        title={alt || `Team ${teamNumber}`}
+      >
+        {firstDigit}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={logoUrl}
+      alt={alt || `Team ${teamNumber}`}
+      className={className}
+      onError={() => setHasError(true)}
+    />
+  );
+}
+
 export default function Events() {
   const { roleContext } = useAuth();
   // ==========================================================================
@@ -634,11 +684,11 @@ export default function Events() {
                         to={`/teams?team=${team.team_number}`}
                         className="team-attending-card"
                       >
-                        <img
-                          src={getTeamLogoUrl(team.team_number)}
-                          alt={`Team ${team.team_number}`}
+                        <TeamLogo
+                          teamNumber={team.team_number}
+                          year={selectedEvent?.year || year}
                           className="team-logo"
-                          onError={(e) => { e.target.style.display = 'none'; }}
+                          alt={`Team ${team.team_number}`}
                         />
                         <div className="team-attending-info">
                           <span className="team-number">{team.team_number}</span>
@@ -856,11 +906,11 @@ export default function Events() {
                               <div key={rIndex} className="award-recipient">
                                 {teamNum && (
                                   <Link to={`/teams?team=${teamNum}`} className="award-team-link">
-                                    <img
-                                      src={getTeamLogoUrl(teamNum)}
-                                      alt={`Team ${teamNum}`}
+                                    <TeamLogo
+                                      teamNumber={parseInt(teamNum)}
+                                      year={selectedEvent?.year || year}
                                       className="award-team-logo"
-                                      onError={(e) => { e.target.style.display = 'none'; }}
+                                      alt={`Team ${teamNum}`}
                                     />
                                     <span className="award-team-number">{teamNum}</span>
                                     {team?.nickname && (
@@ -1020,11 +1070,11 @@ export default function Events() {
                   return (
                     <div key={key} className="match-team-card">
                       <Link to={`/teams?team=${teamNum}`} className="match-team-header">
-                        <img
-                          src={getTeamLogoUrl(teamNum)}
-                          alt={`Team ${teamNum}`}
+                        <TeamLogo
+                          teamNumber={teamNum}
+                          year={selectedEvent?.year || year}
                           className="match-team-logo"
-                          onError={(e) => { e.target.style.display = 'none'; }}
+                          alt={`Team ${teamNum}`}
                         />
                         <div>
                           <span className="match-team-number">{teamNum}</span>
@@ -1090,11 +1140,11 @@ export default function Events() {
                   return (
                     <div key={key} className="match-team-card">
                       <Link to={`/teams?team=${teamNum}`} className="match-team-header">
-                        <img
-                          src={getTeamLogoUrl(teamNum)}
-                          alt={`Team ${teamNum}`}
+                        <TeamLogo
+                          teamNumber={teamNum}
+                          year={selectedEvent?.year || year}
                           className="match-team-logo"
-                          onError={(e) => { e.target.style.display = 'none'; }}
+                          alt={`Team ${teamNum}`}
                         />
                         <div>
                           <span className="match-team-number">{teamNum}</span>

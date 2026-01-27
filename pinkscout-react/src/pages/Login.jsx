@@ -55,18 +55,33 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   
   // Hooks
-  const { user, login, signup } = useAuth();
+  const { user, login, signup, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   // ==========================================================================
   // REDIRECT IF ALREADY LOGGED IN
   // ==========================================================================
-  
+
   useEffect(() => {
-    if (user) {
+    // Only redirect after auth state is determined (not during loading)
+    if (!authLoading && user) {
       navigate('/dashboard', { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, authLoading, navigate]);
+
+  // ==========================================================================
+  // SHOW LOADING WHILE AUTH STATE IS BEING DETERMINED
+  // ==========================================================================
+  // This prevents blank page when duplicating tabs
+
+  if (authLoading) {
+    return (
+      <div className="loading-container">
+        <div className="loading-spinner"></div>
+        <p>Loading...</p>
+      </div>
+    );
+  }
 
   // ==========================================================================
   // TOGGLE MODE HANDLER

@@ -404,10 +404,12 @@ export function AuthProvider({ children }) {
     refreshRoleContext  // Function: refreshRoleContext() - call after role changes
   };
 
-  // Don't render children until auth state is determined
+  // Render children with loading state available via context
+  // Note: We always render children now - components use the `loading` state
+  // to show their own loading UI. This fixes blank page on tab duplication.
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 }

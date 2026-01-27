@@ -133,93 +133,97 @@ export function AuthProvider({ children }) {
 
   // Handle auth state changes
   async function handleAuthChange(supabaseUser) {
+    // Set user and loading state IMMEDIATELY - don't wait for additional data
+    setUser(supabaseUser);
+    setLoading(false);
+
+    if (supabaseUser) {
+      // Load additional data in the background (non-blocking)
+      // These don't affect the loading state - UI can render while these load
+      loadUserData(supabaseUser);
+    } else {
+      setIsAdmin(false);
+      setUserProfile(null);
+      setRoleContext({
+        role: null,
+        scoutingId: null,
+        userUid: null,
+        isMasterAdmin: false,
+        canViewAll: false,
+        isTeamLead: false,
+        teamLeadUid: null,
+        teamCode: null
+      });
+    }
+  }
+
+  // Load additional user data in the background (non-blocking)
+  async function loadUserData(supabaseUser) {
+    // Check admin rights
     try {
-      setUser(supabaseUser);
-
-      if (supabaseUser) {
-        // Check admin rights
-        try {
-          const adminStatus = await checkAdminRights(supabaseUser);
-          setIsAdmin(adminStatus);
-        } catch (error) {
-          if (import.meta.env.DEV) {
-            console.error('Error checking admin rights:', error);
-          }
-          setIsAdmin(false);
-        }
-
-        // Load role context for RBAC
-        try {
-          const context = await getRoleContext(supabaseUser);
-          setRoleContext(context);
-        } catch (error) {
-          if (import.meta.env.DEV) {
-            console.error('Error loading role context:', error);
-          }
-        }
-
-        // Load user profile from Supabase
-        try {
-          const { data: profile, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', supabaseUser.id)
-            .single();
-
-          if (profile && !error) {
-            // Convert snake_case keys to camelCase for consistent access
-            setUserProfile(snakeToCamelCase(profile));
-          } else if (error?.code === 'PGRST116') {
-            // Profile doesn't exist - create it automatically
-            // This can happen if profile creation failed during signup
-            if (import.meta.env.DEV) {
-              console.log('Creating missing profile for user:', supabaseUser.id);
-            }
-            const newProfile = {
-              id: supabaseUser.id,
-              email: supabaseUser.email,
-              display_name: supabaseUser.user_metadata?.display_name || supabaseUser.email?.split('@')[0] || '',
-              role: ROLES.SCOUT,
-              is_team_lead: false
-            };
-
-            const { data: createdProfile, error: createError } = await supabase
-              .from('profiles')
-              .insert(newProfile)
-              .select()
-              .single();
-
-            if (createdProfile && !createError) {
-              setUserProfile(snakeToCamelCase(createdProfile));
-              if (import.meta.env.DEV) {
-                console.log('✅ Auto-created profile for user:', supabaseUser.id);
-              }
-            } else if (import.meta.env.DEV) {
-              console.error('Error auto-creating profile:', createError);
-            }
-          }
-        } catch (error) {
-          if (import.meta.env.DEV) {
-            console.error('Error loading user profile:', error);
-          }
-        }
-      } else {
-        setIsAdmin(false);
-        setUserProfile(null);
-        setRoleContext({
-          role: null,
-          scoutingId: null,
-          userUid: null,
-          isMasterAdmin: false,
-          canViewAll: false,
-          isTeamLead: false,
-          teamLeadUid: null,
-          teamCode: null
-        });
+      const adminStatus = await checkAdminRights(supabaseUser);
+      setIsAdmin(adminStatus);
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('Error checking admin rights:', error);
       }
-    } finally {
-      // Always set loading to false, even if errors occur
-      setLoading(false);
+      setIsAdmin(false);
+    }
+
+    // Load role context for RBAC
+    try {
+      const context = await getRoleContext(supabaseUser);
+      setRoleContext(context);
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('Error loading role context:', error);
+      }
+    }
+
+    // Load user profile from Supabase
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', supabaseUser.id)
+        .single();
+
+      if (profile && !error) {
+        // Convert snake_case keys to camelCase for consistent access
+        setUserProfile(snakeToCamelCase(profile));
+      } else if (error?.code === 'PGRST116') {
+        // Profile doesn't exist - create it automatically
+        // This can happen if profile creation failed during signup
+        if (import.meta.env.DEV) {
+          console.log('Creating missing profile for user:', supabaseUser.id);
+        }
+        const newProfile = {
+          id: supabaseUser.id,
+          email: supabaseUser.email,
+          display_name: supabaseUser.user_metadata?.display_name || supabaseUser.email?.split('@')[0] || '',
+          role: ROLES.SCOUT,
+          is_team_lead: false
+        };
+
+        const { data: createdProfile, error: createError } = await supabase
+          .from('profiles')
+          .insert(newProfile)
+          .select()
+          .single();
+
+        if (createdProfile && !createError) {
+          setUserProfile(snakeToCamelCase(createdProfile));
+          if (import.meta.env.DEV) {
+            console.log('✅ Auto-created profile for user:', supabaseUser.id);
+          }
+        } else if (import.meta.env.DEV) {
+          console.error('Error auto-creating profile:', createError);
+        }
+      }
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('Error loading user profile:', error);
+      }
     }
   }
 

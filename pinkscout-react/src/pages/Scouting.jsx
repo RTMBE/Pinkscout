@@ -32,7 +32,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { saveScoutingData } from '../services/scoutingService';
-import { getEventList } from '../services/blueAllianceAPI';
+import { getEventList, getTeamEvents } from '../services/blueAllianceAPI';
 import { useAuth } from '../contexts/AuthContext';
 
 // LocalStorage keys for persisting event selection
@@ -115,6 +115,46 @@ export default function Scouting() {
       if (selectedEvent && !eventList.find(e => e.key === selectedEvent)) {
         setSelectedEvent('');
         localStorage.removeItem(STORAGE_KEY_EVENT);
+      }
+
+      // Auto-select user's team's current/closest event if no event is saved
+      const savedEvent = localStorage.getItem(STORAGE_KEY_EVENT);
+      if (!savedEvent && userProfile?.teamNumber && eventList.length > 0) {
+        try {
+          // Get events for the user's team
+          const teamEvents = await getTeamEvents(userProfile.teamNumber, selectedYear);
+
+          if (teamEvents.length > 0) {
+            const now = new Date();
+
+            // Find event that's currently happening
+            let relevantEvent = teamEvents.find(e => {
+              const start = new Date(e.start_date);
+              const end = new Date(e.end_date);
+              end.setDate(end.getDate() + 1); // Include end date
+              return now >= start && now <= end;
+            });
+
+            // If no current event, find next upcoming event
+            if (!relevantEvent) {
+              relevantEvent = teamEvents.find(e => new Date(e.start_date) >= now);
+            }
+
+            // If no upcoming event, use the most recent past event
+            if (!relevantEvent) {
+              relevantEvent = teamEvents[teamEvents.length - 1];
+            }
+
+            // Auto-select the relevant event
+            if (relevantEvent && eventList.find(e => e.key === relevantEvent.key)) {
+              setSelectedEvent(relevantEvent.key);
+              setEventSearchQuery(relevantEvent.name);
+              localStorage.setItem(STORAGE_KEY_EVENT, relevantEvent.key);
+            }
+          }
+        } catch (teamEventsErr) {
+          console.warn('Could not load team events for auto-selection:', teamEventsErr);
+        }
       }
     } catch (err) {
       console.error('Error loading events:', err);

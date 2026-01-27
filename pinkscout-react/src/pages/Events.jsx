@@ -46,19 +46,35 @@ function TeamLogo({ teamNumber, year, className = 'team-logo', alt }) {
   const colorIndex = teamNumber % colors.length;
   const bgColor = colors[colorIndex];
 
+  // Determine size based on className
+  let size = '48px'; // default for .team-logo
+  let fontSize = '1.2rem';
+  if (className.includes('match-team-logo')) {
+    size = '32px';
+    fontSize = '0.9rem';
+  } else if (className.includes('award-team-logo')) {
+    size = '24px';
+    fontSize = '0.7rem';
+  }
+
   if (hasError) {
     return (
       <div
         className={`${className} team-logo-fallback`}
         style={{
+          width: size,
+          height: size,
+          minWidth: size,
+          minHeight: size,
           backgroundColor: bgColor,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           color: 'white',
           fontWeight: 'bold',
-          fontSize: className.includes('small') ? '0.75rem' : '1rem',
-          borderRadius: '4px'
+          fontSize: fontSize,
+          borderRadius: '4px',
+          flexShrink: 0
         }}
         title={alt || `Team ${teamNumber}`}
       >

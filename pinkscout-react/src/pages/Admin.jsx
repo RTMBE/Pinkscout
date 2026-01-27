@@ -29,7 +29,8 @@ import { getAllScoutingData, deleteScoutingData } from '../services/scoutingServ
 const ALLOWED_ADMIN_EMAILS = [
   'rkuzmik@gmail.com',
   'rtmbe20@gmail.com',
-  'admin@pinkscout.com',
+  'benjamin.kuzmik@gmail.com',
+  'owentrandem@gmail.com',
   // Add more admin emails here
 ];
 

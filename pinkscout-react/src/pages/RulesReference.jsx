@@ -36,9 +36,9 @@ const RULES_DATA = [
   {
     id: 'G402',
     category: 'Robot Contact',
-    title: 'No Pinning Over 5 Seconds',
-    description: 'A robot may not pin an opponent for more than 5 seconds. A pin ends when the pinned robot can move at least 6 feet away.',
-    penalty: 'FOUL per additional 5 seconds.',
+    title: 'No Pinning Over 3 Seconds',
+    description: 'A robot may not pin an opponent for more than 3 seconds. A pin ends when the pinned robot can move at least 6 feet away.',
+    penalty: 'FOUL per additional 3 seconds.',
     whyItMatters: 'Common defense disputes; timing errors lead to bad calls.',
   },
   {

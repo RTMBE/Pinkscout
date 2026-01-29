@@ -91,6 +91,14 @@ export default function Sidebar({ isOpen = false, onClose }) {
               </NavLink>
             </li>
           )}
+          {/* Recommended Alliance - Only visible when user has set their team number */}
+          {userProfile?.teamNumber && (
+            <li>
+              <NavLink to="/recommended-alliance">
+                🤝 Alliance Picks
+              </NavLink>
+            </li>
+          )}
           <li>
             <NavLink to="/analytics">
               📈 Analytics

@@ -45,6 +45,7 @@ const Analytics = lazy(() => import('./pages/Analytics'));
 const Login = lazy(() => import('./pages/Login'));
 const Profile = lazy(() => import('./pages/Profile'));
 const MyMatches = lazy(() => import('./pages/MyMatches'));
+const RecommendedAlliance = lazy(() => import('./pages/RecommendedAlliance'));
 
 // =============================================================================
 // LOADING FALLBACK COMPONENT
@@ -212,6 +213,11 @@ export default function App() {
             {/* My Matches - User's team matches */}
             <Route path="/my-matches" element={
               <ProtectedRoute><MyMatches /></ProtectedRoute>
+            } />
+
+            {/* Recommended Alliance - Alliance partner recommendations */}
+            <Route path="/recommended-alliance" element={
+              <ProtectedRoute><RecommendedAlliance /></ProtectedRoute>
             } />
 
             {/* Admin - Admin panel (admin only) */}

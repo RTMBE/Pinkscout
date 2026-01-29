@@ -101,7 +101,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
           )}
           <li>
             <NavLink to="/analytics">
-              📈 Analytics
+              📖 Rules Reference
             </NavLink>
           </li>
           <li>

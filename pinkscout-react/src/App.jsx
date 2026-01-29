@@ -16,7 +16,7 @@
  * /events       → Event Page (protected)
  * /scouting     → Scouting Form (protected)
  * /admin        → Admin Panel (protected + email whitelist)
- * /analytics    → Analytics (protected)
+ * /analytics    → Rules Reference (public)
  * /login        → Login Page (public, no sidebar)
  * /profile      → Scouter Profile (protected)
  *
@@ -41,7 +41,7 @@ const Teams = lazy(() => import('./pages/Teams'));
 const Events = lazy(() => import('./pages/Events'));
 const Scouting = lazy(() => import('./pages/Scouting'));
 const Admin = lazy(() => import('./pages/Admin'));
-const Analytics = lazy(() => import('./pages/Analytics'));
+const RulesReference = lazy(() => import('./pages/RulesReference'));
 const Login = lazy(() => import('./pages/Login'));
 const Profile = lazy(() => import('./pages/Profile'));
 const MyMatches = lazy(() => import('./pages/MyMatches'));
@@ -200,10 +200,8 @@ export default function App() {
               <ProtectedRoute><Scouting /></ProtectedRoute>
             } />
             
-            {/* Analytics - Charts and comparisons */}
-            <Route path="/analytics" element={
-              <ProtectedRoute><Analytics /></ProtectedRoute>
-            } />
+            {/* Rules Reference - Public FRC 2026 game rules */}
+            <Route path="/analytics" element={<RulesReference />} />
             
             {/* Profile - User profile */}
             <Route path="/profile" element={

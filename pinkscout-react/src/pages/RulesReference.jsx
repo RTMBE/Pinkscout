@@ -2,20 +2,17 @@
  * =============================================================================
  * RULESREFERENCE.JSX - FRC 2026 Rules & Match Reference
  * =============================================================================
- * 
- * WHAT IS THIS PAGE?
- * A fast, in-match reference for high-impact FRC 2026 game rules that can
- * affect penalties, match outcomes, replays, or score corrections.
- * 
+ *
  * PURPOSE:
- * Function as a driver coach + strategist cheat sheet that can be opened
- * mid-event to verify rules and support calm, accurate discussions with referees.
- * 
+ * Driver Coach & Strategist reference for the most match-impactful FRC 2026 rules.
+ * This page is not educational and not a summary — it is a fast dispute and
+ * verification tool for use during events.
+ *
  * ACCESSIBILITY:
  * - Publicly accessible (no login required)
  * - No team number requirement
- * - Mobile-optimized with large, readable text
- * 
+ * - Mobile-first layout, fast load, no animations
+ *
  * =============================================================================
  */
 
@@ -23,180 +20,197 @@ import { useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 
 // =============================================================================
-// FRC 2026 REBUILT - TOP 20 CRITICAL RULES
-// Categories: Robot-to-Robot Contact, Defense & Blocking, Protected Zones / Endgame,
-//             Human Player & Drive Team Conduct, Inspection & Robot Legality,
-//             Match Timing & Referee Authority
+// FRC 2026 REBUILT - TOP 20 CRITICAL RULES (EXACT CONTENT)
 // =============================================================================
 
 const RULES_DATA = [
-  // Robot-to-Robot Contact
+  // 🤖 Robot Contact
   {
     id: 'G401',
-    category: 'Robot-to-Robot Contact',
+    category: 'Robot Contact',
     title: 'No Damaging Contact',
-    description: 'ROBOTS may not damage or functionally impair other ROBOTS.',
-    penalty: 'FOUL, TECH FOUL if extended or repeated, YELLOW/RED CARD for egregious violations',
+    description: 'Robots may not deliberately or recklessly cause damage to an opponent robot. Damage includes bent frames, broken mechanisms, or loss of function.',
+    penalty: 'Major FOUL; YELLOW CARD if damage is significant or repeated; RED CARD if an opponent is disabled.',
+    whyItMatters: 'This rule can swing eliminations instantly if misapplied.',
   },
   {
     id: 'G402',
-    category: 'Robot-to-Robot Contact',
+    category: 'Robot Contact',
     title: 'No Pinning Over 5 Seconds',
-    description: 'A ROBOT may not PIN an opponent\'s ROBOT for more than 5 seconds. After 5 seconds, must back off at least 6 feet before re-engaging.',
-    penalty: 'FOUL per additional 5 seconds of PIN',
+    description: 'A robot may not pin an opponent for more than 5 seconds. A pin ends when the pinned robot can move at least 6 feet away.',
+    penalty: 'FOUL per additional 5 seconds.',
+    whyItMatters: 'Common defense disputes; timing errors lead to bad calls.',
   },
   {
     id: 'G403',
-    category: 'Robot-to-Robot Contact',
+    category: 'Robot Contact',
     title: 'No Tipping or Entanglement',
-    description: 'Strategies aimed at tipping, entangling, or disabling ROBOTS are not permitted.',
-    penalty: 'TECH FOUL, YELLOW CARD if deliberate',
+    description: 'Robots may not intentionally tip, lift, or entangle an opponent.',
+    penalty: 'Major FOUL; possible YELLOW or RED CARD.',
+    whyItMatters: 'Determines whether contact was strategic or illegal.',
   },
-  // Defense & Blocking
+  // 🛡️ Defense
   {
     id: 'G410',
-    category: 'Defense & Blocking',
+    category: 'Defense',
     title: 'Defense Must Be Legal',
-    description: 'Defense must be played without using mechanisms designed solely to obstruct opponents.',
-    penalty: 'FOUL, TECH FOUL for repeated violations',
+    description: 'Defensive contact must be within bumper-to-bumper interaction and may not violate safety or protected zone rules.',
+    penalty: 'FOUL or Major FOUL depending on severity.',
+    whyItMatters: 'Clean defense vs illegal hits is subjective.',
   },
   {
     id: 'G411',
-    category: 'Defense & Blocking',
+    category: 'Defense',
     title: 'No Blocking Opponent Access to Their Elements',
-    description: 'ROBOTS may not block opponent access to their GAME PIECES or SCORING locations indefinitely.',
-    penalty: 'FOUL after 5 seconds, TECH FOUL if persistent',
+    description: 'Robots may not completely block opponent access to their scoring elements or loading areas for extended periods.',
+    penalty: 'Major FOUL per violation.',
+    whyItMatters: 'Used to stop zone denial strategies.',
   },
-  // Protected Zones / Endgame
+  // 🏁 Protected / Endgame
   {
     id: 'G420',
-    category: 'Protected Zones / Endgame',
+    category: 'Protected / Endgame',
     title: 'Protected Zones',
-    description: 'Certain field areas are PROTECTED ZONES. Opposing ROBOTS may not contact ROBOTS in these zones under specified conditions.',
-    penalty: 'TECH FOUL per instance of contact',
+    description: 'Robots contacting opponents fully inside protected zones commit a violation.',
+    penalty: 'Major FOUL.',
+    whyItMatters: 'One bad call can hand over endgame points.',
   },
   {
     id: 'G421',
-    category: 'Protected Zones / Endgame',
+    category: 'Protected / Endgame',
     title: 'Endgame Protection',
-    description: 'During the last 20 seconds of the MATCH (ENDGAME), ROBOTS attempting to CLIMB or PARK in designated areas are protected from opponent contact.',
-    penalty: 'TECH FOUL, YELLOW CARD for intentional disruption',
+    description: 'During endgame, robots interacting with endgame structures are protected from contact.',
+    penalty: 'Major FOUL + awarded endgame credit.',
+    whyItMatters: 'Decides climbs and ranking points.',
   },
   {
     id: 'G422',
-    category: 'Protected Zones / Endgame',
+    category: 'Protected / Endgame',
     title: 'No Interference with Climbing Robots',
-    description: 'ROBOTS may not contact or interfere with an opponent ROBOT that has begun its CLIMB sequence.',
-    penalty: 'TECH FOUL plus opponent points if climb prevented',
+    description: 'Robots may not contact or disturb an opponent that is actively climbing or latched.',
+    penalty: 'Major FOUL; possible YELLOW CARD.',
+    whyItMatters: 'Often miscalled in chaotic endgames.',
   },
-  // Human Player & Drive Team Conduct
+  // 👥 Human Player & Drive Team
   {
     id: 'G430',
-    category: 'Human Player & Drive Team Conduct',
+    category: 'Human Player & Drive Team',
     title: 'Human Players Stay in Designated Areas',
-    description: 'HUMAN PLAYERS must remain in designated HUMAN PLAYER STATIONS during the MATCH.',
-    penalty: 'FOUL, TECH FOUL if affecting gameplay',
+    description: 'Human Players must remain fully inside their assigned zone.',
+    penalty: 'FOUL; escalation for repeat offenses.',
+    whyItMatters: 'Easy to verify and overturn if wrong.',
   },
   {
     id: 'G431',
-    category: 'Human Player & Drive Team Conduct',
+    category: 'Human Player & Drive Team',
     title: 'No Throwing Game Pieces at Robots',
-    description: 'HUMAN PLAYERS may not throw GAME PIECES directly at ROBOTS or in a manner intended to interfere.',
-    penalty: 'TECH FOUL per violation',
+    description: 'Game pieces may not be thrown directly at robots.',
+    penalty: 'FOUL or Major FOUL.',
+    whyItMatters: 'Prevents unsafe scoring attempts.',
   },
   {
     id: 'G432',
-    category: 'Human Player & Drive Team Conduct',
+    category: 'Human Player & Drive Team',
     title: 'Drive Team Conduct',
-    description: 'DRIVE TEAM members must demonstrate professional behavior. Abuse of REFEREES, FIELD STAFF, or other teams is prohibited.',
-    penalty: 'YELLOW CARD or RED CARD',
+    description: 'Drive Teams must act respectfully and follow referee instructions.',
+    penalty: 'YELLOW CARD; RED CARD for egregious behavior.',
+    whyItMatters: 'Impacts alliance penalties.',
   },
   {
     id: 'G433',
-    category: 'Human Player & Drive Team Conduct',
+    category: 'Human Player & Drive Team',
     title: 'No Coaching During Match',
-    description: 'Only designated DRIVE TEAM members may communicate with DRIVERS during the MATCH.',
-    penalty: 'FOUL per instance',
+    description: 'Only designated Drive Team members may communicate during a match.',
+    penalty: 'FOUL or YELLOW CARD.',
+    whyItMatters: 'Often violated unintentionally.',
   },
-  // Inspection & Robot Legality
+  // 📋 Robot Legality
   {
     id: 'R101',
-    category: 'Inspection & Robot Legality',
+    category: 'Robot Legality',
     title: 'Robot Size Limits',
-    description: 'ROBOTS must start the MATCH within the STARTING CONFIGURATION (frame perimeter, height restrictions per game manual).',
-    penalty: 'ROBOT not allowed to compete until corrected',
+    description: 'Robots must remain within size constraints except during legal extension.',
+    penalty: 'DISABLED if illegal during match.',
+    whyItMatters: 'Instant match loss if violated.',
   },
   {
     id: 'R102',
-    category: 'Inspection & Robot Legality',
+    category: 'Robot Legality',
     title: 'Weight Limit',
-    description: 'ROBOT weight may not exceed the maximum weight specified in the game manual (typically 125 lbs without battery/bumpers).',
-    penalty: 'ROBOT not allowed to compete until corrected',
+    description: 'Robots may not exceed the maximum allowed weight including bumpers and battery.',
+    penalty: 'Fails inspection; may not compete.',
+    whyItMatters: 'Can invalidate match results.',
   },
   {
     id: 'R103',
-    category: 'Inspection & Robot Legality',
+    category: 'Robot Legality',
     title: 'Bumper Requirements',
-    description: 'BUMPERS must meet all requirements for construction, height, color, and team number display.',
-    penalty: 'FOUL if non-compliant during MATCH, may be disabled',
+    description: 'Bumpers must meet construction, coverage, and height rules.',
+    penalty: 'Inspection failure or DISABLED.',
+    whyItMatters: 'Contact legality depends on bumpers.',
   },
-  // Match Timing & Referee Authority
+  // ⏱️ Match Authority & Timing
   {
     id: 'G440',
-    category: 'Match Timing & Referee Authority',
+    category: 'Match Authority & Timing',
     title: 'Referee Calls Are Final',
-    description: 'All REFEREE decisions are final. Teams may request clarification but may not dispute calls on the field.',
-    penalty: 'YELLOW CARD for persistent arguing',
+    description: 'All referee decisions are final and not subject to video review.',
+    penalty: 'Ends disputes immediately.',
+    whyItMatters: 'N/A - procedural rule.',
   },
   {
     id: 'G441',
-    category: 'Match Timing & Referee Authority',
+    category: 'Match Authority & Timing',
     title: 'Match Replay Authority',
-    description: 'Only the HEAD REFEREE may authorize a MATCH replay due to FIELD FAULT or other extenuating circumstances.',
-    penalty: 'N/A - procedural rule',
+    description: 'Only the Head Referee may authorize a match replay due to field or timing faults.',
+    penalty: 'Prevents improper replay demands.',
+    whyItMatters: 'N/A - procedural rule.',
   },
   {
     id: 'G442',
-    category: 'Match Timing & Referee Authority',
+    category: 'Match Authority & Timing',
     title: 'Late Arrival',
-    description: 'DRIVE TEAMS must be queued and ready before their MATCH. Failure to be ready may result in forfeiture.',
-    penalty: 'Possible MATCH forfeiture',
+    description: 'Teams not present at match start may be bypassed or disabled.',
+    penalty: 'Zero contribution to alliance score.',
+    whyItMatters: 'N/A - procedural rule.',
   },
   {
     id: 'G443',
-    category: 'Match Timing & Referee Authority',
+    category: 'Match Authority & Timing',
     title: 'E-Stop Usage',
-    description: 'DRIVE TEAMS must use E-STOP if ROBOT poses a safety hazard. E-STOP disabled ROBOTS may not re-enter that MATCH.',
-    penalty: 'ROBOT removed from MATCH',
+    description: 'Emergency Stop disables the robot for the remainder of the match.',
+    penalty: 'Irreversible match consequence.',
+    whyItMatters: 'N/A - procedural rule.',
   },
   {
     id: 'G444',
-    category: 'Match Timing & Referee Authority',
+    category: 'Match Authority & Timing',
     title: 'Score Correction Window',
-    description: 'Teams have until the end of the next MATCH to request score correction review.',
-    penalty: 'N/A - procedural rule',
+    description: 'Score discrepancies must be raised within the allowed review window before the next match.',
+    penalty: 'Missed window = score locked.',
+    whyItMatters: 'N/A - procedural rule.',
   },
 ];
 
-// Categories for filtering
+// Categories for filtering (matching user spec exactly)
 const CATEGORIES = [
   'All Categories',
-  'Robot-to-Robot Contact',
-  'Defense & Blocking',
-  'Protected Zones / Endgame',
-  'Human Player & Drive Team Conduct',
-  'Inspection & Robot Legality',
-  'Match Timing & Referee Authority',
+  'Robot Contact',
+  'Defense',
+  'Protected / Endgame',
+  'Human Player & Drive Team',
+  'Robot Legality',
+  'Match Authority & Timing',
 ];
 
 // Category icons for visual distinction
 const CATEGORY_ICONS = {
-  'Robot-to-Robot Contact': '🤖',
-  'Defense & Blocking': '🛡️',
-  'Protected Zones / Endgame': '🏁',
-  'Human Player & Drive Team Conduct': '👥',
-  'Inspection & Robot Legality': '📋',
-  'Match Timing & Referee Authority': '⏱️',
+  'Robot Contact': '🤖',
+  'Defense': '🛡️',
+  'Protected / Endgame': '🏁',
+  'Human Player & Drive Team': '👥',
+  'Robot Legality': '📋',
+  'Match Authority & Timing': '⏱️',
 };
 
 export default function RulesReference() {
@@ -224,10 +238,10 @@ export default function RulesReference() {
       <header className="page-header" style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
         <h1 style={{ fontSize: '1.75rem', marginBottom: '0.5rem' }}>📖 FRC 2026 Rules & Match Reference</h1>
         <p style={{ fontSize: '1rem', opacity: 0.9, marginBottom: '1rem' }}>
-          Critical rules that can make or break a match
+          High-impact rules that can decide matches
         </p>
         <a
-          href="https://firstfrc.blob.core.windows.net/frc2026/Manual/2026GameManual.pdf"
+          href="https://firstfrc.blob.core.windows.net/frc2026/Manual/TeamUpdates/REBUILT_TeamUpdate-Combined.pdf"
           target="_blank"
           rel="noopener noreferrer"
           className="btn btn-primary"
@@ -346,9 +360,19 @@ export default function RulesReference() {
                   backgroundColor: 'var(--warning-bg, #fff3e0)',
                   borderLeft: '4px solid var(--warning-color, #ff9800)',
                   borderRadius: '4px',
+                  marginBottom: '1rem',
                 }}>
-                  <strong style={{ marginRight: '0.5rem' }}>⚠️ Penalty:</strong>
+                  <strong style={{ marginRight: '0.5rem' }}>⚠️ Penalty / Match Impact:</strong>
                   <span style={{ fontSize: '1rem' }}>{rule.penalty}</span>
+                </div>
+                <div style={{
+                  padding: '0.75rem 1rem',
+                  backgroundColor: 'var(--info-bg, #e3f2fd)',
+                  borderLeft: '4px solid var(--info-color, #2196f3)',
+                  borderRadius: '4px',
+                }}>
+                  <strong style={{ marginRight: '0.5rem' }}>💡 Why it matters:</strong>
+                  <span style={{ fontSize: '1rem' }}>{rule.whyItMatters}</span>
                 </div>
               </div>
             )}
@@ -366,13 +390,10 @@ export default function RulesReference() {
         fontSize: '0.95rem',
         color: 'var(--text-secondary, #666)',
       }}>
-        <p style={{ marginBottom: '0.5rem' }}>
-          <strong>⚖️ Disclaimer:</strong> Referee calls are final.
-        </p>
         <p>
-          This page is a reference tool only and does not override Head Referee decisions.
-          Always reference the latest <a
-            href="https://firstfrc.blob.core.windows.net/frc2026/Manual/2026GameManual.pdf"
+          This page is a reference tool. Referee calls are final. Always defer to the Head Referee and the latest{' '}
+          <a
+            href="https://firstfrc.blob.core.windows.net/frc2026/Manual/TeamUpdates/REBUILT_TeamUpdate-Combined.pdf"
             target="_blank"
             rel="noopener noreferrer"
             style={{ color: 'var(--primary-color, #e91e63)', textDecoration: 'underline' }}

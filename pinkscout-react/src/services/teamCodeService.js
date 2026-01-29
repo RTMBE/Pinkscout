@@ -296,13 +296,20 @@ export async function getTeamScoutingData(teamLeadUid) {
  * @returns {Promise<string>} - The new team code
  */
 export async function regenerateTeamCode(teamLeadUid, teamLeadEmail) {
+  if (!teamLeadUid) throw new Error('Team Lead UID is required');
+
   // Find and deactivate old code
   const oldCode = await getTeamLeadCode(teamLeadUid);
   if (oldCode) {
-    await supabase
+    const { error: deactivateError } = await supabase
       .from('team_codes')
       .update({ active: false, deactivated_at: new Date().toISOString() })
       .eq('code', oldCode);
+
+    if (deactivateError) {
+      console.error('Error deactivating old code:', deactivateError);
+      // Continue anyway - we'll create a new code
+    }
   }
 
   // Generate new code
@@ -336,13 +343,21 @@ export async function regenerateTeamCode(teamLeadUid, teamLeadEmail) {
       active: true
     });
 
-  if (codeError) throw codeError;
+  if (codeError) {
+    console.error('Error inserting new team code:', codeError);
+    throw new Error(`Failed to create new team code: ${codeError.message}`);
+  }
 
   // Update user profile with new code
-  await supabase
+  const { error: profileError } = await supabase
     .from('profiles')
     .update({ team_code: code })
     .eq('id', teamLeadUid);
+
+  if (profileError) {
+    console.error('Error updating profile with new code:', profileError);
+    // Non-critical - code was created, profile update can be retried
+  }
 
   if (import.meta.env.DEV) {
     console.log(`✅ Team code regenerated for ${teamLeadUid}: ${code}`);

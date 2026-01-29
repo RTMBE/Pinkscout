@@ -105,11 +105,11 @@ export default function Profile() {
 
     try {
       // Get team code
-      const code = await getTeamLeadCode(user.uid);
+      const code = await getTeamLeadCode(user.id);
       setTeamCode(code || roleContext.teamCode || '');
 
       // Get team members
-      const members = await getTeamMembers(user.uid);
+      const members = await getTeamMembers(user.id);
       setTeamMembers(members);
 
       // Update team stats
@@ -135,7 +135,7 @@ export default function Profile() {
     setError('');
 
     try {
-      const newCode = await regenerateTeamCode(user.uid, user.email);
+      const newCode = await regenerateTeamCode(user.id, user.email);
       setTeamCode(newCode);
       setSuccess('Team code regenerated successfully!');
     } catch (err) {

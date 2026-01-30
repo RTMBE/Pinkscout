@@ -527,10 +527,28 @@ export async function deleteScoutingData(docId, teamNumber = null, eventKey = nu
  * Calculate aggregate statistics for a team from raw scouting entries
  * This avoids repeated full document reads for displaying team summaries
  *
- * @param {Array} entries - Raw scouting entries for a team
- * @returns {Object} - Aggregated statistics
+ * @param {Array} entries - Raw scouting entries for a team (array of match records)
+ * @returns {Object} - Aggregated statistics including averages and rates
+ *
+ * WHAT THIS FUNCTION DOES:
+ * Takes all scouting entries for a single team and calculates averages and rates.
+ * This is used in the Analytics and Recommended Alliance pages to compare teams.
+ *
+ * AUTO RATING FORMULA:
+ * The auto rating (0-100 scale) is a composite score with these weights:
+ *   - 40% Scoring Component: avgAutoFuel * 10 + avgAutoCycles * 15 (capped at 40)
+ *   - 25% Accuracy Component: (autoAccuracy / 100) * 25
+ *   - 20% Consistency Component: (autoConsistency / 100) * 20
+ *   - 15% Bonus Component: (mobility% + winRate%) / 200 * 15
+ *
+ * CONSISTENCY CALCULATION:
+ * Uses the Coefficient of Variation (CV = stdDev / mean)
+ * Lower CV = more consistent performance
+ * Consistency = (1 - CV) * 100, clamped to 0-100
  */
 export function calculateTeamAggregates(entries) {
+  // If no entries, return zeros for all metrics
+  // This prevents division by zero and provides sensible defaults
   if (!entries || entries.length === 0) {
     return {
       matchCount: 0,
@@ -539,7 +557,7 @@ export function calculateTeamAggregates(entries) {
       avgCycles: 0,
       avgDefense: 0,
       climbRate: 0,
-      // Auto-specific metrics
+      // Auto-specific metrics (used in Recommended Alliance feature)
       avgAutoShotsMade: 0,
       avgAutoShotsAttempted: 0,
       autoAccuracy: 0,
@@ -555,87 +573,123 @@ export function calculateTeamAggregates(entries) {
 
   const matchCount = entries.length;
 
-  // Sum up numeric fields
+  // ---------------------------------------------------------------------------
+  // STEP 1: Sum up all numeric fields across all matches
+  // ---------------------------------------------------------------------------
   let totalAutoFuel = 0;
   let totalAutoShotsAttempted = 0;
   let totalAutoCycles = 0;
-  let autoMobilityCount = 0;
-  let autoWinCount = 0;
+  let autoMobilityCount = 0;    // How many matches they moved from starting position
+  let autoWinCount = 0;         // How many matches their alliance won auto
   let totalTeleopFuel = 0;
   let totalCycles = 0;
   let totalDefense = 0;
   let climbCount = 0;
   let latestDate = null;
 
-  // For consistency calculation (standard deviation)
+  // Array to store auto scores for consistency calculation
   const autoScores = [];
 
+  // Loop through each match entry
   for (const entry of entries) {
-    // Auto metrics
+    // --- Auto Period Metrics ---
     const autoFuel = entry.autoFuelScored || 0;
     totalAutoFuel += autoFuel;
     totalAutoShotsAttempted += entry.autoShotsAttempted || 0;
     totalAutoCycles += entry.autoCyclesCompleted || 0;
-    // Count mobility if startingPosition is set (new field) or autoMobility is true (legacy)
+
+    // Count mobility - supports BOTH new field (startingPosition) and legacy field (autoMobility)
+    // This ensures backward compatibility with older scouting data
     if (entry.startingPosition || entry.autoMobility) autoMobilityCount++;
+
+    // Did this alliance win auto? (hubControlFirst checkbox)
     if (entry.hubControlFirst) autoWinCount++;
 
     // Track auto scores for consistency calculation
+    // Cycles are weighted 2x since they're harder to achieve
     autoScores.push(autoFuel + (entry.autoCyclesCompleted || 0) * 2);
 
-    // Teleop metrics
+    // --- Teleop Period Metrics ---
     totalTeleopFuel += (entry.teleopFuelActive || 0) + (entry.teleopFuelInactive || 0);
-    // Support both old (teleopCycleCount) and new (teleopBallsCycled) field names
+    // Support both old field name (teleopCycleCount) and new field name (teleopBallsCycled)
     totalCycles += entry.teleopBallsCycled || entry.teleopCycleCount || 0;
-    // Add endgame fuel scoring (replacing defense rating)
+    // Support both old field (defenseRating) and new field (endgameFuelScored)
     totalDefense += entry.endgameFuelScored || entry.defenseRating || 0;
 
-    // Count successful climbs (level1, level2, or level3)
+    // --- Endgame Metrics ---
+    // Count successful climbs (any level except 'none')
     if (entry.endgameTowerLevel === 'level1' || entry.endgameTowerLevel === 'level2' || entry.endgameTowerLevel === 'level3') {
       climbCount++;
     }
 
-    // Track latest entry date
+    // Track the most recent entry date
     const entryDate = entry.createdAt ? new Date(entry.createdAt) : null;
     if (entryDate && (!latestDate || entryDate > latestDate)) {
       latestDate = entryDate;
     }
   }
 
-  // Calculate averages
+  // ---------------------------------------------------------------------------
+  // STEP 2: Calculate averages and rates
+  // ---------------------------------------------------------------------------
+  // Math.round(x * 10) / 10 rounds to 1 decimal place
   const avgAutoFuel = Math.round((totalAutoFuel / matchCount) * 10) / 10;
   const avgAutoShotsAttempted = Math.round((totalAutoShotsAttempted / matchCount) * 10) / 10;
   const avgAutoCycles = Math.round((totalAutoCycles / matchCount) * 10) / 10;
-  const autoMobilityRate = Math.round((autoMobilityCount / matchCount) * 100);
-  const autoWinRate = Math.round((autoWinCount / matchCount) * 100);
+  const autoMobilityRate = Math.round((autoMobilityCount / matchCount) * 100);  // Percentage
+  const autoWinRate = Math.round((autoWinCount / matchCount) * 100);            // Percentage
 
-  // Calculate auto accuracy (shots made / shots attempted)
+  // ---------------------------------------------------------------------------
+  // STEP 3: Calculate auto accuracy
+  // ---------------------------------------------------------------------------
+  // Accuracy = shots made / shots attempted * 100
   const autoAccuracy = totalAutoShotsAttempted > 0
     ? Math.round((totalAutoFuel / totalAutoShotsAttempted) * 100)
     : 0;
 
-  // Calculate auto consistency (inverse of coefficient of variation)
-  // Lower variance = higher consistency
-  let autoConsistency = 100;
+  // ---------------------------------------------------------------------------
+  // STEP 4: Calculate auto consistency using Coefficient of Variation
+  // ---------------------------------------------------------------------------
+  // Coefficient of Variation (CV) = Standard Deviation / Mean
+  // Low CV means consistent performance, high CV means inconsistent
+  // We invert it so higher number = more consistent
+  let autoConsistency = 100;  // Default to 100 if only 1 match (can't measure variance)
   if (autoScores.length > 1) {
+    // Calculate mean (average)
     const mean = autoScores.reduce((a, b) => a + b, 0) / autoScores.length;
     if (mean > 0) {
+      // Calculate variance: average of squared differences from mean
       const variance = autoScores.reduce((sum, score) => sum + Math.pow(score - mean, 2), 0) / autoScores.length;
+      // Standard deviation is the square root of variance
       const stdDev = Math.sqrt(variance);
-      const cv = stdDev / mean; // Coefficient of variation
+      // Coefficient of variation
+      const cv = stdDev / mean;
+      // Convert to consistency score (0-100): lower CV = higher consistency
+      // Cap cv at 1 to prevent negative consistency scores
       autoConsistency = Math.max(0, Math.round((1 - Math.min(cv, 1)) * 100));
     }
   }
 
-  // Calculate composite auto rating (0-100 scale)
-  // Weights: 40% scoring, 25% accuracy, 20% consistency, 15% mobility/win rate
-  const scoringComponent = Math.min(avgAutoFuel * 10 + avgAutoCycles * 15, 40);
+  // ---------------------------------------------------------------------------
+  // STEP 5: Calculate composite auto rating (0-100 scale)
+  // ---------------------------------------------------------------------------
+  // This combines multiple auto metrics into a single score for easy comparison
+  //
+  // Weights:
+  //   40% - Scoring (fuel + cycles)
+  //   25% - Accuracy (shots made / shots attempted)
+  //   20% - Consistency (low variance in performance)
+  //   15% - Bonuses (mobility + winning auto)
+  const scoringComponent = Math.min(avgAutoFuel * 10 + avgAutoCycles * 15, 40);  // Cap at 40
   const accuracyComponent = (autoAccuracy / 100) * 25;
   const consistencyComponent = (autoConsistency / 100) * 20;
   const bonusComponent = ((autoMobilityRate + autoWinRate) / 200) * 15;
   const autoRating = Math.round(scoringComponent + accuracyComponent + consistencyComponent + bonusComponent);
 
-  // Determine auto rating label
+  // ---------------------------------------------------------------------------
+  // STEP 6: Determine auto rating label (for display)
+  // ---------------------------------------------------------------------------
+  // High = 60+, Medium = 35-59, Low = 0-34
   let autoRatingLabel = 'Low';
   if (autoRating >= 60) autoRatingLabel = 'High';
   else if (autoRating >= 35) autoRatingLabel = 'Medium';

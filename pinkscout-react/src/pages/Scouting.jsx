@@ -73,12 +73,12 @@ export default function Scouting() {
     teamNumber: '',
     matchNumber: '',
     allianceColor: 'red',
+    startingPosition: '',       // Starting zone position: left, center, right
 
     // Auto Period (2026 REBUILT™) - 20 seconds
     autoFuelScored: 0,          // Fuel scored in active Hub (1 pt each)
     autoShotsAttempted: 0,      // Total shots attempted in auto (for accuracy tracking)
     autoCyclesCompleted: 0,     // Cycles completed during auto
-    autoMobility: false,        // Did robot leave starting zone?
     autoTowerClimb: 'none',     // Tower climb in auto (none, level1 only - 10 pts, 2 max)
 
     // Teleop Period (2026 REBUILT™) - 2:20 with Alliance Shifts
@@ -302,10 +302,10 @@ export default function Scouting() {
           teamNumber: '',
           matchNumber: '',
           allianceColor: 'red',
+          startingPosition: '',
           autoFuelScored: 0,
           autoShotsAttempted: 0,
           autoCyclesCompleted: 0,
-          autoMobility: false,
           autoTowerClimb: 'none',
           teleopFuelActive: 0,
           teleopFuelInactive: 0,
@@ -547,6 +547,20 @@ export default function Scouting() {
                 </button>
               </div>
             </div>
+            <div className="form-group">
+              <label htmlFor="startingPosition">📍 Starting Position</label>
+              <select
+                id="startingPosition"
+                name="startingPosition"
+                value={formData.startingPosition}
+                onChange={handleChange}
+              >
+                <option value="">Select position...</option>
+                <option value="left">Left</option>
+                <option value="center">Center</option>
+                <option value="right">Right</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -600,19 +614,6 @@ export default function Scouting() {
                 <option value="none">None</option>
                 <option value="level1">Level 1 - Off Carpet (10 pts, 2 max)</option>
               </select>
-            </div>
-
-            {/* Auto Mobility */}
-            <div className="form-group checkbox-group">
-              <label>
-                <input
-                  type="checkbox"
-                  name="autoMobility"
-                  checked={formData.autoMobility}
-                  onChange={handleChange}
-                />
-                🚗 Left Starting Zone (Mobility)
-              </label>
             </div>
 
             {/* Team Won Auto */}

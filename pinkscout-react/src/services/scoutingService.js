@@ -576,7 +576,8 @@ export function calculateTeamAggregates(entries) {
     totalAutoFuel += autoFuel;
     totalAutoShotsAttempted += entry.autoShotsAttempted || 0;
     totalAutoCycles += entry.autoCyclesCompleted || 0;
-    if (entry.autoMobility) autoMobilityCount++;
+    // Count mobility if startingPosition is set (new field) or autoMobility is true (legacy)
+    if (entry.startingPosition || entry.autoMobility) autoMobilityCount++;
     if (entry.hubControlFirst) autoWinCount++;
 
     // Track auto scores for consistency calculation

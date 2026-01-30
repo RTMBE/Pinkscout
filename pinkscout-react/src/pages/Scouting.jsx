@@ -585,7 +585,7 @@ export default function Scouting() {
                   checked={formData.hubControlFirst}
                   onChange={handleChange}
                 />
-                🎯 Alliance controlled Hub first
+                🎯 Team Won Auto
               </label>
             </div>
           </div>

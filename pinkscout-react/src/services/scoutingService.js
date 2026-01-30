@@ -539,6 +539,16 @@ export function calculateTeamAggregates(entries) {
       avgCycles: 0,
       avgDefense: 0,
       climbRate: 0,
+      // Auto-specific metrics
+      avgAutoShotsMade: 0,
+      avgAutoShotsAttempted: 0,
+      autoAccuracy: 0,
+      avgAutoCycles: 0,
+      autoMobilityRate: 0,
+      autoWinRate: 0,
+      autoRating: 0,
+      autoRatingLabel: 'N/A',
+      autoConsistency: 0,
       lastUpdated: null
     };
   }
@@ -547,14 +557,32 @@ export function calculateTeamAggregates(entries) {
 
   // Sum up numeric fields
   let totalAutoFuel = 0;
+  let totalAutoShotsAttempted = 0;
+  let totalAutoCycles = 0;
+  let autoMobilityCount = 0;
+  let autoWinCount = 0;
   let totalTeleopFuel = 0;
   let totalCycles = 0;
   let totalDefense = 0;
   let climbCount = 0;
   let latestDate = null;
 
+  // For consistency calculation (standard deviation)
+  const autoScores = [];
+
   for (const entry of entries) {
-    totalAutoFuel += entry.autoFuelScored || 0;
+    // Auto metrics
+    const autoFuel = entry.autoFuelScored || 0;
+    totalAutoFuel += autoFuel;
+    totalAutoShotsAttempted += entry.autoShotsAttempted || 0;
+    totalAutoCycles += entry.autoCyclesCompleted || 0;
+    if (entry.autoMobility) autoMobilityCount++;
+    if (entry.hubControlFirst) autoWinCount++;
+
+    // Track auto scores for consistency calculation
+    autoScores.push(autoFuel + (entry.autoCyclesCompleted || 0) * 2);
+
+    // Teleop metrics
     totalTeleopFuel += (entry.teleopFuelActive || 0) + (entry.teleopFuelInactive || 0);
     // Support both old (teleopCycleCount) and new (teleopBallsCycled) field names
     totalCycles += entry.teleopBallsCycled || entry.teleopCycleCount || 0;
@@ -573,13 +601,61 @@ export function calculateTeamAggregates(entries) {
     }
   }
 
+  // Calculate averages
+  const avgAutoFuel = Math.round((totalAutoFuel / matchCount) * 10) / 10;
+  const avgAutoShotsAttempted = Math.round((totalAutoShotsAttempted / matchCount) * 10) / 10;
+  const avgAutoCycles = Math.round((totalAutoCycles / matchCount) * 10) / 10;
+  const autoMobilityRate = Math.round((autoMobilityCount / matchCount) * 100);
+  const autoWinRate = Math.round((autoWinCount / matchCount) * 100);
+
+  // Calculate auto accuracy (shots made / shots attempted)
+  const autoAccuracy = totalAutoShotsAttempted > 0
+    ? Math.round((totalAutoFuel / totalAutoShotsAttempted) * 100)
+    : 0;
+
+  // Calculate auto consistency (inverse of coefficient of variation)
+  // Lower variance = higher consistency
+  let autoConsistency = 100;
+  if (autoScores.length > 1) {
+    const mean = autoScores.reduce((a, b) => a + b, 0) / autoScores.length;
+    if (mean > 0) {
+      const variance = autoScores.reduce((sum, score) => sum + Math.pow(score - mean, 2), 0) / autoScores.length;
+      const stdDev = Math.sqrt(variance);
+      const cv = stdDev / mean; // Coefficient of variation
+      autoConsistency = Math.max(0, Math.round((1 - Math.min(cv, 1)) * 100));
+    }
+  }
+
+  // Calculate composite auto rating (0-100 scale)
+  // Weights: 40% scoring, 25% accuracy, 20% consistency, 15% mobility/win rate
+  const scoringComponent = Math.min(avgAutoFuel * 10 + avgAutoCycles * 15, 40);
+  const accuracyComponent = (autoAccuracy / 100) * 25;
+  const consistencyComponent = (autoConsistency / 100) * 20;
+  const bonusComponent = ((autoMobilityRate + autoWinRate) / 200) * 15;
+  const autoRating = Math.round(scoringComponent + accuracyComponent + consistencyComponent + bonusComponent);
+
+  // Determine auto rating label
+  let autoRatingLabel = 'Low';
+  if (autoRating >= 60) autoRatingLabel = 'High';
+  else if (autoRating >= 35) autoRatingLabel = 'Medium';
+
   return {
     matchCount,
-    avgAutoFuel: Math.round((totalAutoFuel / matchCount) * 10) / 10,
+    avgAutoFuel,
     avgTeleopFuel: Math.round((totalTeleopFuel / matchCount) * 10) / 10,
     avgCycles: Math.round((totalCycles / matchCount) * 10) / 10,
     avgDefense: Math.round((totalDefense / matchCount) * 10) / 10,
     climbRate: Math.round((climbCount / matchCount) * 100),
+    // Auto-specific metrics
+    avgAutoShotsMade: avgAutoFuel,
+    avgAutoShotsAttempted,
+    autoAccuracy,
+    avgAutoCycles,
+    autoMobilityRate,
+    autoWinRate,
+    autoRating,
+    autoRatingLabel,
+    autoConsistency,
     lastUpdated: latestDate?.toISOString() || null
   };
 }

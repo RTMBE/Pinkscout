@@ -229,26 +229,32 @@ export default function RecommendedAlliance() {
       }
     }
 
-    // Sort shooters by average balls scored (auto + teleop), then RP
+    // Sort shooters by average balls scored (auto + teleop), then auto rating, then RP
     shooters.sort((a, b) => {
       const aScore = (a.avgAutoFuel || 0) + (a.avgTeleopFuel || 0);
       const bScore = (b.avgAutoFuel || 0) + (b.avgTeleopFuel || 0);
       if (bScore !== aScore) return bScore - aScore;
+      // Use auto rating as tiebreaker
+      if ((b.autoRating || 0) !== (a.autoRating || 0)) return (b.autoRating || 0) - (a.autoRating || 0);
       return (b.normalizedRP || 0) - (a.normalizedRP || 0);
     });
 
-    // Sort cyclers by average balls cycled, then RP
+    // Sort cyclers by average balls cycled, then auto rating, then RP
     cyclers.sort((a, b) => {
       if ((b.avgCycles || 0) !== (a.avgCycles || 0)) return (b.avgCycles || 0) - (a.avgCycles || 0);
+      // Use auto rating as tiebreaker
+      if ((b.autoRating || 0) !== (a.autoRating || 0)) return (b.autoRating || 0) - (a.autoRating || 0);
       return (b.normalizedRP || 0) - (a.normalizedRP || 0);
     });
 
-    // Sort defenders: defense count, then cycles, then scoring, then RP
+    // Sort defenders: defense count, then cycles, then auto rating, then scoring, then RP
     defenders.sort((a, b) => {
       const aDefCount = a.roleCounts?.defense || 0;
       const bDefCount = b.roleCounts?.defense || 0;
       if (bDefCount !== aDefCount) return bDefCount - aDefCount;
       if ((b.avgCycles || 0) !== (a.avgCycles || 0)) return (b.avgCycles || 0) - (a.avgCycles || 0);
+      // Use auto rating as tiebreaker
+      if ((b.autoRating || 0) !== (a.autoRating || 0)) return (b.autoRating || 0) - (a.autoRating || 0);
       const aScore = (a.avgAutoFuel || 0) + (a.avgTeleopFuel || 0);
       const bScore = (b.avgAutoFuel || 0) + (b.avgTeleopFuel || 0);
       if (bScore !== aScore) return bScore - aScore;
@@ -270,10 +276,19 @@ export default function RecommendedAlliance() {
       return scoring * 2 + cycles * 1.5 + climbRate * 0.3;
     };
 
+    // Auto performance score (0-100 scale based on auto rating)
+    const getAutoScore = (t) => t?.autoRating || 0;
+
     const p1 = getPerformanceScore(team1);
     const p2 = getPerformanceScore(team2);
     const p3 = getPerformanceScore(team3);
     const totalPerformance = p1 + p2 + p3;
+
+    // Auto performance component (average auto rating across alliance)
+    const a1 = getAutoScore(team1);
+    const a2 = getAutoScore(team2);
+    const a3 = getAutoScore(team3);
+    const avgAutoRating = (a1 + a2 + a3) / 3;
 
     // Role diversity bonus (favor complementary roles)
     const roles = [team1?.primaryRole, team2?.primaryRole, team3?.primaryRole].filter(Boolean);
@@ -286,8 +301,8 @@ export default function RecommendedAlliance() {
     // Ranking points (averaged, normalized 0-1)
     const avgRP = ((team1?.normalizedRP || 0) + (team2?.normalizedRP || 0) + (team3?.normalizedRP || 0)) / 3;
 
-    // Final score: 90% performance, 10% ranking
-    return (0.9 * synergyPerformance) + (0.1 * avgRP * 100);
+    // Final score: 75% performance, 15% auto rating, 10% ranking
+    return (0.75 * synergyPerformance) + (0.15 * avgAutoRating) + (0.1 * avgRP * 100);
   };
 
   // ==========================================================================
@@ -544,6 +559,16 @@ function TeamCard({ team, isUser = false }) {
   };
   const roleColor = roleColors[team?.primaryRole] || '#666';
 
+  // Auto rating color coding
+  const autoRatingColors = {
+    'High': '#4CAF50',
+    'Medium': '#FF9800',
+    'Low': '#f44336',
+    'N/A': '#666'
+  };
+  const autoLabel = team?.autoRatingLabel || 'N/A';
+  const autoColor = autoRatingColors[autoLabel] || '#666';
+
   return (
     <div style={{
       display: 'flex',
@@ -563,6 +588,18 @@ function TeamCard({ team, isUser = false }) {
           {team?.matchCount || 0} matches scouted
         </div>
       </div>
+      {/* Auto Rating Badge */}
+      <div style={{
+        padding: '0.2rem 0.4rem',
+        borderRadius: '0.25rem',
+        background: `${autoColor}22`,
+        border: `1px solid ${autoColor}`,
+        color: autoColor,
+        fontSize: '0.65rem',
+        fontWeight: '600'
+      }}>
+        🤖 {autoLabel}
+      </div>
       <div style={{
         padding: '0.25rem 0.5rem',
         borderRadius: '0.25rem',
@@ -578,6 +615,16 @@ function TeamCard({ team, isUser = false }) {
 }
 
 function TeamRowCard({ team, rank, statLabel, statValue }) {
+  // Auto rating color coding
+  const autoRatingColors = {
+    'High': '#4CAF50',
+    'Medium': '#FF9800',
+    'Low': '#f44336',
+    'N/A': '#666'
+  };
+  const autoLabel = team?.autoRatingLabel || 'N/A';
+  const autoColor = autoRatingColors[autoLabel] || '#666';
+
   return (
     <div style={{
       display: 'flex',
@@ -592,6 +639,18 @@ function TeamRowCard({ team, rank, statLabel, statValue }) {
       <span style={{ fontWeight: 'bold', minWidth: '50px' }}>{team.teamNumber}</span>
       <span style={{ flex: 1, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {team.nickname}
+      </span>
+      {/* Auto Rating Badge */}
+      <span style={{
+        padding: '0.15rem 0.35rem',
+        borderRadius: '0.2rem',
+        background: `${autoColor}22`,
+        border: `1px solid ${autoColor}`,
+        color: autoColor,
+        fontSize: '0.6rem',
+        fontWeight: '600'
+      }}>
+        🤖 {autoLabel}
       </span>
       <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
         {statLabel}: <strong>{statValue}</strong>

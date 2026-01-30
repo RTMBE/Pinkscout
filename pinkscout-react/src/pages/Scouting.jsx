@@ -76,6 +76,9 @@ export default function Scouting() {
 
     // Auto Period (2026 REBUILT™) - 20 seconds
     autoFuelScored: 0,          // Fuel scored in active Hub (1 pt each)
+    autoShotsAttempted: 0,      // Total shots attempted in auto (for accuracy tracking)
+    autoCyclesCompleted: 0,     // Cycles completed during auto
+    autoMobility: false,        // Did robot leave starting zone?
     autoTowerClimb: 'none',     // Tower climb in auto (none, level1 only - 10 pts, 2 max)
 
     // Teleop Period (2026 REBUILT™) - 2:20 with Alliance Shifts
@@ -300,13 +303,16 @@ export default function Scouting() {
           matchNumber: '',
           allianceColor: 'red',
           autoFuelScored: 0,
+          autoShotsAttempted: 0,
+          autoCyclesCompleted: 0,
+          autoMobility: false,
           autoTowerClimb: 'none',
           teleopFuelActive: 0,
           teleopFuelInactive: 0,
-          teleopCycleCount: 0,
+          teleopBallsCycled: 0,
           endgameTowerLevel: 'none',
+          endgameFuelScored: 0,
           hubControlFirst: false,
-          defenseRating: 0,
           robotRole: '',
           notes: ''
         });
@@ -552,13 +558,33 @@ export default function Scouting() {
           </p>
 
           <div className="form-grid">
-            {/* Fuel Scored */}
+            {/* Auto Shots Made */}
             <div className="form-group counter-group">
-              <label>⚽ Fuel Scored (1 pt each)</label>
+              <label>⚽ Auto Shots Made (1 pt each)</label>
               <div className="counter">
                 <button type="button" onClick={() => handleIncrement('autoFuelScored', -1)}>−</button>
                 <span>{formData.autoFuelScored}</span>
                 <button type="button" onClick={() => handleIncrement('autoFuelScored', 1)}>+</button>
+              </div>
+            </div>
+
+            {/* Auto Shots Attempted */}
+            <div className="form-group counter-group">
+              <label>🎯 Auto Shots Attempted</label>
+              <div className="counter">
+                <button type="button" onClick={() => handleIncrement('autoShotsAttempted', -1)}>−</button>
+                <span>{formData.autoShotsAttempted}</span>
+                <button type="button" onClick={() => handleIncrement('autoShotsAttempted', 1)}>+</button>
+              </div>
+            </div>
+
+            {/* Auto Cycles Completed */}
+            <div className="form-group counter-group">
+              <label>🔄 Auto Cycles Completed</label>
+              <div className="counter">
+                <button type="button" onClick={() => handleIncrement('autoCyclesCompleted', -1)}>−</button>
+                <span>{formData.autoCyclesCompleted}</span>
+                <button type="button" onClick={() => handleIncrement('autoCyclesCompleted', 1)}>+</button>
               </div>
             </div>
 
@@ -576,7 +602,20 @@ export default function Scouting() {
               </select>
             </div>
 
-            {/* Hub Control */}
+            {/* Auto Mobility */}
+            <div className="form-group checkbox-group">
+              <label>
+                <input
+                  type="checkbox"
+                  name="autoMobility"
+                  checked={formData.autoMobility}
+                  onChange={handleChange}
+                />
+                🚗 Left Starting Zone (Mobility)
+              </label>
+            </div>
+
+            {/* Team Won Auto */}
             <div className="form-group checkbox-group">
               <label>
                 <input
@@ -585,10 +624,24 @@ export default function Scouting() {
                   checked={formData.hubControlFirst}
                   onChange={handleChange}
                 />
-                🎯 Team Won Auto
+                � Team Won Auto
               </label>
             </div>
           </div>
+
+          {/* Auto Accuracy Display */}
+          {formData.autoShotsAttempted > 0 && (
+            <div style={{
+              marginTop: '1rem',
+              padding: '0.75rem',
+              background: 'var(--surface-secondary)',
+              borderRadius: '0.5rem',
+              fontSize: '0.9rem'
+            }}>
+              <strong>Auto Accuracy:</strong> {formData.autoFuelScored}/{formData.autoShotsAttempted}
+              ({Math.round((formData.autoFuelScored / formData.autoShotsAttempted) * 100)}%)
+            </div>
+          )}
         </div>
 
         {/* Teleop Period Section (2:20 with Alliance Shifts) */}

@@ -70,6 +70,19 @@ export async function generateTeamCode(teamLeadUid, teamLeadEmail) {
   // Check if user already has a code
   const existingCode = await getTeamLeadCode(teamLeadUid);
   if (existingCode) {
+    // Ensure profile is marked as Team Lead (in case they toggled off and back on)
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({
+        is_team_lead: true,
+        team_code: existingCode
+      })
+      .eq('id', teamLeadUid);
+
+    if (profileError) {
+      console.error('Error updating profile:', profileError);
+    }
+
     return existingCode;
   }
 

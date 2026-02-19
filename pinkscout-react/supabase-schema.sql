@@ -50,19 +50,40 @@ CREATE TABLE IF NOT EXISTS scouting (
   scouting_id TEXT,
   team_lead_uid UUID REFERENCES profiles(id),
   alliance_color TEXT CHECK (alliance_color IN ('red', 'blue')),
-  -- 2026 REBUILT game fields
+  -- Match Info
+  starting_position TEXT CHECK (starting_position IN ('left', 'center', 'right')),
+  -- 2026 REBUILT game fields - Auto Period
   auto_fuel_scored INTEGER DEFAULT 0,
+  auto_shots_attempted INTEGER DEFAULT 0,
+  auto_cycles_completed INTEGER DEFAULT 0,
   auto_tower_climb TEXT,
+  -- 2026 REBUILT game fields - Teleop Period
   teleop_fuel_active INTEGER DEFAULT 0,
   teleop_fuel_inactive INTEGER DEFAULT 0,
+  teleop_balls_cycled INTEGER DEFAULT 0,
+  -- Legacy field (keep for backward compatibility)
   teleop_cycle_count INTEGER DEFAULT 0,
+  -- 2026 REBUILT game fields - Endgame
   endgame_tower_level TEXT,
+  endgame_fuel_scored INTEGER DEFAULT 0,
+  -- Performance metrics
   defense_rating INTEGER DEFAULT 0,
   hub_control_first BOOLEAN DEFAULT FALSE,
   robot_role TEXT CHECK (robot_role IN ('shooter', 'cycler', 'defense')),
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- =============================================================================
+-- MIGRATION: Add missing columns to existing scouting table
+-- Run this if the table already exists
+-- =============================================================================
+ALTER TABLE scouting ADD COLUMN IF NOT EXISTS starting_position TEXT CHECK (starting_position IN ('left', 'center', 'right'));
+ALTER TABLE scouting ADD COLUMN IF NOT EXISTS auto_shots_attempted INTEGER DEFAULT 0;
+ALTER TABLE scouting ADD COLUMN IF NOT EXISTS auto_cycles_completed INTEGER DEFAULT 0;
+ALTER TABLE scouting ADD COLUMN IF NOT EXISTS teleop_balls_cycled INTEGER DEFAULT 0;
+ALTER TABLE scouting ADD COLUMN IF NOT EXISTS endgame_fuel_scored INTEGER DEFAULT 0;
+ALTER TABLE scouting ADD COLUMN IF NOT EXISTS robot_role TEXT CHECK (robot_role IN ('shooter', 'cycler', 'defense'));
 
 -- =============================================================================
 -- QUESTIONS TABLE (replaces Firestore questions/{docId})

@@ -1,0 +1,888 @@
+================================================================================
+PINKSCOUT - Complete Website Overview (Detailed Edition)
+================================================================================
+
+1. PROJECT OVERVIEW
+--------------------------------------------------------------------------------
+
+PinkScout is a comprehensive web-based scouting application designed for FRC
+(FIRST Robotics Competition) teams. The application enables teams to collect,
+analyze, and leverage match data during competitions to make strategic decisions
+about alliance partnerships.
+
+Live URL: https://pinkscout.net (deployed on Vercel)
+
+Primary Use Cases:
+1. During Competitions: Scouts sit in the stands and record what each robot
+   does during matches using the Scouting Form
+2. Between Matches: Team strategists analyze the collected data to identify
+   strong/weak teams
+3. Alliance Selection: During alliance selection, teams use the Recommended
+   Alliance feature to identify optimal partners
+4. Post-Competition: Teams review their own performance using the Analytics page
+
+
+================================================================================
+2. TECHNOLOGY STACK
+================================================================================
+
+Category            | Technology              | Version  | Purpose
+--------------------|-------------------------|----------|------------------------
+Frontend Framework  | React                   | 18.3.1   | Component-based UI
+Build Tool          | Vite                    | 5.4.1    | Fast dev server & bundling
+Routing             | React Router DOM        | 6.28.0   | Client-side navigation
+Database            | Supabase (PostgreSQL)   | -        | Data storage with RLS
+Authentication      | Supabase Auth           | -        | Email/password auth
+Charts              | Chart.js + react-chartjs| 4.4.1    | Data visualization
+SEO                 | react-helmet-async      | 2.0.5    | Dynamic page titles
+APIs                | The Blue Alliance       | v3       | External FRC data
+APIs                | Statbotics              | v3       | EPA statistics
+Deployment          | Vercel                  | -        | Hosting
+
+
+================================================================================
+3. PROJECT STRUCTURE
+================================================================================
+
+pinkscout-react/
+├── src/
+│   ├── main.jsx                      # Entry point - mounts React app to DOM
+│   ├── App.jsx                       # Root component - routing, layout
+│   │
+│   ├── contexts/
+│   │   └── AuthContext.jsx           # Global auth state provider
+│   │
+│   ├── pages/                        # Full-page components (one per route)
+│   │   ├── Home.jsx                  # Dashboard with quick stats
+│   │   ├── Login.jsx                 # Login/signup with team code join
+│   │   ├── Scouting.jsx              # Match data entry form (1100 lines)
+│   │   ├── Analytics.jsx             # Charts & team comparison
+│   │   ├── Profile.jsx               # User settings & team management
+│   │   ├── Admin.jsx                 # Data management panel
+│   │   ├── RecommendedAlliance.jsx   # Alliance partner algorithm (895 lines)
+│   │   ├── MyMatches.jsx             # User's team match schedule
+│   │   ├── Teams.jsx                 # Team search & details
+│   │   ├── Events.jsx                # Event browser
+│   │   └── Rules.jsx                 # FRC 2026 game rules
+│   │
+│   ├── components/                   # Reusable UI pieces
+│   │   ├── Sidebar.jsx               # Navigation menu
+│   │   ├── ThemeToggle.jsx           # Dark/light mode
+│   │   └── LoadingSpinner.jsx        # Loading indicator
+│   │
+│   └── services/                     # Data layer (API calls, database)
+│       ├── supabase.js               # Supabase client setup
+│       ├── scoutingService.js        # Scouting CRUD + aggregation (857 lines)
+│       ├── roleService.js            # Permission checking (333 lines)
+│       ├── teamCodeService.js        # Team invite codes (404 lines)
+│       ├── blueAllianceAPI.js        # TBA API wrapper (556 lines)
+│       ├── statboticsAPI.js          # Statbotics API wrapper (264 lines)
+│       └── epaCalculationService.js  # EPA adjustment math (624 lines)
+│
+├── supabase-schema.sql               # Database tables & RLS policies
+├── package.json                      # Dependencies
+└── .env.local                        # API keys (not in git)
+
+
+================================================================================
+4. DATABASE SCHEMA (Supabase/PostgreSQL)
+================================================================================
+
+TABLE: profiles - User accounts
+--------------------------------------------------------------------------------
+id UUID PRIMARY KEY          -- Matches Supabase auth.users(id)
+email TEXT NOT NULL          -- User's email address
+display_name TEXT            -- Shown on scouting entries
+role TEXT                    -- 'scout', 'scoutLead', 'masterAdmin'
+team_number INTEGER          -- User's FRC team (e.g., 1551)
+scouting_id TEXT             -- Legacy team isolation identifier
+is_team_lead BOOLEAN         -- TRUE = can generate team codes
+team_lead_uid UUID           -- Points to Team Lead's profile (for members)
+team_code TEXT               -- The code used to join team
+created_at TIMESTAMPTZ
+updated_at TIMESTAMPTZ
+
+
+TABLE: team_codes - Team invite codes
+--------------------------------------------------------------------------------
+code TEXT PRIMARY KEY        -- 6-character code like "92WCJK"
+team_lead_uid UUID NOT NULL  -- Who created this code
+team_lead_email TEXT         -- For display purposes
+active BOOLEAN               -- FALSE = code is invalidated
+created_at TIMESTAMPTZ
+deactivated_at TIMESTAMPTZ   -- When code was invalidated
+
+
+TABLE: scouting - Match scouting entries (core data)
+--------------------------------------------------------------------------------
+id UUID PRIMARY KEY
+
+-- Match identification
+team_number INTEGER NOT NULL -- Team being scouted (not the scouter's team)
+match_number INTEGER NOT NULL-- Qualification match number
+event_key TEXT NOT NULL      -- TBA event key like "2026miket"
+event_year INTEGER           -- Year extracted from event_key
+alliance_color TEXT          -- 'red' or 'blue'
+
+-- Ownership & isolation
+scouter_uid UUID NOT NULL    -- Who submitted this entry
+scouter_name TEXT            -- Display name at submission time
+team_lead_uid UUID           -- For filtering by team
+scouting_id TEXT             -- Legacy isolation
+
+-- Match Info
+starting_position TEXT       -- 'left', 'center', 'right' on field
+
+-- Auto Period (20 seconds - autonomous)
+auto_fuel_scored INTEGER     -- Balls scored in Hub
+auto_shots_attempted INTEGER -- Total shots taken (for accuracy calc)
+auto_cycles_completed INTEGER-- Full cycles completed
+auto_tower_climb TEXT        -- 'none' or 'level1' (10pts, max 2 robots)
+
+-- Teleop Period (2:20 - driver controlled)
+teleop_fuel_active INTEGER   -- Balls scored when Hub is active (1pt each)
+teleop_fuel_inactive INTEGER -- Balls scored when Hub inactive (0pts)
+teleop_balls_cycled INTEGER  -- Balls moved to alliance side
+
+-- Endgame (final 30 seconds)
+endgame_tower_level TEXT     -- 'none', 'level1'(15pts), 'level2'(20pts), 'level3'(30pts)
+endgame_fuel_scored INTEGER  -- Balls during endgame (all Hubs active)
+
+-- Performance assessment
+hub_control_first BOOLEAN    -- Did this alliance win auto period?
+robot_role TEXT              -- 'shooter', 'cycler', 'defense'
+notes TEXT                   -- Free-text observations
+created_at TIMESTAMPTZ
+
+
+TABLE: epa_baseline - Cached Statbotics EPA data
+--------------------------------------------------------------------------------
+id TEXT PRIMARY KEY          -- Format: "teamNumber_year" (e.g., "254_2026")
+team_number INTEGER
+year INTEGER
+epa_total NUMERIC            -- Overall EPA score
+epa_auto NUMERIC             -- Auto period contribution
+epa_teleop NUMERIC           -- Teleop contribution
+epa_endgame NUMERIC          -- Endgame contribution
+source TEXT                  -- Always 'statbotics'
+raw_data JSONB               -- Full API response preserved
+imported_at TIMESTAMPTZ
+
+
+TABLE: adjusted_epa - Calculated EPA (scouting + Statbotics blend)
+--------------------------------------------------------------------------------
+id TEXT PRIMARY KEY          -- Format: "teamNumber_eventKey"
+team_number INTEGER
+event_key TEXT
+baseline_epa JSONB           -- Original Statbotics values
+adjustment JSONB             -- Delta from scouting data
+adjusted_epa JSONB           -- Final blended values
+scouting_entries_count INTEGER
+calculated_at TIMESTAMPTZ
+
+
+================================================================================
+5. AUTHENTICATION SYSTEM
+================================================================================
+
+How Login Works:
+1. User enters email/password on Login page
+2. Supabase Auth validates credentials
+3. On success, AuthContext fetches user's profile from profiles table
+4. AuthContext calculates roleContext with all permissions
+5. User is redirected to Home page
+
+AuthContext.jsx - Global Auth State:
+--------------------------------------------------------------------------------
+const AuthContextValue = {
+  // Current user data
+  user,                          // Supabase auth user object
+  userProfile,                   // Profile from database
+  isAdmin,                       // Has admin access?
+  roleContext,                   // Full permission object
+  loading,                       // Is auth state being checked?
+
+  // Auth actions
+  login(email, password),        // Sign in
+  signup(email, password, username, signupCode, teamNumber, isTeamLead),
+  logout(),                      // Sign out
+  updateUserProfile(updates),    // Update profile fields
+  refreshRoleContext()           // Reload permissions
+};
+
+Role Context Object (RBAC):
+--------------------------------------------------------------------------------
+roleContext = {
+  role: 'scout' | 'scoutLead' | 'masterAdmin',
+  userUid: 'uuid-string',        // User's Supabase ID
+  isMasterAdmin: boolean,        // rtmbe20@gmail.com = true always
+  canViewAll: boolean,           // Can see all team's data?
+  isTeamLead: boolean,           // Can manage team members?
+  teamLeadUid: 'uuid-string',    // Used for scouting data isolation
+  scoutingId: 'string',          // Legacy isolation field
+  teamCode: 'ABCD12'             // Current team invite code
+}
+
+CRITICAL BUG NOTE: Supabase uses user.id NOT user.uid
+Firebase uses uid, but Supabase uses id. This caused a bug fixed on 2026-02-19.
+
+
+================================================================================
+6. TEAM SYSTEM (Team Codes & Member Management)
+================================================================================
+
+Purpose:
+The team system allows groups of scouts to share scouting data. A Team Lead
+creates an invite code, and members join using that code. All scouting entries
+are tagged with the Team Lead's UID, enabling data filtering.
+
+CREATING A TEAM (Becoming a Team Lead):
+--------------------------------------------------------------------------------
+User Flow:
+1. Go to Profile page (/profile)
+2. Check the "Team Lead Account" checkbox
+3. System generates a unique 6-character code (A-Z excluding I,O + 2-9)
+4. Code is displayed on Profile page with a "Copy" button
+5. Share this code with team members
+
+Backend Process (teamCodeService.js):
+async function generateTeamCode(teamLeadUid, teamLeadEmail) {
+  // 1. Check if user already has an active code
+  const existingCode = await getTeamLeadCode(teamLeadUid);
+  if (existingCode) {
+    // Update profile to ensure is_team_lead = true
+    await supabase.from('profiles').update({
+      is_team_lead: true,
+      team_code: existingCode
+    });
+    return existingCode;
+  }
+
+  // 2. Generate unique 6-char code with collision checking
+  let code;
+  do {
+    code = generateRandomCode(); // From "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    const exists = await checkCodeExists(code);
+  } while (exists);
+
+  // 3. Save to team_codes table
+  await supabase.from('team_codes').insert({
+    code, team_lead_uid, team_lead_email, active: true
+  });
+
+  // 4. Update user's profile
+  await supabase.from('profiles').update({
+    is_team_lead: true,
+    team_code: code
+  });
+
+  return code;
+}
+
+
+JOINING A TEAM (Member Flow):
+--------------------------------------------------------------------------------
+User Flow:
+1. During signup OR on Profile page, enter a team code
+2. System validates the code is active
+3. User's profile is linked to the Team Lead
+4. User can now see all scouting data submitted by their team
+
+Backend Process:
+async function linkMemberToTeam(memberUid, teamLeadUid, teamCode) {
+  await supabase.from('profiles').update({
+    team_lead_uid: teamLeadUid,    // Link to Team Lead
+    team_code: teamCode,            // Store which code was used
+    is_team_lead: false             // Member, not lead
+  }).eq('id', memberUid);
+}
+
+
+TEAM MANAGEMENT (Profile Page):
+--------------------------------------------------------------------------------
+What Team Leads See:
+- Large display of their team code (e.g., "92WCJK" in monospace font)
+- "Regenerate Code" button (invalidates old code, creates new one)
+- Team stats: # of members, # of total scouting entries
+- List of team members with their names and emails
+- Each member shows as "Member" badge
+
+
+DATA ISOLATION:
+--------------------------------------------------------------------------------
+When scouting data is saved, it includes team_lead_uid:
+const dataToSave = {
+  ...formData,
+  scouterUid: user.id,
+  teamLeadUid: roleContext.teamLeadUid  // For filtering
+};
+
+When data is retrieved, it filters by team_lead_uid:
+if (roleContext?.teamLeadUid) {
+  query = query.eq('team_lead_uid', roleContext.teamLeadUid);
+}
+
+
+
+
+================================================================================
+7. DETAILED FEATURE DESCRIPTIONS
+================================================================================
+
+
+7A. SCOUTING FORM (Scouting.jsx - 1100 lines)
+--------------------------------------------------------------------------------
+Purpose: The core data collection form where scouts record what robots do
+during FRC matches.
+
+URL: /scouting
+
+User Experience:
+
+1. EVENT SELECTION (Top Section)
+   - Year dropdown (current year default, shows last 5 years)
+   - Searchable event dropdown - type to filter
+   - Auto-selects user's team's current/next event
+   - Shows selected event with green checkmark
+
+2. MATCH INFORMATION Section
+   - Team Number input (required, 1-99999)
+   - Match Number input (1, 2, 3...)
+   - Alliance Color toggle buttons (Red/Blue with color-coded styling)
+   - Starting Position dropdown (Left/Center/Right)
+
+3. AUTO PERIOD Section (20 seconds)
+   - Header explains: "Fuel scored in auto determines which Hub goes inactive"
+   - Auto Shots Made: +/- counter buttons (1 pt each)
+   - Auto Shots Attempted: +/- counter buttons (for accuracy calc)
+   - Auto Cycles Completed: +/- counter buttons
+   - Tower Climb: Dropdown (None, Level 1 - 10pts max 2 robots)
+   - Team Won Auto: Checkbox
+   - Calculated accuracy display: "Auto Accuracy: 3/5 (60%)"
+
+4. TELEOP PERIOD Section (2:20)
+   - Header explains: "Alliance Shifts alternate which Hub is active"
+   - Fuel in Active Hub: +/- counter (1 pt each)
+   - Fuel in Inactive Hub: +/- counter (0 pts, strategy tracking)
+   - Balls Cycled: +/- counter
+
+5. ENDGAME Section (Final 30 seconds)
+   - Header explains: "All Hubs are active for fuel scoring"
+   - Tower Climb Level: Dropdown
+     - None (0 pts)
+     - Level 1 - Off Carpet (15 pts)
+     - Level 2 - Above Low Rung (20 pts)
+     - Level 3 - Above Mid Rung (30 pts)
+   - Fuel Scored (Endgame): +/- counter
+
+6. ROBOT ROLE Section
+   - Explanation: "Select the primary role this robot played"
+   - Three large toggle buttons:
+     - Shooter (pink highlight when selected)
+     - Cycler (green highlight)
+     - Defense (blue highlight)
+
+7. NOTES Section
+   - Large textarea for qualitative observations
+   - Examples: "Good at blocking", "Struggled with auto", "Fast shooter"
+
+8. SUBMIT BUTTON
+   - Shows "Submitting..." with spinner while saving
+   - On success: Green banner "Scouting data saved successfully!"
+   - Form resets but keeps event selection for next match
+
+Technical Implementation:
+// Form state - one big object for all fields
+const [formData, setFormData] = useState({
+  teamNumber: '',
+  matchNumber: '',
+  allianceColor: 'red',
+  startingPosition: '',
+  autoFuelScored: 0,
+  autoShotsAttempted: 0,
+  autoCyclesCompleted: 0,
+  autoTowerClimb: 'none',
+  teleopFuelActive: 0,
+  teleopFuelInactive: 0,
+  teleopBallsCycled: 0,
+  endgameTowerLevel: 'none',
+  endgameFuelScored: 0,
+  hubControlFirst: false,
+  robotRole: '',
+  notes: ''
+});
+
+
+7B. ANALYTICS PAGE (Analytics.jsx)
+--------------------------------------------------------------------------------
+Purpose: Visualize scouting data with charts and compare teams.
+
+URL: /analytics
+
+Features:
+
+1. Event Filter - Dropdown to select which event's data to view
+2. Team Search - Search by team number OR team name (uses TBA search)
+3. Team Overview Card - Number, nickname, logo, match count, averages
+4. Performance Charts (Chart.js):
+   - Auto Performance: Bar chart of auto fuel scores per match
+   - Teleop Scoring: Line chart showing trend over matches
+   - Endgame Success: Pie chart of climb level distribution
+   - Match-by-Match: Combined line chart of all metrics
+5. Team Comparison - Select 2-3 teams for radar chart comparison
+6. Event Statistics - Top scorers, most consistent, best climbers
+
+
+7C. RECOMMENDED ALLIANCE (RecommendedAlliance.jsx - 895 lines)
+--------------------------------------------------------------------------------
+Purpose: Use scouting data to suggest the best 2 teams to form alliance with.
+
+URL: /recommended-alliance
+
+Prerequisite: User must set their FRC team number in Profile
+
+Algorithm Overview:
+
+STEP 1: Categorize all teams by role (shooter/cycler/defense)
+STEP 2: Calculate synergy score for each possible 3-team alliance
+STEP 3: Return top 2 recommended alliances
+
+Synergy Score Formula:
+- 75% Performance (scoring average + cycles + climb rate)
+- 15% Auto Rating (autonomous performance quality)
+- 10% Ranking Points (official standings normalization)
+- Diversity bonus for different roles (+20 for all different)
+
+Display:
+- Two cards: "Top Pick" and "Alternative"
+- Each shows your team + 2 partners with stats
+- Role badges and auto rating badges
+- Breakdown of shooters/cyclers/defenders in columns
+
+
+
+7D. PROFILE PAGE (Profile.jsx - 478 lines)
+--------------------------------------------------------------------------------
+Purpose: Manage user account settings and team membership.
+
+URL: /profile
+
+Sections:
+
+1. Stats Overview
+   - "Entries Submitted" - count of scouting entries by this user
+   - "Teams Scouted" - unique teams this user has scouted
+   - "Admin Status" - checkmark or X
+
+2. Account Type Toggle
+   - Checkbox: "Team Lead Account"
+   - When checked: Generates team code, shows Team Management
+   - When unchecked: Confirmation dialog, removes Team Lead status
+
+3. Team Management (Team Leads Only)
+   - Large team code display (monospace, letter-spaced)
+   - "Regenerate Code" button with warning
+   - Stats: # members, # total entries
+   - Member list with names, emails, "Member" badges
+
+4. Account Information Form
+   - Email (read-only, grayed out)
+   - Display Name (editable)
+   - FRC Team Number (editable, enables My Matches feature)
+   - "Save Changes" button
+
+
+7E. ADMIN PANEL (Admin.jsx)
+--------------------------------------------------------------------------------
+Purpose: View and manage all scouting data (for admins only).
+
+URL: /admin
+
+Access Control: Email whitelist + Master Admin
+
+Features:
+1. Statistics Overview - Total entries, unique teams, events, scouts
+2. Data Table - Sortable, paginated, searchable
+3. Entry Actions - View details, delete with confirmation
+4. Filters - Event, team number, date range, scouter
+5. Export - Download as CSV or JSON
+
+
+7F. MY MATCHES PAGE (MyMatches.jsx)
+--------------------------------------------------------------------------------
+Purpose: Show the match schedule for the user's own FRC team.
+
+URL: /my-matches
+
+Prerequisite: User must set their team number in Profile
+
+Features:
+1. Event Selection - Buttons for each event team attends
+2. Match Schedule - List with match #, alliance color, partners, opponents
+3. Match Details - Expand for predicted vs actual scores
+
+Data Source: The Blue Alliance API (getTeamEventMatches)
+
+
+7G. RULES REFERENCE PAGE (Rules.jsx)
+--------------------------------------------------------------------------------
+Purpose: Quick reference for FRC 2026 REBUILT game rules.
+
+URL: /rules (publicly accessible, no login required)
+
+Content:
+- Game overview and objectives
+- Match structure (Auto, Teleop, Endgame)
+- Scoring table with point values
+- Alliance Shift mechanic explanation
+- Tower climb rules and restrictions
+- Penalty summary
+
+
+7H. HOME PAGE (Home.jsx)
+--------------------------------------------------------------------------------
+Purpose: Dashboard with quick stats and navigation.
+
+URL: / (protected, requires login)
+
+Sections:
+1. Welcome Message - "Welcome back, [Display Name]!"
+2. Quick Stats - Entries this event, total entries, last timestamp
+3. Quick Actions - Buttons to Scout, Analytics, Alliance
+4. Recent Activity - Last 5 scouting entries
+
+
+7I. LOGIN PAGE (Login.jsx)
+--------------------------------------------------------------------------------
+Purpose: User authentication (login and signup).
+
+URL: /login (no sidebar, standalone layout)
+
+Login Tab:
+- Email input
+- Password input
+- "Sign In" button
+- Error messages for invalid credentials
+
+Signup Tab:
+- Email input
+- Password input (with confirmation)
+- Display Name input
+- Team Number input (optional)
+- Team Code input (optional - to join existing team)
+- "I am a Team Lead" checkbox
+- "Create Account" button
+
+
+
+
+================================================================================
+8. EPA CALCULATION SYSTEM (epaCalculationService.js - 624 lines)
+================================================================================
+
+Purpose: Blend official Statbotics EPA ratings with local scouting data to
+produce more accurate team evaluations.
+
+What is EPA?
+EPA (Expected Points Added) is a metric from Statbotics that estimates how
+many points a team contributes to their alliance's score. PinkScout imports
+this baseline and adjusts it based on local observations.
+
+Data Flow:
+1. Statbotics API -> EPA Baseline -> epa_baseline table
+2. Scouting Form -> Scouting Entries -> scouting table
+3. EPA Service -> Analyzes scouting -> Calculates adjustment
+4. Blended Result -> adjusted_epa table
+
+Weight Progression (more scouting = more weight to scouting data):
+--------------------------------------------------------------------------------
+Scouted Matches | Scouting Weight | Statbotics Weight
+----------------|-----------------|-------------------
+0               | 0%              | 100%
+1-3             | 10-30%          | 70-90%
+4-8             | 30-60%          | 40-70%
+9-12            | 60-90%          | 10-40%
+13-15           | 90-99%          | 1-10%
+16+             | 100%            | 0%
+
+Adjustment Calculation Logic:
+function calculateEPAAdjustment(scoutingMetrics, baseline) {
+  // Calculate expected points from scouting
+  const scoutedAutoPoints = avgAutoFuel + avgAutoClimb;
+  const scoutedTeleopPoints = avgTeleopFuel + (avgCycles * 2);
+  const scoutedEndgamePoints = avgEndgameClimb;
+  const scoutedTotal = scoutedAutoPoints + scoutedTeleopPoints + scoutedEndgamePoints;
+
+  // Delta from baseline
+  const rawAdjustment = scoutedTotal - baseline.epaTotal;
+
+  // Apply weight based on match count
+  const weight = calculateScoutingWeight(matchCount);
+  const consistencyMultiplier = 0.8 + (0.4 * consistency); // 0.8x to 1.2x
+
+  return rawAdjustment * weight * consistencyMultiplier;
+}
+
+
+================================================================================
+9. API INTEGRATIONS
+================================================================================
+
+THE BLUE ALLIANCE (TBA):
+--------------------------------------------------------------------------------
+Base URL: https://www.thebluealliance.com/api/v3
+Auth: API key in X-TBA-Auth-Key header
+
+Functions:
+- getEventList(year)           -> /events/{year}
+- getEventTeams(eventKey)      -> /event/{key}/teams
+- getEventMatches(eventKey)    -> /event/{key}/matches
+- getEventRankings(eventKey)   -> /event/{key}/rankings
+- getTeamEvents(team, year)    -> /team/frc{team}/events/{year}
+- getTeamInfo(team)            -> /team/frc{team}
+- getTeamEventMatches(t, e)    -> /team/frc{team}/event/{key}/matches
+- searchTeams(query)           -> /search_index
+
+Caching TTLs:
+- events: 5 minutes
+- eventDetails: 10 minutes
+- teams: 30 minutes (rarely changes)
+- matches: 2 minutes (updates during events)
+
+
+STATBOTICS:
+--------------------------------------------------------------------------------
+Base URL: https://api.statbotics.io/v3
+Auth: None required (public API)
+
+Functions:
+- getStatboticsTeam(team)      -> /team/{team}
+- getTeamEventStats(team, e)   -> /team_event/{team}/{event}
+- getEventTeamStats(event)     -> /team_events?event={key}
+- getTeamYearStats(team, year) -> /team_year/{team}/{year}
+- getTopTeams(year, limit)     -> /team_years?year={year}&limit={n}
+
+
+================================================================================
+10. FRC 2026 REBUILT GAME DETAILS
+================================================================================
+
+Match Structure:
+--------------------------------------------------------------------------------
+Period    | Duration     | Description
+----------|--------------|------------------------------------------
+Auto      | 20 seconds   | Robots run pre-programmed routines
+Teleop    | 2 min 20 sec | Drivers control robots, Alliance Shifts
+Endgame   | 30 seconds   | All Hubs active, Tower climbing
+
+Field Elements:
+- Hubs: Goals where robots score Fuel (balls). Two per alliance.
+- Alliance Shift: Alternates which Hub is "active" during Teleop
+- Tower: Climbing structure with multiple levels for endgame points
+
+Scoring Table:
+--------------------------------------------------------------------------------
+Action                  | Points | Notes
+------------------------|--------|--------------------------------
+Fuel in Active Hub      | 1 pt   | Only active Hub counts in Teleop
+Fuel in Inactive Hub    | 0 pts  | Tracked for strategy
+Auto Tower Climb L1     | 10 pts | Max 2 robots, Level 1 only
+Endgame Tower L1        | 15 pts | Off the carpet
+Endgame Tower L2        | 20 pts | Above low rung
+Endgame Tower L3        | 30 pts | Above mid rung
+
+Auto Bonus:
+The alliance that scores more fuel in auto gets to choose which opposing
+Hub becomes inactive first during Teleop.
+
+Robot Roles (User-defined in scouting):
+- Shooter: Focuses on scoring fuel into Hubs
+- Cycler: Moves balls from opponent's side to alliance's side
+- Defense: Blocks opponents from scoring, plays physical defense
+
+
+
+
+================================================================================
+11. REACT PATTERNS & CONCEPTS USED
+================================================================================
+
+Core Hooks:
+--------------------------------------------------------------------------------
+useState    - Track data that changes (form fields, loading states)
+useEffect   - Run code on mount or when dependencies change
+useRef      - Reference DOM elements without re-render
+useMemo     - Cache expensive calculations
+useContext  - Access global state (AuthContext)
+
+Component Patterns:
+--------------------------------------------------------------------------------
+// Functional Component
+function MyComponent({ prop1, prop2 }) {
+  const [state, setState] = useState('');
+  return <div>{state}</div>;
+}
+
+// Conditional Rendering
+{condition && <Element />}
+{condition ? <A /> : <B />}
+
+// List Rendering
+{items.map(item => <Item key={item.id} data={item} />)}
+
+// Event Handling
+<button onClick={() => handleClick(id)}>Click</button>
+<input onChange={(e) => setValue(e.target.value)} />
+
+// Spread Props
+<Component {...props} additionalProp={value} />
+
+State Update Patterns:
+--------------------------------------------------------------------------------
+// Updating object state
+setFormData(prev => ({
+  ...prev,
+  fieldName: newValue
+}));
+
+// Updating array state
+setItems(prev => [...prev, newItem]);        // Add
+setItems(prev => prev.filter(i => i.id !== id)); // Remove
+
+Protected Route Pattern:
+--------------------------------------------------------------------------------
+function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth();
+
+  if (loading) return <LoadingSpinner />;
+  if (!user) return <Navigate to="/login" replace />;
+
+  return children;
+}
+
+
+================================================================================
+12. ROUTES & NAVIGATION
+================================================================================
+
+Path                    | Component            | Auth | Description
+------------------------|----------------------|------|-------------------------
+/                       | Home                 | Yes  | Dashboard
+/login                  | Login                | No   | Auth forms (no sidebar)
+/scouting               | Scouting             | Yes  | Match data form
+/analytics              | Analytics            | Yes  | Charts & comparison
+/profile                | Profile              | Yes  | Settings & team
+/admin                  | Admin                | Yes* | Data management (*whitelist)
+/teams                  | Teams                | Yes  | Team search
+/events                 | Events               | Yes  | Event browser
+/my-matches             | MyMatches            | Yes  | Team schedule
+/recommended-alliance   | RecommendedAlliance  | Yes  | Partner finder
+/rules                  | Rules                | No   | Game reference
+
+
+================================================================================
+13. ENVIRONMENT VARIABLES
+================================================================================
+
+# Supabase Connection
+VITE_SUPABASE_URL=https://bfresqonbwibevksihez.supabase.co
+VITE_SUPABASE_ANON_KEY=sb_publishable_...
+
+# External APIs
+VITE_TBA_API_KEY=...   # The Blue Alliance
+VITE_NEXUS_API_KEY=... # FRC Nexus (optional)
+
+# Admin Configuration
+VITE_PRIMARY_ADMIN_EMAIL=rtmbe20@gmail.com
+
+
+================================================================================
+14. RECENT BUG FIXES (2026-02-19)
+================================================================================
+
+BUG 1: Team Lead Toggle Not Working
+--------------------------------------------------------------------------------
+Symptom: User unchecks "Team Lead", checks again, Team Management doesn't appear
+Root Cause: generateTeamCode() found existing code but didn't update is_team_lead
+Fix: Added profile update when existing code is found in teamCodeService.js
+
+if (existingCode) {
+  await supabase.from('profiles').update({
+    is_team_lead: true,
+    team_code: existingCode
+  }).eq('id', teamLeadUid);
+  return existingCode;
+}
+
+
+BUG 2: Scouting Form "UID Required" Error
+--------------------------------------------------------------------------------
+Symptom: Form submission failed with "Scouter UID is required" error
+Root Cause: Code used user?.uid (Firebase) instead of user?.id (Supabase)
+Fix: Changed line 474 in Scouting.jsx:
+  // Before: scouterUid: user?.uid
+  scouterUid: user?.id
+
+
+BUG 3: Database Schema Missing Columns
+--------------------------------------------------------------------------------
+Symptom: "Could not find column 'auto_cycles_completed'" error
+Root Cause: New form fields were added but database columns weren't created
+Fix: Ran SQL migration:
+  ALTER TABLE scouting ADD COLUMN IF NOT EXISTS starting_position TEXT;
+  ALTER TABLE scouting ADD COLUMN IF NOT EXISTS auto_shots_attempted INTEGER;
+  ALTER TABLE scouting ADD COLUMN IF NOT EXISTS auto_cycles_completed INTEGER;
+  ALTER TABLE scouting ADD COLUMN IF NOT EXISTS teleop_balls_cycled INTEGER;
+  ALTER TABLE scouting ADD COLUMN IF NOT EXISTS endgame_fuel_scored INTEGER;
+  ALTER TABLE scouting ADD COLUMN IF NOT EXISTS robot_role TEXT;
+
+
+================================================================================
+15. MASTER ADMIN
+================================================================================
+
+Email: rtmbe20@gmail.com (hardcoded in roleService.js line 32)
+
+Special Privileges:
+- Always has isMasterAdmin: true in roleContext
+- Always has isTeamLead: true (cannot be demoted)
+- Can view ALL scouting data (bypasses team isolation)
+- Full access to Admin panel
+- Can manage other admins
+- Can delete any scouting entry
+
+Checking Logic:
+export function isMasterAdmin(user) {
+  if (!user?.email) return false;
+  return user.email.toLowerCase() === 'rtmbe20@gmail.com';
+}
+
+
+================================================================================
+16. KEY FILE LINE COUNTS
+================================================================================
+
+File                        | Lines | Primary Purpose
+----------------------------|-------|-----------------------------------
+Scouting.jsx                | 1100  | Match scouting form
+RecommendedAlliance.jsx     | 895   | Alliance partner algorithm
+scoutingService.js          | 857   | CRUD + team aggregates
+epaCalculationService.js    | 624   | EPA blending
+blueAllianceAPI.js          | 556   | TBA API wrapper
+Profile.jsx                 | 478   | User settings & team management
+teamCodeService.js          | 404   | Team code generation
+roleService.js              | 333   | RBAC & master admin logic
+supabase-schema.sql         | 316   | Database schema with RLS
+statboticsAPI.js            | 264   | Statbotics API wrapper
+
+
+================================================================================
+END OF DOCUMENT
+================================================================================
+
+This comprehensive overview provides ChatGPT with complete context to understand
+the PinkScout application architecture, features, data flow, and implementation
+details. Paste this directly into a new ChatGPT conversation to continue
+development or troubleshoot issues.
+
+Generated: 2026-02-19

@@ -471,7 +471,7 @@ export default function Scouting() {
         eventKey: selectedEvent,                                          // Which event
         eventYear: selectedYear,                                          // Which year
         scouterName: userProfile?.displayName || user?.displayName || user?.email,  // Who scouted
-        scouterUid: user?.uid                                             // Scouter's user ID
+        scouterUid: user?.id                                              // Scouter's user ID (Supabase uses user.id)
       };
 
       // Include scoutingId if available (legacy system for data isolation)

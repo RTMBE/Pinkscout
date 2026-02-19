@@ -30,6 +30,8 @@ import { lazy, Suspense, useState, useEffect } from 'react';
 
 // Import layout components
 import Sidebar from './components/Sidebar';
+import MobileBottomNav from './components/MobileBottomNav';
+import OfflineIndicator from './components/OfflineIndicator';
 
 // =============================================================================
 // LAZY LOAD PAGE COMPONENTS
@@ -41,6 +43,8 @@ const Home = lazy(() => import('./pages/Home'));
 const Teams = lazy(() => import('./pages/Teams'));
 const Events = lazy(() => import('./pages/Events'));
 const Scouting = lazy(() => import('./pages/Scouting'));
+const PitScouting = lazy(() => import('./pages/PitScouting'));
+const Strategy = lazy(() => import('./pages/Strategy'));
 const Admin = lazy(() => import('./pages/Admin'));
 const Analytics = lazy(() => import('./pages/Analytics'));
 const RulesReference = lazy(() => import('./pages/RulesReference'));
@@ -157,6 +161,7 @@ function Layout({ children }) {
       <main className="main-content">
         {children}
       </main>
+      <MobileBottomNav />
     </div>
   );
 }
@@ -172,15 +177,19 @@ export default function App() {
   const isLoginPage = location.pathname === '/login';
 
   return (
-    <Suspense fallback={<LoadingSpinner />}>
-      {isLoginPage ? (
-        // Login page: no sidebar
-        <Routes>
-          <Route path="/login" element={<Login />} />
-        </Routes>
-      ) : (
-        // All other pages: with sidebar layout
-        <Layout>
+    <>
+      {/* Offline indicator - shows at top when offline or syncing */}
+      <OfflineIndicator />
+
+      <Suspense fallback={<LoadingSpinner />}>
+        {isLoginPage ? (
+          // Login page: no sidebar
+          <Routes>
+            <Route path="/login" element={<Login />} />
+          </Routes>
+        ) : (
+          // All other pages: with sidebar layout
+          <Layout>
           <Routes>
             {/* Home - Landing page */}
             <Route path="/" element={
@@ -201,7 +210,17 @@ export default function App() {
             <Route path="/scouting" element={
               <ProtectedRoute><Scouting /></ProtectedRoute>
             } />
-            
+
+            {/* Pit Scouting - Pre-event robot configuration */}
+            <Route path="/pit-scouting" element={
+              <ProtectedRoute><PitScouting /></ProtectedRoute>
+            } />
+
+            {/* Strategy Board - Drawing and planning */}
+            <Route path="/strategy" element={
+              <ProtectedRoute><Strategy /></ProtectedRoute>
+            } />
+
             {/* Analytics - Charts and comparisons */}
             <Route path="/analytics" element={
               <ProtectedRoute><Analytics /></ProtectedRoute>
@@ -235,7 +254,8 @@ export default function App() {
           </Routes>
         </Layout>
       )}
-    </Suspense>
+      </Suspense>
+    </>
   );
 }
 

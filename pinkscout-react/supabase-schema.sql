@@ -313,3 +313,164 @@ CREATE TRIGGER profiles_updated_at
   BEFORE UPDATE ON profiles
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+
+-- =============================================================================
+-- PIT SCOUTING TABLE (NEW - Pre-event robot capability collection)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS pit_scouting (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  team_number INTEGER NOT NULL,
+  event_key TEXT NOT NULL,
+
+  -- Robot Configuration
+  drive_type TEXT CHECK (drive_type IN ('tank', 'mecanum', 'swerve', 'other')),
+  climb_level TEXT CHECK (climb_level IN ('none', 'level1', 'level2', 'level3')),
+  shooter_type TEXT CHECK (shooter_type IN ('fixed_turret', 'adjustable_turret', 'none')),
+  intake_type TEXT CHECK (intake_type IN ('over_bumper', 'under_bumper', 'both', 'none')),
+  preferred_strategy TEXT,
+
+  -- Optional robot image
+  robot_image_url TEXT,
+
+  -- Ownership for RLS
+  scouter_uid UUID NOT NULL REFERENCES profiles(id),
+  scouter_name TEXT,
+  team_lead_uid UUID REFERENCES profiles(id),
+  scouting_id TEXT,
+
+  -- Notes
+  notes TEXT,
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+  -- Unique constraint: one pit scout entry per team per event (per team lead)
+  UNIQUE(team_number, event_key, team_lead_uid)
+);
+
+-- Indexes for pit_scouting
+CREATE INDEX IF NOT EXISTS idx_pit_scouting_team ON pit_scouting(team_number);
+CREATE INDEX IF NOT EXISTS idx_pit_scouting_event ON pit_scouting(event_key);
+CREATE INDEX IF NOT EXISTS idx_pit_scouting_team_lead ON pit_scouting(team_lead_uid);
+
+-- Enable RLS on pit_scouting
+ALTER TABLE pit_scouting ENABLE ROW LEVEL SECURITY;
+
+-- Pit Scouting RLS Policies
+CREATE POLICY "Master admin full access to pit_scouting" ON pit_scouting
+  FOR ALL USING (is_master_admin(auth.email()));
+
+CREATE POLICY "Team leads see team pit scouting data" ON pit_scouting
+  FOR SELECT USING (team_lead_uid = auth.uid());
+
+CREATE POLICY "Users see own pit scouting entries" ON pit_scouting
+  FOR SELECT USING (scouter_uid = auth.uid());
+
+CREATE POLICY "Users can insert pit scouting data" ON pit_scouting
+  FOR INSERT WITH CHECK (scouter_uid = auth.uid());
+
+CREATE POLICY "Users can update own pit scouting" ON pit_scouting
+  FOR UPDATE USING (scouter_uid = auth.uid());
+
+CREATE POLICY "Users can delete own pit scouting" ON pit_scouting
+  FOR DELETE USING (scouter_uid = auth.uid());
+
+-- Trigger for pit_scouting updated_at
+CREATE TRIGGER pit_scouting_updated_at
+  BEFORE UPDATE ON pit_scouting
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+
+-- =============================================================================
+-- STRATEGY DRAWINGS TABLE (NEW - Strategy board drawings)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS strategy_drawings (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+  -- Match identification (null for default/general strategy)
+  match_key TEXT,
+  event_key TEXT NOT NULL,
+
+  -- Drawing data stored as JSON
+  drawing_data JSONB NOT NULL,
+
+  -- Metadata
+  title TEXT,
+  is_default BOOLEAN DEFAULT FALSE,
+
+  -- Ownership for RLS
+  created_by UUID NOT NULL REFERENCES profiles(id),
+  team_lead_uid UUID REFERENCES profiles(id),
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for strategy_drawings
+CREATE INDEX IF NOT EXISTS idx_strategy_drawings_event ON strategy_drawings(event_key);
+CREATE INDEX IF NOT EXISTS idx_strategy_drawings_match ON strategy_drawings(match_key);
+CREATE INDEX IF NOT EXISTS idx_strategy_drawings_team_lead ON strategy_drawings(team_lead_uid);
+
+-- Enable RLS on strategy_drawings
+ALTER TABLE strategy_drawings ENABLE ROW LEVEL SECURITY;
+
+-- Strategy Drawings RLS Policies
+CREATE POLICY "Master admin full access to strategy_drawings" ON strategy_drawings
+  FOR ALL USING (is_master_admin(auth.email()));
+
+CREATE POLICY "Team leads see team strategy drawings" ON strategy_drawings
+  FOR SELECT USING (team_lead_uid = auth.uid());
+
+CREATE POLICY "Users see own strategy drawings" ON strategy_drawings
+  FOR SELECT USING (created_by = auth.uid());
+
+CREATE POLICY "Users can insert strategy drawings" ON strategy_drawings
+  FOR INSERT WITH CHECK (created_by = auth.uid());
+
+CREATE POLICY "Users can update own strategy drawings" ON strategy_drawings
+  FOR UPDATE USING (created_by = auth.uid());
+
+CREATE POLICY "Users can delete own strategy drawings" ON strategy_drawings
+  FOR DELETE USING (created_by = auth.uid());
+
+-- Trigger for strategy_drawings updated_at
+CREATE TRIGGER strategy_drawings_updated_at
+  BEFORE UPDATE ON strategy_drawings
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+
+-- =============================================================================
+-- USER SETTINGS TABLE (NEW - User preferences including large button mode)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS user_settings (
+  id UUID PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
+
+  -- UI Preferences
+  large_button_mode BOOLEAN DEFAULT FALSE,
+  theme TEXT DEFAULT 'default' CHECK (theme IN ('default', 'frc_red', 'frc_blue', 'high_contrast')),
+
+  -- Offline settings
+  offline_enabled BOOLEAN DEFAULT TRUE,
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable RLS on user_settings
+ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
+
+-- User Settings RLS Policies
+CREATE POLICY "Users can view own settings" ON user_settings
+  FOR SELECT USING (auth.uid() = id);
+
+CREATE POLICY "Users can update own settings" ON user_settings
+  FOR UPDATE USING (auth.uid() = id);
+
+CREATE POLICY "Users can insert own settings" ON user_settings
+  FOR INSERT WITH CHECK (auth.uid() = id);
+
+-- Trigger for user_settings updated_at
+CREATE TRIGGER user_settings_updated_at
+  BEFORE UPDATE ON user_settings
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+

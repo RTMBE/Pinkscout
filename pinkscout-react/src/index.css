@@ -3259,3 +3259,250 @@ a:hover {
   }
 }
 
+/* =============================================================================
+   LARGE BUTTON MODE - For phones and accessibility
+   ============================================================================= */
+
+body.large-button-mode .btn {
+  min-height: 48px;
+  min-width: 48px;
+  padding: var(--spacing-md) var(--spacing-lg);
+  font-size: 1.125rem;
+}
+
+body.large-button-mode .btn-small {
+  min-height: 44px;
+  min-width: 44px;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: 1rem;
+}
+
+body.large-button-mode input[type="number"],
+body.large-button-mode input[type="text"],
+body.large-button-mode input[type="email"],
+body.large-button-mode input[type="password"],
+body.large-button-mode select,
+body.large-button-mode textarea {
+  min-height: 48px;
+  font-size: 1.125rem;
+  padding: var(--spacing-md);
+}
+
+body.large-button-mode .counter button {
+  width: 60px;
+  height: 60px;
+  font-size: 1.75rem;
+}
+
+body.large-button-mode .counter span {
+  min-width: 60px;
+  font-size: 1.5rem;
+}
+
+body.large-button-mode .role-toggle button,
+body.large-button-mode .alliance-toggle button {
+  min-height: 56px;
+  font-size: 1.125rem;
+  padding: var(--spacing-md) var(--spacing-lg);
+}
+
+body.large-button-mode .form-group label {
+  font-size: 1.125rem;
+  margin-bottom: var(--spacing-sm);
+}
+
+body.large-button-mode .card h2,
+body.large-button-mode .card h3 {
+  font-size: 1.375rem;
+}
+
+/* =============================================================================
+   THEME VARIATIONS
+   ============================================================================= */
+
+/* FRC Red Theme */
+body.theme-frc-red {
+  --primary-color: #e53935;
+  --primary-dark: #c62828;
+  --primary-light: #ef5350;
+}
+
+/* FRC Blue Theme */
+body.theme-frc-blue {
+  --primary-color: #1e88e5;
+  --primary-dark: #1565c0;
+  --primary-light: #42a5f5;
+}
+
+/* High Contrast Theme */
+body.theme-high-contrast {
+  --bg-primary: #000000;
+  --bg-secondary: #1a1a1a;
+  --bg-card: #0d0d0d;
+  --text-primary: #ffffff;
+  --text-secondary: #e0e0e0;
+  --border-color: #ffffff;
+  --primary-color: #ffff00;
+  --primary-dark: #cccc00;
+  --success-color: #00ff00;
+  --error-color: #ff0000;
+}
+
+body.theme-high-contrast .card {
+  border: 2px solid #ffffff;
+}
+
+body.theme-high-contrast .btn {
+  border: 2px solid currentColor;
+}
+
+body.theme-high-contrast a {
+  text-decoration: underline;
+}
+
+/* =============================================================================
+   MOBILE BOTTOM NAVIGATION
+   ============================================================================= */
+
+.mobile-bottom-nav {
+  display: none; /* Hidden on desktop */
+}
+
+@media (max-width: 768px) {
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background-color: var(--bg-card);
+    border-top: 1px solid var(--border-color);
+    z-index: 1000;
+    justify-content: space-around;
+    align-items: center;
+    padding: 0 var(--spacing-xs);
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
+  }
+
+  .bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    color: var(--text-secondary);
+    padding: var(--spacing-xs);
+    flex: 1;
+    max-width: 80px;
+    transition: color 0.2s;
+  }
+
+  .bottom-nav-item.active {
+    color: var(--primary-color);
+  }
+
+  .bottom-nav-item:hover {
+    color: var(--primary-color);
+  }
+
+  .bottom-nav-icon {
+    font-size: 1.5rem;
+    line-height: 1;
+  }
+
+  .bottom-nav-label {
+    font-size: 0.65rem;
+    margin-top: 2px;
+    white-space: nowrap;
+  }
+
+  /* Add padding to main content to account for bottom nav */
+  .main-content {
+    padding-bottom: 80px;
+  }
+}
+
+
+/* =============================================================================
+   OFFLINE INDICATOR STYLES
+   ============================================================================= */
+
+.offline-indicator {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+}
+
+.offline-banner,
+.sync-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: 0.875rem;
+  font-weight: 500;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.offline-banner {
+  background: linear-gradient(135deg, #ff6b6b, #ee5a5a);
+  color: white;
+}
+
+.sync-banner.syncing {
+  background: linear-gradient(135deg, #4facfe, #00c9ff);
+  color: white;
+}
+
+.sync-banner.sync-complete {
+  background: linear-gradient(135deg, #38ef7d, #11998e);
+  color: white;
+}
+
+.offline-icon,
+.sync-icon {
+  font-size: 1.125rem;
+}
+
+.pending-badge {
+  background: rgba(255, 255, 255, 0.3);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  margin-left: var(--spacing-sm);
+}
+
+/* When offline indicator is showing, push content down */
+.offline-indicator + .app-layout {
+  padding-top: 40px;
+}
+
+@media (max-width: 768px) {
+  .offline-banner,
+  .sync-banner {
+    font-size: 0.75rem;
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+
+  .offline-icon,
+  .sync-icon {
+    font-size: 1rem;
+  }
+}
+
+

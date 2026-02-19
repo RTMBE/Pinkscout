@@ -24,6 +24,7 @@ import { getTeamScoutingData } from '../services/scoutingService';
 import { searchTeams } from '../services/blueAllianceAPI';
 import { scaleStatboticsEPA, classifyEPA, getEPAPercentile } from '../utils/epaUtils';
 import { useAuth } from '../contexts/AuthContext';
+import { getPitScoutingForTeam } from '../services/pitScoutingService';
 
 export default function Analytics() {
   const { roleContext } = useAuth();
@@ -35,6 +36,11 @@ export default function Analytics() {
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Event key for pit scouting lookup (optional)
+  const [eventKey, setEventKey] = useState(() => {
+    return localStorage.getItem('pinkscout_selected_event') || '';
+  });
 
   // Autocomplete state
   const [suggestions, setSuggestions] = useState([]);
@@ -159,14 +165,23 @@ export default function Analytics() {
     setShowSuggestions(false);
 
     try {
-      // Use Promise.allSettled to handle individual failures gracefully
-      const [statboticsResult, scoutingResult] = await Promise.allSettled([
+      // Build array of promises - include pit scouting if event key is set
+      const promises = [
         getStatboticsTeam(teamNumber),
         getTeamScoutingData(teamNumber, { roleContext })
-      ]);
+      ];
 
-      const statbotics = statboticsResult.status === 'fulfilled' ? statboticsResult.value : null;
-      const scouting = scoutingResult.status === 'fulfilled' ? scoutingResult.value : [];
+      // Add pit scouting fetch if event key is available
+      if (eventKey) {
+        promises.push(getPitScoutingForTeam(teamNumber, eventKey, roleContext));
+      }
+
+      // Use Promise.allSettled to handle individual failures gracefully
+      const results = await Promise.allSettled(promises);
+
+      const statbotics = results[0].status === 'fulfilled' ? results[0].value : null;
+      const scouting = results[1].status === 'fulfilled' ? results[1].value : [];
+      const pitScouting = results[2]?.status === 'fulfilled' ? results[2].value : null;
 
       if (!statbotics) {
         setError(`Team ${teamNumber} not found in Statbotics`);
@@ -187,7 +202,8 @@ export default function Analytics() {
         epaPercentile,
         classification,
         scoutingData: scouting,
-        scoutingAvg
+        scoutingAvg,
+        pitScouting // Robot configuration from pit scouting
       }]);
 
       setTeamInput('');
@@ -497,7 +513,102 @@ export default function Analytics() {
           </div>
         </div>
       )}
+
+      {/* Pit Scouting / Robot Configuration Comparison */}
+      {teams.length > 0 && teams.some(t => t.pitScouting) && (
+        <div className="content-card">
+          <h3>🔧 Robot Configuration (Pit Scouting)</h3>
+          <div className="table-container">
+            <table className="data-table comparison-table">
+              <thead>
+                <tr>
+                  <th>Team</th>
+                  <th>Drive Type</th>
+                  <th>Climb Level</th>
+                  <th>Shooter</th>
+                  <th>Intake</th>
+                  <th>Strategy</th>
+                </tr>
+              </thead>
+              <tbody>
+                {teams.filter(t => t.pitScouting).map(team => (
+                  <tr key={team.teamNumber}>
+                    <td>
+                      <strong>{team.teamNumber}</strong>
+                      <br />
+                      <small>{team.name}</small>
+                    </td>
+                    <td>
+                      <span className={`drive-badge drive-${team.pitScouting.drive_type || 'unknown'}`}>
+                        {formatDriveType(team.pitScouting.drive_type)}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`climb-badge climb-${team.pitScouting.climb_level || 'none'}`}>
+                        {formatClimbLevel(team.pitScouting.climb_level)}
+                      </span>
+                    </td>
+                    <td>{formatShooterType(team.pitScouting.shooter_type)}</td>
+                    <td>{formatIntakeType(team.pitScouting.intake_type)}</td>
+                    <td>
+                      <small>{team.pitScouting.preferred_strategy || '—'}</small>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {!eventKey && (
+            <p style={{ marginTop: '1rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+              💡 Select an event on the Scouting page to see pit scouting data for added teams.
+            </p>
+          )}
+        </div>
+      )}
     </>
   );
+}
+
+// =============================================================================
+// HELPER FUNCTIONS FOR PIT SCOUTING DISPLAY
+// =============================================================================
+
+function formatDriveType(driveType) {
+  const types = {
+    tank: '🛞 Tank',
+    mecanum: '⚙️ Mecanum',
+    swerve: '🔄 Swerve',
+    other: '❓ Other'
+  };
+  return types[driveType] || '—';
+}
+
+function formatClimbLevel(climbLevel) {
+  const levels = {
+    none: '❌ None',
+    level1: '1️⃣ L1',
+    level2: '2️⃣ L2',
+    level3: '3️⃣ L3 (High)'
+  };
+  return levels[climbLevel] || '—';
+}
+
+function formatShooterType(shooterType) {
+  const types = {
+    fixed_turret: '🎯 Fixed Turret',
+    adjustable_turret: '🔄 Adj. Turret',
+    none: '❌ None'
+  };
+  return types[shooterType] || '—';
+}
+
+function formatIntakeType(intakeType) {
+  const types = {
+    over_bumper: '⬆️ Over Bumper',
+    under_bumper: '⬇️ Under Bumper',
+    both: '↕️ Both',
+    none: '❌ None'
+  };
+  return types[intakeType] || '—';
 }
 

@@ -64,6 +64,9 @@ import { getTeamEvents, getEventTeams, getEventRankings } from '../services/blue
 // Scouting service - fetches scouting data and calculates team statistics
 import { getEventScoutingData, calculateTeamAggregates } from '../services/scoutingService';
 
+// Pit scouting service - robot configuration data collected before matches
+import { getPitScoutingByEvent } from '../services/pitScoutingService';
+
 // -----------------------------------------------------------------------------
 // CONSTANTS
 // -----------------------------------------------------------------------------
@@ -101,6 +104,7 @@ export default function RecommendedAlliance() {
   const [eventTeams, setEventTeams] = useState([]);      // Teams at this event
   const [rankings, setRankings] = useState([]);          // Official rankings
   const [scoutingData, setScoutingData] = useState([]);  // Our scouting entries
+  const [pitScoutingData, setPitScoutingData] = useState([]);  // Robot configuration from pit scouting
 
   // Current year for fetching events
   const currentYear = new Date().getFullYear();
@@ -177,16 +181,18 @@ export default function RecommendedAlliance() {
     try {
       // Promise.allSettled - like Promise.all but doesn't fail if one request fails
       // Returns objects with { status: 'fulfilled'|'rejected', value|reason }
-      const [teams, rankingsData, scouting] = await Promise.allSettled([
+      const [teams, rankingsData, scouting, pitScouting] = await Promise.allSettled([
         getEventTeams(event.key),                      // All teams at this event
         getEventRankings(event.key),                   // Official rankings
-        getEventScoutingData(event.key, roleContext)   // Our scouting data
+        getEventScoutingData(event.key, roleContext),  // Our scouting data
+        getPitScoutingByEvent(event.key, roleContext)  // Robot configuration data
       ]);
 
       // Set state only if the promise succeeded
       setEventTeams(teams.status === 'fulfilled' ? teams.value : []);
       setRankings(rankingsData.status === 'fulfilled' ? rankingsData.value : []);
       setScoutingData(scouting.status === 'fulfilled' ? scouting.value : []);
+      setPitScoutingData(pitScouting.status === 'fulfilled' ? pitScouting.value : []);
     } catch (err) {
       console.error('Error loading event data:', err);
       setError('Failed to load event data. Please try again.');
@@ -279,21 +285,43 @@ export default function RecommendedAlliance() {
     return map;
   }, [rankings]);
 
+  // ==========================================================================
+  // MEMO: Index pit scouting data by team number
+  // ==========================================================================
+  // Pit scouting contains robot configuration: drive type, climb level, shooter, intake
+  const pitScoutingMap = useMemo(() => {
+    const map = new Map();
+    for (const pit of pitScoutingData) {
+      map.set(pit.team_number, {
+        driveType: pit.drive_type,
+        climbLevel: pit.climb_level,
+        shooterType: pit.shooter_type,
+        intakeType: pit.intake_type,
+        preferredStrategy: pit.preferred_strategy,
+        notes: pit.notes,
+        robotImageUrl: pit.robot_image_url
+      });
+    }
+    return map;
+  }, [pitScoutingData]);
+
   // ---------------------------------------------------------------------------
   // HELPER: Combine all data sources for a single team
   // ---------------------------------------------------------------------------
-  // Merges: TBA team info + our scouting stats + official rankings
+  // Merges: TBA team info + our scouting stats + official rankings + pit scouting
   const getTeamFullData = (teamNum) => {
     const team = eventTeams.find(t => t.team_number === teamNum);  // TBA data
     const stats = teamStats.get(teamNum);    // Our scouting aggregates
     const ranking = rankingsMap.get(teamNum); // Official rankings
+    const pitData = pitScoutingMap.get(teamNum); // Robot configuration
 
     return {
       teamNumber: teamNum,
       nickname: team?.nickname || `Team ${teamNum}`,  // Fallback if no nickname
       ...stats,                              // All our calculated stats
       rank: ranking?.rank,
-      normalizedRP: ranking?.normalizedRP || 0
+      normalizedRP: ranking?.normalizedRP || 0,
+      pitScouting: pitData || null           // Robot configuration from pit scouting
     };
   };
 
@@ -419,8 +447,30 @@ export default function RecommendedAlliance() {
     // 3 different roles = +20, 2 different roles = +10, all same = +0
     const diversityBonus = uniqueRoles === 3 ? 20 : uniqueRoles === 2 ? 10 : 0;
 
-    // Total performance including diversity bonus
-    const synergyPerformance = totalPerformance + diversityBonus;
+    // -------------------------------------------------------------------------
+    // PIT SCOUTING BONUS: Robot configuration advantages
+    // -------------------------------------------------------------------------
+    let pitScoutingBonus = 0;
+
+    // Bonus for L3 climbers (high climb capability is valuable)
+    const l3Climbers = [team1, team2, team3].filter(t => t?.pitScouting?.climbLevel === 'level3').length;
+    pitScoutingBonus += l3Climbers * 8;  // +8 per L3 climber
+
+    // Bonus for swerve drive (better maneuverability)
+    const swerveDrives = [team1, team2, team3].filter(t => t?.pitScouting?.driveType === 'swerve').length;
+    pitScoutingBonus += swerveDrives * 4;  // +4 per swerve robot
+
+    // Bonus for having at least one team with adjustable turret (flexible scoring)
+    const hasAdjustableTurret = [team1, team2, team3].some(t => t?.pitScouting?.shooterType === 'adjustable_turret');
+    if (hasAdjustableTurret) pitScoutingBonus += 5;
+
+    // Bonus for drive type diversity (different drives can complement each other)
+    const driveTypes = [team1?.pitScouting?.driveType, team2?.pitScouting?.driveType, team3?.pitScouting?.driveType].filter(Boolean);
+    const uniqueDriveTypes = new Set(driveTypes).size;
+    if (uniqueDriveTypes >= 2) pitScoutingBonus += 3;
+
+    // Total performance including diversity bonus and pit scouting bonus
+    const synergyPerformance = totalPerformance + diversityBonus + pitScoutingBonus;
 
     // -------------------------------------------------------------------------
     // RANKING POINTS: Official competition performance

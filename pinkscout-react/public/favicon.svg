@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="#e91e63">
+  <!-- Pink Scout Logo - A stylized "P" inside a circle -->
+  <circle cx="256" cy="256" r="240" fill="#e91e63"/>
+  <text x="256" y="340" font-size="280" font-weight="bold" fill="white" text-anchor="middle" font-family="Arial, sans-serif">P</text>
+</svg>
+

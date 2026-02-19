@@ -31,6 +31,7 @@ import {
   linkMemberToTeam,
   generateTeamCode
 } from '../services/teamCodeService';
+import { getUserSettings, isMobileDevice } from '../services/userSettingsService';
 
 // =============================================================================
 // UTILITY: Convert snake_case to camelCase
@@ -224,6 +225,34 @@ export function AuthProvider({ children }) {
       if (import.meta.env.DEV) {
         console.error('Error loading user profile:', error);
       }
+    }
+
+    // Load and apply user settings (large button mode, theme)
+    try {
+      const settings = await getUserSettings(supabaseUser.id);
+      applyUserSettings(settings);
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('Error loading user settings:', error);
+      }
+      // Apply defaults based on device
+      const defaultLargeButton = isMobileDevice();
+      applyUserSettings({ largeButtonMode: defaultLargeButton, theme: 'default' });
+    }
+  }
+
+  // Apply user settings to the document body
+  function applyUserSettings(settings) {
+    // Apply large button mode
+    if (settings.largeButtonMode) {
+      document.body.classList.add('large-button-mode');
+    } else {
+      document.body.classList.remove('large-button-mode');
+    }
+    // Apply theme
+    document.body.classList.remove('theme-frc-red', 'theme-frc-blue', 'theme-high-contrast');
+    if (settings.theme && settings.theme !== 'default') {
+      document.body.classList.add(`theme-${settings.theme.replace('_', '-')}`);
     }
   }
 

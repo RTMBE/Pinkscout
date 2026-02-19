@@ -18,6 +18,7 @@ import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../contexts/AuthContext';
 import { getAllScoutingData } from '../services/scoutingService';
 import { getTeamMembers, regenerateTeamCode, getTeamLeadCode, generateTeamCode } from '../services/teamCodeService';
+import { getUserSettings, saveUserSettings, isMobileDevice } from '../services/userSettingsService';
 
 export default function Profile() {
   const { user, userProfile, isAdmin, roleContext, updateUserProfile, refreshRoleContext } = useAuth();
@@ -44,6 +45,14 @@ export default function Profile() {
   // Team Lead toggle state
   const [isTogglingTeamLead, setIsTogglingTeamLead] = useState(false);
 
+  // User Settings state
+  const [userSettings, setUserSettings] = useState({
+    largeButtonMode: false,
+    theme: 'default',
+    offlineEnabled: true
+  });
+  const [savingSettings, setSavingSettings] = useState(false);
+
   // Update form when userProfile loads
   useEffect(() => {
     if (userProfile) {
@@ -51,6 +60,59 @@ export default function Profile() {
       setTeamNumber(userProfile.teamNumber || '');
     }
   }, [userProfile, user]);
+
+  // ==========================================================================
+  // LOAD USER SETTINGS
+  // ==========================================================================
+
+  useEffect(() => {
+    loadUserSettings();
+  }, [user]);
+
+  const loadUserSettings = async () => {
+    if (!user?.id) return;
+    try {
+      const settings = await getUserSettings(user.id);
+      setUserSettings(settings);
+      // Apply settings to body
+      applySettings(settings);
+    } catch (err) {
+      console.error('Error loading user settings:', err);
+      // Apply default based on device
+      const defaultLargeButton = isMobileDevice();
+      setUserSettings(prev => ({ ...prev, largeButtonMode: defaultLargeButton }));
+      applySettings({ largeButtonMode: defaultLargeButton, theme: 'default' });
+    }
+  };
+
+  const applySettings = (settings) => {
+    // Apply large button mode
+    if (settings.largeButtonMode) {
+      document.body.classList.add('large-button-mode');
+    } else {
+      document.body.classList.remove('large-button-mode');
+    }
+    // Apply theme
+    document.body.classList.remove('theme-frc-red', 'theme-frc-blue', 'theme-high-contrast');
+    if (settings.theme && settings.theme !== 'default') {
+      document.body.classList.add(`theme-${settings.theme.replace('_', '-')}`);
+    }
+  };
+
+  const handleSettingChange = async (key, value) => {
+    if (!user?.id) return;
+    setSavingSettings(true);
+    try {
+      const newSettings = { ...userSettings, [key]: value };
+      setUserSettings(newSettings);
+      applySettings(newSettings);
+      await saveUserSettings(user.id, newSettings);
+    } catch (err) {
+      console.error('Error saving settings:', err);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   // ==========================================================================
   // LOAD USER STATS
@@ -445,6 +507,53 @@ export default function Profile() {
         </form>
       </div>
 
+      {/* App Settings */}
+      <div className="content-card">
+        <h3>⚙️ App Settings</h3>
+
+        {/* Large Button Mode */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={userSettings.largeButtonMode}
+              onChange={(e) => handleSettingChange('largeButtonMode', e.target.checked)}
+              disabled={savingSettings}
+              style={{ width: '20px', height: '20px' }}
+            />
+            <span style={{ fontWeight: 500 }}>Large Button Mode</span>
+          </label>
+          <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '0.5rem', marginLeft: '2rem' }}>
+            Increases button and input sizes for easier tapping on phones. Default ON for mobile devices.
+          </small>
+        </div>
+
+        {/* Theme Selection */}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ display: 'block', fontWeight: 500, marginBottom: '0.5rem' }}>
+            Theme
+          </label>
+          <select
+            value={userSettings.theme}
+            onChange={(e) => handleSettingChange('theme', e.target.value)}
+            disabled={savingSettings}
+            style={{ width: '100%', maxWidth: '250px' }}
+          >
+            <option value="default">Default (Pink)</option>
+            <option value="frc_red">FRC Red</option>
+            <option value="frc_blue">FRC Blue</option>
+            <option value="high_contrast">High Contrast</option>
+          </select>
+          <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '0.5rem' }}>
+            Choose a color theme for the app.
+          </small>
+        </div>
+
+        {savingSettings && (
+          <small style={{ color: 'var(--primary-color)' }}>Saving settings...</small>
+        )}
+      </div>
+
       {/* Account Details */}
       <div className="content-card">
         <h3>Account Details</h3>
@@ -456,7 +565,7 @@ export default function Profile() {
           <div className="detail-row">
             <span className="detail-label">Account Created:</span>
             <span className="detail-value">
-              {user?.metadata?.creationTime 
+              {user?.metadata?.creationTime
                 ? new Date(user.metadata.creationTime).toLocaleDateString()
                 : 'Unknown'}
             </span>
@@ -464,7 +573,7 @@ export default function Profile() {
           <div className="detail-row">
             <span className="detail-label">Last Sign In:</span>
             <span className="detail-value">
-              {user?.metadata?.lastSignInTime 
+              {user?.metadata?.lastSignInTime
                 ? new Date(user.metadata.lastSignInTime).toLocaleDateString()
                 : 'Unknown'}
             </span>

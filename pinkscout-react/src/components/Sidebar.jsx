@@ -74,6 +74,16 @@ export default function Sidebar({ isOpen = false, onClose }) {
             </NavLink>
           </li>
           <li>
+            <NavLink to="/pit-scouting">
+              🔧 Pit Scout
+            </NavLink>
+          </li>
+          <li>
+            <NavLink to="/strategy">
+              🎯 Strategy
+            </NavLink>
+          </li>
+          <li>
             <NavLink to="/teams">
               🤖 Teams
             </NavLink>

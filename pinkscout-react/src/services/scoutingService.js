@@ -31,6 +31,7 @@
 
 import { supabase } from './supabase';
 import { ROLES, isMasterAdmin } from './roleService';
+import { isOnline, addToOfflineQueue } from './offlineSyncService';
 
 // Collection reference
 const SCOUTING_COLLECTION = 'scouting';
@@ -160,6 +161,16 @@ async function validateScoutingData(data) {
  */
 export async function saveScoutingData(scoutingData) {
   try {
+    // Check if offline - queue for later sync
+    if (!isOnline()) {
+      const queued = addToOfflineQueue('scouting', scoutingData);
+      if (queued) {
+        return 'offline-queued';
+      } else {
+        throw new Error('Failed to save offline. Please try again.');
+      }
+    }
+
     // Validate and sanitize input data (async - checks profile existence)
     const validatedData = await validateScoutingData(scoutingData);
 

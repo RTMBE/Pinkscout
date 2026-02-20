@@ -37,7 +37,7 @@ import {
 } from '../services/strategyService';
 
 // Field image - 2026 FRC REBUILT field
-const FIELD_IMAGE_URL = '/field-2026.svg';
+const FIELD_IMAGE_URL = '/Feild2026.png';
 
 // LocalStorage keys
 const STORAGE_KEY_YEAR = 'pinkscout_strategy_year';

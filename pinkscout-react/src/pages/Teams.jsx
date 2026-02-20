@@ -22,6 +22,8 @@ import { getTeamInfo, getTeamAllAwards, getTeamAwardsForYear, getTeamMatchesForY
 import { getTeamScoutingData } from '../services/scoutingService';
 import { scaleStatboticsEPA, classifyEPA, getEPAPercentile, calculateAutoPoints, calculateTeleopPoints, EPA_TYPES, EPA_TYPE_LABELS, getEPAByType, calculateTrueEPA } from '../utils/epaUtils';
 import { useAuth } from '../contexts/AuthContext';
+import { calculateAverageECS, getScoutingConfig, DEFAULT_SCORING_WEIGHTS } from '../services/scoutingConfigService';
+import { getPerformanceMetrics } from '../utils/performanceMetrics';
 
 export default function Teams() {
   const { roleContext } = useAuth();
@@ -61,6 +63,26 @@ export default function Teams() {
 
   // EPA type state (for dropdown selector)
   const [epaType, setEpaType] = useState(EPA_TYPES.OVERALL);
+
+  // ECS scoring weights and score
+  const [ecsWeights, setEcsWeights] = useState(DEFAULT_SCORING_WEIGHTS);
+  const [ecsScore, setEcsScore] = useState(0);
+
+  // Performance metrics state
+  const [perfMetrics, setPerfMetrics] = useState(null);
+
+  // Load ECS weights from team configuration
+  useEffect(() => {
+    async function loadEcsWeights() {
+      if (roleContext?.teamLeadUid) {
+        const config = await getScoutingConfig(roleContext.teamLeadUid, 2026);
+        if (config?.scoring_weights) {
+          setEcsWeights(config.scoring_weights);
+        }
+      }
+    }
+    loadEcsWeights();
+  }, [roleContext?.teamLeadUid]);
 
   // ==========================================================================
   // SEARCH ON URL PARAM CHANGE
@@ -207,6 +229,14 @@ export default function Teams() {
       setScoutingData(scouting);
       setAllAwards(awards);
       setThisYearMatches(yearMatches);
+
+      // Calculate ECS from scouting data
+      const calculatedEcs = calculateAverageECS(scouting, ecsWeights);
+      setEcsScore(calculatedEcs);
+
+      // Calculate performance metrics
+      const metrics = getPerformanceMetrics(scouting);
+      setPerfMetrics(metrics);
 
       // Calculate records
       // All-time record from statbotics base data
@@ -616,6 +646,49 @@ export default function Teams() {
                     Win Rate: {winRate}% ({recordViewMode === 'thisYear' ? currentYear : 'All Time'})
                   </div>
                 </div>
+
+                {/* ECS Score Card */}
+                <div className="overview-card ecs-card" style={{ borderLeftColor: '#9C27B0' }}>
+                  <div className="overview-card-header">
+                    <span className="overview-icon">⚡</span>
+                    <span>ECS Score</span>
+                  </div>
+                  <div className="overview-card-value" style={{ color: '#9C27B0' }}>
+                    {ecsScore > 0 ? ecsScore.toFixed(1) : '—'}
+                  </div>
+                  <div className="overview-card-sub">
+                    {ecsScore > 0 ? (
+                      <span>Estimated Contribution Score</span>
+                    ) : (
+                      <span style={{ color: 'var(--text-muted)' }}>No scouting data</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Performance Trends Card */}
+                {perfMetrics && perfMetrics.matchCount >= 3 && (
+                  <div className="overview-card performance-card" style={{ borderLeftColor: perfMetrics.trendBadge.color }}>
+                    <div className="overview-card-header">
+                      <span className="overview-icon">{perfMetrics.trendBadge.emoji}</span>
+                      <span>{perfMetrics.trendBadge.label}</span>
+                    </div>
+                    <div className="overview-card-value" style={{ color: perfMetrics.trendBadge.color }}>
+                      {perfMetrics.slope > 0 ? '+' : ''}{perfMetrics.slope.toFixed(1)} pts/match
+                    </div>
+                    <div className="overview-card-sub">
+                      {perfMetrics.trendBadge.description}
+                    </div>
+                    <div className="performance-metrics-mini">
+                      <span title="Consistency Index">🎯 {perfMetrics.consistency}%</span>
+                      <span title="Volatility">📊 ±{perfMetrics.volatility}</span>
+                      {perfMetrics.recentForm !== null && (
+                        <span title="Recent Form vs Average" style={{ color: perfMetrics.recentForm >= 0 ? '#4CAF50' : '#FF9800' }}>
+                          📈 {perfMetrics.recentForm >= 0 ? '+' : ''}{perfMetrics.recentForm}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Your Scouting Card */}
                 <div className="overview-card scouting-card">

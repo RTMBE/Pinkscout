@@ -67,6 +67,12 @@ import { getEventScoutingData, calculateTeamAggregates } from '../services/scout
 // Pit scouting service - robot configuration data collected before matches
 import { getPitScoutingByEvent } from '../services/pitScoutingService';
 
+// Alliance compatibility calculator
+import { calculateAllianceCompatibility, getCompatibilityBreakdown } from '../utils/allianceCompatibility';
+
+// Alliance optimizer - AI-driven (math-based) pick recommendations
+import { calculateRiskAdjustedScore, findOptimal2ndPick, findOptimal3rdPick } from '../utils/allianceOptimizer';
+
 // -----------------------------------------------------------------------------
 // CONSTANTS
 // -----------------------------------------------------------------------------
@@ -538,19 +544,28 @@ export default function RecommendedAlliance() {
       if (alliances.length === 1) {
         // At least one new team? Add it as the alternative
         if (!usedTeams.has(c.partner1.teamNumber) || !usedTeams.has(c.partner2.teamNumber)) {
+          const allianceTeams = [userTeam, c.partner1, c.partner2];
+          const compatibility = calculateAllianceCompatibility(allianceTeams);
+
           alliances.push({
             userTeam,
             partners: [c.partner1, c.partner2],
-            score: c.score
+            score: c.score,
+            compatibility
           });
           break;
         }
       } else {
         // First alliance - just pick the best
+        // Calculate compatibility for this alliance
+        const allianceTeams = [userTeam, c.partner1, c.partner2];
+        const compatibility = calculateAllianceCompatibility(allianceTeams);
+
         alliances.push({
           userTeam,
           partners: [c.partner1, c.partner2],
-          score: c.score
+          score: c.score,
+          compatibility
         });
         usedTeams.add(c.partner1.teamNumber);
         usedTeams.add(c.partner2.teamNumber);
@@ -560,14 +575,49 @@ export default function RecommendedAlliance() {
     // Fallback: If we couldn't find a diverse second alliance, just use #2 ranked
     if (alliances.length === 1 && candidates.length > 1) {
       const fallback = candidates[1];
+      const allianceTeams = [userTeam, fallback.partner1, fallback.partner2];
+      const compatibility = calculateAllianceCompatibility(allianceTeams);
+
       alliances.push({
         userTeam,
         partners: [fallback.partner1, fallback.partner2],
-        score: fallback.score
+        score: fallback.score,
+        compatibility
       });
     }
 
     return alliances;
+  }, [teamNumber, eventTeams, teamStats, rankingsMap]);
+
+  // ==========================================================================
+  // MEMO: Smart Pick Recommendations with Risk Analysis
+  // ==========================================================================
+  const smartPicks = useMemo(() => {
+    const userTeam = getTeamFullData(teamNumber);
+    if (!userTeam) return { secondPicks: [], thirdPicks: [] };
+
+    // Get all teams with scouting data (excluding user's team)
+    const allTeamsWithData = eventTeams
+      .map(t => {
+        const data = getTeamFullData(t.team_number);
+        if (!data || data.teamNumber === teamNumber) return null;
+        // Add risk-adjusted scores
+        const riskInfo = calculateRiskAdjustedScore(data);
+        return { ...data, ...riskInfo };
+      })
+      .filter(Boolean)
+      .filter(t => t.matchCount >= MIN_MATCH_THRESHOLD);
+
+    // Find optimal 2nd picks
+    const secondPicks = findOptimal2ndPick(userTeam, allTeamsWithData, 5);
+
+    // Find optimal 3rd picks (assuming best 2nd pick is selected)
+    const best2nd = secondPicks[0]?.team;
+    const thirdPicks = best2nd
+      ? findOptimal3rdPick(userTeam, best2nd, allTeamsWithData.filter(t => t.teamNumber !== best2nd.teamNumber), 5)
+      : [];
+
+    return { secondPicks, thirdPicks, userTeam, best2nd };
   }, [teamNumber, eventTeams, teamStats, rankingsMap]);
 
   // =============================================================================
@@ -692,15 +742,139 @@ export default function RecommendedAlliance() {
                         <TeamCard key={p.teamNumber} team={p} />
                       ))}
                     </div>
-                    {/* Display the calculated synergy score */}
-                    <div style={{ marginTop: '1rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                      Synergy Score: {alliance.score.toFixed(1)}
+                    {/* Display the calculated synergy score and compatibility */}
+                    <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        Synergy: {alliance.score.toFixed(1)}
+                      </div>
+                      {alliance.compatibility && (
+                        <div style={{
+                          padding: '0.35rem 0.75rem',
+                          borderRadius: '12px',
+                          fontSize: '0.85rem',
+                          fontWeight: '600',
+                          background: alliance.compatibility.overall >= 85 ? 'rgba(76, 175, 80, 0.2)' :
+                                      alliance.compatibility.overall >= 70 ? 'rgba(33, 150, 243, 0.2)' :
+                                      'rgba(255, 152, 0, 0.2)',
+                          color: alliance.compatibility.overall >= 85 ? '#4CAF50' :
+                                 alliance.compatibility.overall >= 70 ? '#2196F3' : '#FF9800'
+                        }}>
+                          Compatibility: {alliance.compatibility.grade}
+                        </div>
+                      )}
                     </div>
+                    {/* Compatibility Breakdown */}
+                    {alliance.compatibility && (
+                      <div style={{
+                        marginTop: '0.75rem',
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(2, 1fr)',
+                        gap: '0.35rem',
+                        fontSize: '0.75rem',
+                        color: 'var(--text-muted)'
+                      }}>
+                        <span>🎯 Roles: {alliance.compatibility.roleCompatibility}%</span>
+                        <span>🚗 Auto: {alliance.compatibility.autoPath}%</span>
+                        <span>🧗 Climb: {alliance.compatibility.climbSynergy}%</span>
+                        <span>🛡️ Defense: {alliance.compatibility.defenseBalance}%</span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             )}
           </div>
+
+          {/* --- SMART PICK ANALYSIS (AI-Driven) --- */}
+          {smartPicks.secondPicks.length > 0 && (
+            <div className="content-card">
+              <h2 style={{ marginBottom: '0.5rem' }}>🤖 Smart Pick Analysis</h2>
+              <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
+                Risk-adjusted recommendations based on consistency, volatility, and synergy
+              </p>
+
+              <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))' }}>
+                {/* 2nd Pick Recommendations */}
+                <div>
+                  <h3 style={{ color: '#9C27B0', marginBottom: '1rem' }}>🥈 Best 2nd Picks</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {smartPicks.secondPicks.map((pick, idx) => (
+                      <div key={pick.team.teamNumber} style={{
+                        background: 'var(--card-bg-alt)',
+                        padding: '0.75rem 1rem',
+                        borderRadius: '8px',
+                        borderLeft: `3px solid ${idx === 0 ? '#9C27B0' : 'var(--border-color)'}`
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                          <div>
+                            <strong style={{ fontSize: '1.1rem' }}>{pick.team.teamNumber}</strong>
+                            <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem', fontSize: '0.85rem' }}>{pick.team.nickname}</span>
+                          </div>
+                          <div style={{
+                            padding: '0.25rem 0.5rem',
+                            borderRadius: '4px',
+                            fontSize: '0.75rem',
+                            fontWeight: '600',
+                            background: pick.team.riskScore < 15 ? 'rgba(76, 175, 80, 0.2)' : pick.team.riskScore < 30 ? 'rgba(255, 193, 7, 0.2)' : 'rgba(244, 67, 54, 0.2)',
+                            color: pick.team.riskScore < 15 ? '#4CAF50' : pick.team.riskScore < 30 ? '#FF9800' : '#F44336'
+                          }}>
+                            Risk: {pick.team.riskScore}%
+                          </div>
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                          Score: {pick.finalScore.toFixed(1)} | {pick.recommendation}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem', fontStyle: 'italic' }}>
+                          {pick.reasoning}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 3rd Pick Recommendations */}
+                <div>
+                  <h3 style={{ color: '#FF9800', marginBottom: '1rem' }}>🥉 Best 3rd Picks</h3>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                    (If paired with #{smartPicks.best2nd?.teamNumber || '?'})
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {smartPicks.thirdPicks.map((pick, idx) => (
+                      <div key={pick.team.teamNumber} style={{
+                        background: 'var(--card-bg-alt)',
+                        padding: '0.75rem 1rem',
+                        borderRadius: '8px',
+                        borderLeft: `3px solid ${idx === 0 ? '#FF9800' : 'var(--border-color)'}`
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                          <div>
+                            <strong style={{ fontSize: '1.1rem' }}>{pick.team.teamNumber}</strong>
+                            <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem', fontSize: '0.85rem' }}>{pick.team.nickname}</span>
+                          </div>
+                          <div style={{
+                            padding: '0.25rem 0.5rem',
+                            borderRadius: '4px',
+                            fontSize: '0.75rem',
+                            fontWeight: '600',
+                            background: pick.team.riskScore < 15 ? 'rgba(76, 175, 80, 0.2)' : pick.team.riskScore < 30 ? 'rgba(255, 193, 7, 0.2)' : 'rgba(244, 67, 54, 0.2)',
+                            color: pick.team.riskScore < 15 ? '#4CAF50' : pick.team.riskScore < 30 ? '#FF9800' : '#F44336'
+                          }}>
+                            Risk: {pick.team.riskScore}%
+                          </div>
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                          Score: {pick.finalScore.toFixed(1)} | {pick.recommendation}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem', fontStyle: 'italic' }}>
+                          {pick.reasoning}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* --- ALLIANCE CANDIDATE BREAKDOWN --- */}
           {/* Three columns showing all teams categorized by role */}

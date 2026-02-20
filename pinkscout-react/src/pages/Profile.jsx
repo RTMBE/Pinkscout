@@ -19,6 +19,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getAllScoutingData } from '../services/scoutingService';
 import { getTeamMembers, regenerateTeamCode, getTeamLeadCode, generateTeamCode } from '../services/teamCodeService';
 import { getUserSettings, saveUserSettings, isMobileDevice } from '../services/userSettingsService';
+import TeamSharing from '../components/TeamSharing';
 
 export default function Profile() {
   const { user, userProfile, isAdmin, roleContext, updateUserProfile, refreshRoleContext } = useAuth();
@@ -454,6 +455,11 @@ export default function Profile() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Team Data Sharing (Team Leads only) */}
+      {roleContext?.isTeamLead && (
+        <TeamSharing userUid={user?.id} userRole={roleContext?.role} />
       )}
 
       {/* Profile Form */}

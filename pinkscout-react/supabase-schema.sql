@@ -206,8 +206,9 @@ CREATE POLICY "Team leads can view team members" ON profiles
 -- =============================================================================
 -- TEAM_CODES POLICIES
 -- =============================================================================
-CREATE POLICY "Anyone can validate team codes" ON team_codes
-  FOR SELECT USING (active = TRUE);
+-- SECURITY FIX (2026-02-19): Removed overly permissive "Anyone can validate team codes" policy
+-- that allowed ANY user (or even unauthenticated users) to see ALL active team codes.
+-- Now team code validation is done via a secure RPC function (validate_team_code below).
 
 -- Allow users to create their own team codes (becoming a Team Lead)
 CREATE POLICY "Users can create team codes" ON team_codes
@@ -228,6 +229,50 @@ CREATE POLICY "Team leads can delete their codes" ON team_codes
 CREATE POLICY "Master admin full access to team_codes" ON team_codes
   FOR ALL USING (is_master_admin(auth.email()))
   WITH CHECK (is_master_admin(auth.email()));
+
+-- =============================================================================
+-- SECURE TEAM CODE VALIDATION FUNCTION (RPC)
+-- =============================================================================
+-- This function allows authenticated users to validate a SPECIFIC team code
+-- without being able to enumerate all codes. It only returns the team lead info
+-- if the exact code matches.
+
+CREATE OR REPLACE FUNCTION validate_team_code(code_to_validate TEXT)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  result JSON;
+BEGIN
+  -- Require authentication
+  IF auth.uid() IS NULL THEN
+    RETURN json_build_object('valid', false, 'error', 'Authentication required');
+  END IF;
+
+  -- Normalize and validate input
+  IF code_to_validate IS NULL OR LENGTH(TRIM(code_to_validate)) != 6 THEN
+    RETURN json_build_object('valid', false, 'error', 'Invalid code format');
+  END IF;
+
+  -- Look up the specific code
+  SELECT json_build_object(
+    'valid', true,
+    'team_lead_uid', team_lead_uid,
+    'team_lead_email', team_lead_email
+  ) INTO result
+  FROM team_codes
+  WHERE code = UPPER(TRIM(code_to_validate))
+    AND active = TRUE;
+
+  -- Return result or invalid message
+  IF result IS NULL THEN
+    RETURN json_build_object('valid', false, 'error', 'Invalid or expired code');
+  END IF;
+
+  RETURN result;
+END;
+$$;
 
 -- =============================================================================
 -- SCOUTING POLICIES (matching Firestore rules)
@@ -472,5 +517,251 @@ CREATE POLICY "Users can insert own settings" ON user_settings
 -- Trigger for user_settings updated_at
 CREATE TRIGGER user_settings_updated_at
   BEFORE UPDATE ON user_settings
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+
+-- =============================================================================
+-- SCOUTING CONFIGURATION TABLE (NEW - Customizable scouting inputs)
+-- =============================================================================
+-- Allows team leads to configure custom scouting fields without code changes
+CREATE TABLE IF NOT EXISTS scouting_config (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  team_lead_uid UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+
+  -- Config metadata
+  config_name TEXT NOT NULL DEFAULT 'Default Config',
+  year INTEGER NOT NULL DEFAULT 2026,
+  is_active BOOLEAN DEFAULT TRUE,
+
+  -- Field definitions stored as JSONB array
+  -- Format: [{ id, name, type, category, required, min, max, options, weight, description }]
+  -- Types: 'number', 'counter', 'toggle', 'select', 'text', 'rating'
+  -- Categories: 'auto', 'teleop', 'endgame', 'general', 'custom'
+  fields JSONB NOT NULL DEFAULT '[]'::jsonb,
+
+  -- Scoring weights for ECS calculation
+  -- Format: { fieldId: weight, ... }
+  scoring_weights JSONB NOT NULL DEFAULT '{}'::jsonb,
+
+  -- ECS formula configuration
+  -- Format: { formula: "auto * 1.5 + teleop + endgame * 2", version: 1 }
+  ecs_config JSONB DEFAULT '{"formula": "default", "version": 1}'::jsonb,
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for scouting_config
+CREATE INDEX IF NOT EXISTS idx_scouting_config_team_lead ON scouting_config(team_lead_uid);
+CREATE INDEX IF NOT EXISTS idx_scouting_config_year ON scouting_config(year);
+CREATE INDEX IF NOT EXISTS idx_scouting_config_active ON scouting_config(is_active);
+
+-- Enable RLS on scouting_config
+ALTER TABLE scouting_config ENABLE ROW LEVEL SECURITY;
+
+-- Scouting Config RLS Policies
+CREATE POLICY "Master admin full access to scouting_config" ON scouting_config
+  FOR ALL USING (is_master_admin(auth.email()));
+
+CREATE POLICY "Team leads manage own config" ON scouting_config
+  FOR ALL USING (team_lead_uid = auth.uid());
+
+CREATE POLICY "Team members view team config" ON scouting_config
+  FOR SELECT USING (
+    team_lead_uid IN (
+      SELECT team_lead_uid FROM profiles WHERE id = auth.uid()
+    )
+  );
+
+-- Trigger for scouting_config updated_at
+CREATE TRIGGER scouting_config_updated_at
+  BEFORE UPDATE ON scouting_config
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+
+-- =============================================================================
+-- TEAM SHARING / MULTI-TEAM LINKING TABLE (NEW - Cross-team data sharing)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS team_sharing (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+  -- The team lead granting access
+  owner_team_lead_uid UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+
+  -- The team lead receiving access
+  shared_with_team_lead_uid UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+
+  -- Permission level
+  permission TEXT NOT NULL DEFAULT 'viewer' CHECK (permission IN ('viewer', 'editor', 'admin')),
+
+  -- Status
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected', 'revoked')),
+
+  -- Invitation details
+  invite_code TEXT,
+  invited_at TIMESTAMPTZ DEFAULT NOW(),
+  accepted_at TIMESTAMPTZ,
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+  -- Prevent duplicate invites
+  UNIQUE(owner_team_lead_uid, shared_with_team_lead_uid)
+);
+
+-- Indexes for team_sharing
+CREATE INDEX IF NOT EXISTS idx_team_sharing_owner ON team_sharing(owner_team_lead_uid);
+CREATE INDEX IF NOT EXISTS idx_team_sharing_shared ON team_sharing(shared_with_team_lead_uid);
+CREATE INDEX IF NOT EXISTS idx_team_sharing_status ON team_sharing(status);
+
+-- Enable RLS on team_sharing
+ALTER TABLE team_sharing ENABLE ROW LEVEL SECURITY;
+
+-- Team Sharing RLS Policies
+CREATE POLICY "Master admin full access to team_sharing" ON team_sharing
+  FOR ALL USING (is_master_admin(auth.email()));
+
+CREATE POLICY "Owners manage sharing" ON team_sharing
+  FOR ALL USING (owner_team_lead_uid = auth.uid());
+
+CREATE POLICY "Recipients view and respond" ON team_sharing
+  FOR SELECT USING (shared_with_team_lead_uid = auth.uid());
+
+CREATE POLICY "Recipients can update status" ON team_sharing
+  FOR UPDATE USING (shared_with_team_lead_uid = auth.uid());
+
+-- Trigger for team_sharing updated_at
+CREATE TRIGGER team_sharing_updated_at
+  BEFORE UPDATE ON team_sharing
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+
+-- =============================================================================
+-- PRESCOUTING DATA TABLE (NEW - Imported/historical team data)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS prescouting_data (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+  team_number INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  event_key TEXT,
+
+  -- Aggregated statistics
+  avg_auto_points DECIMAL(6,2),
+  avg_teleop_points DECIMAL(6,2),
+  avg_endgame_points DECIMAL(6,2),
+  avg_total_points DECIMAL(6,2),
+
+  -- Performance metrics
+  consistency_index DECIMAL(4,3), -- 0-1 scale
+  improvement_rate DECIMAL(6,3), -- Slope of performance
+  volatility DECIMAL(4,3), -- Standard deviation normalized
+
+  -- Capability flags
+  can_climb BOOLEAN DEFAULT FALSE,
+  climb_consistency DECIMAL(4,3),
+  preferred_role TEXT CHECK (preferred_role IN ('shooter', 'cycler', 'defense', 'hybrid')),
+
+  -- Raw data for detailed analysis
+  match_data JSONB, -- Array of match-level data
+
+  -- Import metadata
+  source TEXT, -- 'manual', 'tba', 'statbotics', 'import'
+  imported_by UUID REFERENCES profiles(id),
+  team_lead_uid UUID REFERENCES profiles(id),
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+  -- One entry per team per year per event (or null event for season aggregate)
+  UNIQUE(team_number, year, event_key)
+);
+
+-- Indexes for prescouting_data
+CREATE INDEX IF NOT EXISTS idx_prescouting_team ON prescouting_data(team_number);
+CREATE INDEX IF NOT EXISTS idx_prescouting_year ON prescouting_data(year);
+CREATE INDEX IF NOT EXISTS idx_prescouting_event ON prescouting_data(event_key);
+CREATE INDEX IF NOT EXISTS idx_prescouting_team_lead ON prescouting_data(team_lead_uid);
+
+-- Enable RLS on prescouting_data
+ALTER TABLE prescouting_data ENABLE ROW LEVEL SECURITY;
+
+-- Prescouting Data RLS Policies
+CREATE POLICY "Master admin full access to prescouting_data" ON prescouting_data
+  FOR ALL USING (is_master_admin(auth.email()));
+
+CREATE POLICY "Team leads manage prescouting" ON prescouting_data
+  FOR ALL USING (team_lead_uid = auth.uid());
+
+CREATE POLICY "Team members view team prescouting" ON prescouting_data
+  FOR SELECT USING (
+    team_lead_uid IN (
+      SELECT team_lead_uid FROM profiles WHERE id = auth.uid()
+    )
+  );
+
+-- Trigger for prescouting_data updated_at
+CREATE TRIGGER prescouting_data_updated_at
+  BEFORE UPDATE ON prescouting_data
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+
+-- =============================================================================
+-- ALLIANCE COMPATIBILITY CACHE TABLE (NEW - Pre-calculated compatibility scores)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS alliance_compatibility (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+  team_a INTEGER NOT NULL,
+  team_b INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  event_key TEXT,
+
+  -- Compatibility scores (0-100)
+  overall_score DECIMAL(5,2),
+  role_synergy DECIMAL(5,2),
+  auto_compatibility DECIMAL(5,2),
+  endgame_synergy DECIMAL(5,2),
+  defense_balance DECIMAL(5,2),
+
+  -- Detailed breakdown
+  analysis JSONB,
+
+  -- Ownership
+  calculated_by UUID REFERENCES profiles(id),
+  team_lead_uid UUID REFERENCES profiles(id),
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+  -- One compatibility score per team pair per event
+  UNIQUE(team_a, team_b, year, event_key)
+);
+
+-- Indexes for alliance_compatibility
+CREATE INDEX IF NOT EXISTS idx_compatibility_teams ON alliance_compatibility(team_a, team_b);
+CREATE INDEX IF NOT EXISTS idx_compatibility_event ON alliance_compatibility(event_key);
+CREATE INDEX IF NOT EXISTS idx_compatibility_team_lead ON alliance_compatibility(team_lead_uid);
+
+-- Enable RLS on alliance_compatibility
+ALTER TABLE alliance_compatibility ENABLE ROW LEVEL SECURITY;
+
+-- Alliance Compatibility RLS Policies
+CREATE POLICY "Master admin full access to alliance_compatibility" ON alliance_compatibility
+  FOR ALL USING (is_master_admin(auth.email()));
+
+CREATE POLICY "Team leads manage compatibility" ON alliance_compatibility
+  FOR ALL USING (team_lead_uid = auth.uid());
+
+CREATE POLICY "Team members view team compatibility" ON alliance_compatibility
+  FOR SELECT USING (
+    team_lead_uid IN (
+      SELECT team_lead_uid FROM profiles WHERE id = auth.uid()
+    )
+  );
+
+-- Trigger for alliance_compatibility updated_at
+CREATE TRIGGER alliance_compatibility_updated_at
+  BEFORE UPDATE ON alliance_compatibility
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 

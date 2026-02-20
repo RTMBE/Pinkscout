@@ -1,0 +1,251 @@
+/* =============================================================================
+   COMPARE.CSS - Team Comparison Page Styles
+   ============================================================================= */
+
+.compare-page {
+  padding: 1rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.compare-page h2 {
+  color: var(--primary-color);
+  margin-bottom: 0.5rem;
+}
+
+.page-subtitle {
+  color: var(--text-muted);
+  margin-bottom: 1.5rem;
+}
+
+/* Compare Form */
+.compare-form {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.compare-form .search-container {
+  flex: 1;
+  position: relative;
+}
+
+.compare-form .form-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 1rem;
+  background: var(--card-bg);
+  color: var(--text-color);
+}
+
+.suggestions-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.suggestion-item {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.suggestion-item:hover {
+  background: var(--hover-bg);
+}
+
+.suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.suggestion-name {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* Team Pills */
+.team-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.team-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--card-bg);
+  border: 2px solid;
+  border-radius: 20px;
+  font-size: 0.9rem;
+}
+
+.pill-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.pill-number {
+  font-weight: bold;
+}
+
+.pill-name {
+  color: var(--text-muted);
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pill-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1.2rem;
+  padding: 0 0.25rem;
+  line-height: 1;
+}
+
+.pill-remove:hover {
+  color: var(--danger-color);
+}
+
+/* Compare Controls */
+.compare-controls {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.control-group label {
+  font-weight: 500;
+  color: var(--text-color);
+}
+
+.control-group select {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: var(--text-color);
+  font-size: 0.9rem;
+}
+
+.chart-type-buttons {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.chart-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg);
+  color: var(--text-color);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chart-btn:first-child { border-radius: 6px 0 0 6px; }
+.chart-btn:last-child { border-radius: 0 6px 6px 0; }
+.chart-btn.active {
+  background: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+/* Chart Container */
+.chart-container {
+  height: 400px;
+  position: relative;
+  margin-top: 1rem;
+}
+
+/* Team Indicator in Table */
+.team-indicator {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 3rem 2rem;
+}
+
+.empty-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+}
+
+.empty-state h3 {
+  color: var(--text-color);
+  margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+  color: var(--text-muted);
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .compare-form {
+    flex-direction: column;
+  }
+
+  .compare-form .search-container {
+    width: 100%;
+  }
+
+  .compare-form .btn {
+    width: 100%;
+  }
+
+  .compare-controls {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .chart-container {
+    height: 300px;
+  }
+
+  .pill-name {
+    display: none;
+  }
+
+  .comparison-table th,
+  .comparison-table td {
+    padding: 0.5rem;
+    font-size: 0.85rem;
+  }
+}
+

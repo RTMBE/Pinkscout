@@ -1,13 +1,15 @@
 /**
  * ThemeToggle.jsx - Light/Dark Mode Toggle Component
- * 
+ *
  * Toggles between light and dark themes by setting data-theme attribute
  * on the document root. Persists preference to localStorage.
+ *
+ * @param {boolean} compact - If true, renders inline nav-item style
  */
 
 import { useState, useEffect } from 'react';
 
-export default function ThemeToggle() {
+export default function ThemeToggle({ compact = false }) {
   const [isDark, setIsDark] = useState(() => {
     // Check localStorage first
     const saved = localStorage.getItem('theme');
@@ -22,8 +24,23 @@ export default function ThemeToggle() {
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
   }, [isDark]);
 
+  // Compact mode for sidebar navigation item
+  if (compact) {
+    return (
+      <button
+        className="theme-toggle-compact"
+        onClick={() => setIsDark(!isDark)}
+        title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        aria-label={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+      >
+        <span className="nav-item-icon">{isDark ? '☀️' : '🌙'}</span>
+        <span>{isDark ? 'Light Mode' : 'Dark Mode'}</span>
+      </button>
+    );
+  }
+
   return (
-    <button 
+    <button
       className="theme-toggle-btn"
       onClick={() => setIsDark(!isDark)}
       title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}

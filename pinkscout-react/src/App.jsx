@@ -24,9 +24,15 @@
  * =============================================================================
  */
 
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { lazy, Suspense, useState, useEffect } from 'react';
+
+// TeamRedirect component - redirects /team/:teamNumber to /teams?team=:teamNumber
+function TeamRedirect() {
+  const { teamNumber } = useParams();
+  return <Navigate to={`/teams?team=${teamNumber}`} replace />;
+}
 
 // Import layout components
 import Sidebar from './components/Sidebar';
@@ -52,6 +58,8 @@ const Login = lazy(() => import('./pages/Login'));
 const Profile = lazy(() => import('./pages/Profile'));
 const MyMatches = lazy(() => import('./pages/MyMatches'));
 const RecommendedAlliance = lazy(() => import('./pages/RecommendedAlliance'));
+const ScoutingConfig = lazy(() => import('./pages/ScoutingConfig'));
+const Compare = lazy(() => import('./pages/Compare'));
 
 // =============================================================================
 // LOADING FALLBACK COMPONENT
@@ -200,7 +208,12 @@ export default function App() {
             <Route path="/teams" element={
               <ProtectedRoute><Teams /></ProtectedRoute>
             } />
-            
+
+            {/* Team Data Page - Direct link to team (redirects to Teams with query param) */}
+            <Route path="/team/:teamNumber" element={
+              <ProtectedRoute><TeamRedirect /></ProtectedRoute>
+            } />
+
             {/* Events - Event schedules and matches */}
             <Route path="/events" element={
               <ProtectedRoute><Events /></ProtectedRoute>
@@ -226,6 +239,11 @@ export default function App() {
               <ProtectedRoute><Analytics /></ProtectedRoute>
             } />
 
+            {/* Compare - Multi-team comparison with charts */}
+            <Route path="/compare" element={
+              <ProtectedRoute><Compare /></ProtectedRoute>
+            } />
+
             {/* Rules Reference - Public FRC 2026 game rules */}
             <Route path="/rules" element={<RulesReference />} />
             
@@ -244,11 +262,16 @@ export default function App() {
               <ProtectedRoute><RecommendedAlliance /></ProtectedRoute>
             } />
 
+            {/* Scouting Config - Team lead configuration for scouting fields */}
+            <Route path="/scouting-config" element={
+              <ProtectedRoute><ScoutingConfig /></ProtectedRoute>
+            } />
+
             {/* Admin - Admin panel (admin only) */}
             <Route path="/admin" element={
               <AdminRoute><Admin /></AdminRoute>
             } />
-            
+
             {/* Catch-all redirect */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

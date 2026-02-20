@@ -1,0 +1,203 @@
+/**
+ * =============================================================================
+ * SCOUTING CONFIG STYLES
+ * =============================================================================
+ */
+
+/* Config Header */
+.config-header {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.config-header .form-group {
+  flex: 1;
+  min-width: 200px;
+}
+
+/* Card Header with Actions */
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.card-header h3 {
+  margin: 0;
+}
+
+.card-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Fields List */
+.fields-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.field-category h4 {
+  color: var(--primary-color);
+  border-bottom: 2px solid var(--primary-color);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
+  text-transform: capitalize;
+}
+
+/* Field Item */
+.field-item {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.field-item:hover {
+  border-color: var(--primary-color);
+}
+
+.field-item.editing {
+  border-color: var(--primary-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.field-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  background: var(--bg-secondary);
+}
+
+.field-header:hover {
+  background: var(--bg-hover);
+}
+
+.field-name {
+  font-weight: 600;
+  flex: 2;
+}
+
+.field-type {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  flex: 1;
+  text-align: center;
+  text-transform: capitalize;
+}
+
+.field-weight {
+  color: var(--primary-color);
+  font-size: 0.85rem;
+  flex: 1;
+  text-align: right;
+}
+
+/* Field Editor */
+.field-editor {
+  padding: 1rem;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-color);
+}
+
+.editor-row {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.editor-row .form-group {
+  flex: 1;
+  min-width: 120px;
+}
+
+.editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+}
+
+/* Button Sizes */
+.btn-sm {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.btn-lg {
+  padding: 0.75rem 1.5rem;
+  font-size: 1.1rem;
+  width: 100%;
+}
+
+/* Message Styles */
+.message {
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-weight: 500;
+}
+
+.message.success {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.message.error {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .config-header {
+    flex-direction: column;
+  }
+  
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .card-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  
+  .field-header {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .field-name {
+    flex: 1 1 100%;
+  }
+  
+  .field-type,
+  .field-weight {
+    flex: 1;
+    text-align: left;
+  }
+  
+  .editor-row {
+    flex-direction: column;
+  }
+  
+  .editor-row .form-group {
+    min-width: 100%;
+  }
+}
+

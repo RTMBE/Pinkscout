@@ -25,6 +25,7 @@ import { searchTeams } from '../services/blueAllianceAPI';
 import { scaleStatboticsEPA, classifyEPA, getEPAPercentile } from '../utils/epaUtils';
 import { useAuth } from '../contexts/AuthContext';
 import { getPitScoutingForTeam } from '../services/pitScoutingService';
+import { calculateAverageECS, getScoutingConfig, DEFAULT_SCORING_WEIGHTS } from '../services/scoutingConfigService';
 
 export default function Analytics() {
   const { roleContext } = useAuth();
@@ -50,6 +51,22 @@ export default function Analytics() {
   const inputRef = useRef(null);
   const suggestionsRef = useRef(null);
   const debounceTimerRef = useRef(null);
+
+  // ECS scoring weights (loaded from team config or defaults)
+  const [ecsWeights, setEcsWeights] = useState(DEFAULT_SCORING_WEIGHTS);
+
+  // Load ECS weights from team configuration
+  useEffect(() => {
+    async function loadEcsWeights() {
+      if (roleContext?.teamLeadUid) {
+        const config = await getScoutingConfig(roleContext.teamLeadUid, 2026);
+        if (config?.scoring_weights) {
+          setEcsWeights(config.scoring_weights);
+        }
+      }
+    }
+    loadEcsWeights();
+  }, [roleContext?.teamLeadUid]);
 
   // ==========================================================================
   // AUTOCOMPLETE: Search teams as user types
@@ -195,6 +212,9 @@ export default function Analytics() {
       // Calculate scouting averages
       const scoutingAvg = calculateScoutingAverages(scouting);
 
+      // Calculate ECS (Estimated Contribution Score) from scouting data
+      const ecsScore = calculateAverageECS(scouting, ecsWeights);
+
       setTeams(prev => [...prev, {
         teamNumber,
         name: statbotics.team || `Team ${teamNumber}`,
@@ -203,6 +223,7 @@ export default function Analytics() {
         classification,
         scoutingData: scouting,
         scoutingAvg,
+        ecsScore, // NEW: Estimated Contribution Score
         pitScouting // Robot configuration from pit scouting
       }]);
 
@@ -411,10 +432,11 @@ export default function Analytics() {
                   <th>Team</th>
                   <th>Classification</th>
                   <th>EPA Points</th>
+                  <th>ECS</th>
                   <th>Percentile</th>
-                  <th>Avg Auto (Scouted)</th>
-                  <th>Avg Teleop (Scouted)</th>
-                  <th>Matches Scouted</th>
+                  <th>Avg Auto</th>
+                  <th>Avg Teleop</th>
+                  <th>Matches</th>
                   <th></th>
                 </tr>
               </thead>
@@ -435,6 +457,11 @@ export default function Analytics() {
                       </span>
                     </td>
                     <td>{team.epaValue.toFixed(1)}</td>
+                    <td>
+                      <span className="ecs-score" title="Estimated Contribution Score">
+                        {team.ecsScore > 0 ? team.ecsScore.toFixed(1) : '—'}
+                      </span>
+                    </td>
                     <td>{team.epaPercentile.toFixed(0)}%</td>
                     <td>{team.scoutingAvg.autoPoints.toFixed(1)}</td>
                     <td>{team.scoutingAvg.teleopPoints.toFixed(1)}</td>

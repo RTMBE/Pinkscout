@@ -179,6 +179,11 @@ export async function getTeamLeadCode(teamLeadUid) {
 
 /**
  * Validate a team code and return the Team Lead info
+ *
+ * SECURITY FIX (2026-02-19): Now uses secure RPC function instead of direct table access.
+ * The RPC function only returns info for a SPECIFIC matching code, preventing
+ * enumeration of all team codes which was a security vulnerability.
+ *
  * @param {string} code - The team code to validate
  * @returns {Promise<Object|null>} - { teamLeadUid, teamLeadEmail } or null
  */
@@ -189,14 +194,23 @@ export async function validateTeamCode(code) {
   if (normalizedCode.length !== CODE_LENGTH) return null;
 
   try {
-    const { data, error } = await supabase
-      .from('team_codes')
-      .select('team_lead_uid, team_lead_email, active')
-      .eq('code', normalizedCode)
-      .single();
+    // Use secure RPC function that only returns info for matching code
+    const { data, error } = await supabase.rpc('validate_team_code', {
+      code_to_validate: normalizedCode
+    });
 
-    if (error || !data) return null;
-    if (!data.active) return null;
+    if (error) {
+      if (import.meta.env.DEV) {
+        console.error('Error validating team code:', error);
+      }
+      return null;
+    }
+
+    // RPC returns { valid: true, team_lead_uid, team_lead_email } on success
+    // or { valid: false, error: "..." } on failure
+    if (!data || !data.valid) {
+      return null;
+    }
 
     return {
       teamLeadUid: data.team_lead_uid,

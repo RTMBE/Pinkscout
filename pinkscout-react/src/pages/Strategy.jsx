@@ -8,12 +8,14 @@
  * Allows users to draw on a field image background.
  * 
  * FEATURES:
- * - FRC field background image
- * - Drawing tools (pen, eraser)
+ * - FRC 2026 REBUILT field background image
+ * - Drawing tools (pen, arrow, eraser)
  * - Color selection (red, blue, black)
  * - Brush size (S/M/L)
  * - Save/Load drawings
  * - Match-specific or default strategies
+ * - Export to PNG and copy to clipboard
+ * - Touch/stylus support for tablets
  * 
  * NOTES:
  * - Canvas is implemented using native HTML5 Canvas API
@@ -35,7 +37,7 @@ import {
 } from '../services/strategyService';
 
 // Field image - 2026 FRC REBUILT field
-const FIELD_IMAGE_URL = '/field-2026.png';
+const FIELD_IMAGE_URL = '/field-2026.svg';
 
 // LocalStorage keys
 const STORAGE_KEY_YEAR = 'pinkscout_strategy_year';
@@ -44,7 +46,8 @@ const STORAGE_KEY_EVENT = 'pinkscout_strategy_event';
 // Drawing tools
 const TOOLS = {
   PEN: 'pen',
-  ERASER: 'eraser'
+  ERASER: 'eraser',
+  ARROW: 'arrow'
 };
 
 // Colors
@@ -92,6 +95,10 @@ export default function Strategy() {
   const [brushSize, setBrushSize] = useState(BRUSH_SIZES.MEDIUM);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // Arrow drawing state
+  const [arrowStart, setArrowStart] = useState(null);
+  const [canvasSnapshot, setCanvasSnapshot] = useState(null);
 
   // Saved Drawings
   const [savedDrawings, setSavedDrawings] = useState([]);
@@ -264,8 +271,14 @@ export default function Strategy() {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
 
-    ctx.beginPath();
-    ctx.moveTo(x, y);
+    if (tool === TOOLS.ARROW) {
+      // Save canvas state for arrow preview
+      setArrowStart({ x, y });
+      setCanvasSnapshot(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+    }
   };
 
   const draw = (e) => {
@@ -276,23 +289,79 @@ export default function Strategy() {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
 
-    if (tool === TOOLS.ERASER) {
+    if (tool === TOOLS.ARROW && arrowStart && canvasSnapshot) {
+      // Restore canvas and draw preview arrow
+      ctx.putImageData(canvasSnapshot, 0, 0);
+      drawArrow(ctx, arrowStart.x, arrowStart.y, x, y);
+    } else if (tool === TOOLS.ERASER) {
       ctx.globalCompositeOperation = 'destination-out';
       ctx.strokeStyle = 'rgba(0,0,0,1)';
+      ctx.lineWidth = brushSize;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.lineTo(x, y);
+      ctx.stroke();
     } else {
       ctx.globalCompositeOperation = 'source-over';
       ctx.strokeStyle = color;
+      ctx.lineWidth = brushSize;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.lineTo(x, y);
+      ctx.stroke();
     }
+  };
 
+  const stopDrawing = (e) => {
+    if (tool === TOOLS.ARROW && isDrawing && arrowStart) {
+      const { x, y } = getCanvasCoordinates(e);
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+
+      // Restore canvas and draw final arrow
+      if (canvasSnapshot) {
+        ctx.putImageData(canvasSnapshot, 0, 0);
+      }
+      drawArrow(ctx, arrowStart.x, arrowStart.y, x, y);
+      setArrowStart(null);
+      setCanvasSnapshot(null);
+    }
+    setIsDrawing(false);
+  };
+
+  // Draw arrow with arrowhead
+  const drawArrow = (ctx, fromX, fromY, toX, toY) => {
+    const headLen = Math.max(15, brushSize * 2.5);
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    const angle = Math.atan2(dy, dx);
+
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
     ctx.lineWidth = brushSize;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.lineTo(x, y);
-    ctx.stroke();
-  };
 
-  const stopDrawing = () => {
-    setIsDrawing(false);
+    // Draw line
+    ctx.beginPath();
+    ctx.moveTo(fromX, fromY);
+    ctx.lineTo(toX, toY);
+    ctx.stroke();
+
+    // Draw arrowhead
+    ctx.beginPath();
+    ctx.moveTo(toX, toY);
+    ctx.lineTo(
+      toX - headLen * Math.cos(angle - Math.PI / 6),
+      toY - headLen * Math.sin(angle - Math.PI / 6)
+    );
+    ctx.lineTo(
+      toX - headLen * Math.cos(angle + Math.PI / 6),
+      toY - headLen * Math.sin(angle + Math.PI / 6)
+    );
+    ctx.closePath();
+    ctx.fill();
   };
 
   // ==========================================================================
@@ -305,6 +374,37 @@ export default function Strategy() {
     }
     drawFieldBackground();
     setHasUnsavedChanges(false);
+  };
+
+  // Export canvas as PNG
+  const exportAsPNG = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const link = document.createElement('a');
+    link.download = `strategy-${selectedEvent || 'drawing'}-${Date.now()}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    setSuccess('Image exported!');
+    setTimeout(() => setSuccess(''), 3000);
+  };
+
+  // Copy to clipboard for sharing
+  const copyToClipboard = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    try {
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      await navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': blob })
+      ]);
+      setSuccess('Copied to clipboard!');
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      // Fallback: download if clipboard not supported
+      exportAsPNG();
+    }
   };
 
   const saveDrawing = async () => {
@@ -540,6 +640,13 @@ export default function Strategy() {
                 </button>
                 <button
                   type="button"
+                  className={`btn btn-small ${tool === TOOLS.ARROW ? 'btn-primary' : ''}`}
+                  onClick={() => setTool(TOOLS.ARROW)}
+                >
+                  ➡️ Arrow
+                </button>
+                <button
+                  type="button"
                   className={`btn btn-small ${tool === TOOLS.ERASER ? 'btn-primary' : ''}`}
                   onClick={() => setTool(TOOLS.ERASER)}
                 >
@@ -598,6 +705,12 @@ export default function Strategy() {
                   disabled={saving}
                 >
                   {saving ? '...' : '💾 Save'}
+                </button>
+                <button type="button" className="btn btn-small" onClick={exportAsPNG} title="Download as PNG">
+                  📥 Export
+                </button>
+                <button type="button" className="btn btn-small" onClick={copyToClipboard} title="Copy to clipboard">
+                  📋 Copy
                 </button>
               </div>
             </div>

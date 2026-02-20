@@ -87,6 +87,26 @@
   --sidebar-bg: #ffffff;
   --sidebar-border: 1px solid #e0e0e0;
   --sidebar-shadow: 2px 0 8px rgba(0, 0, 0, 0.08);
+  --sidebar-header-bg: var(--primary-gradient);
+  --sidebar-nav-text: #5a6575;
+  --sidebar-nav-text-hover: var(--primary-color);
+  --sidebar-nav-text-active: var(--primary-color);
+  --sidebar-nav-hover-bg: var(--primary-light);
+  --sidebar-nav-active-bg: var(--primary-light);
+  --sidebar-nav-indicator: var(--primary-color);
+  --sidebar-surface-bg: var(--bg-color);
+  --sidebar-surface-border: var(--border-color);
+  --sidebar-muted-text: var(--text-secondary);
+  --sidebar-toggle-bg: var(--bg-color);
+  --sidebar-toggle-border: var(--border-color);
+  --sidebar-toggle-text: var(--text-primary);
+  --sidebar-toggle-hover-bg: var(--primary-light);
+  --sidebar-toggle-hover-border: var(--primary-color);
+  --sidebar-toggle-hover-text: var(--primary-color);
+  --sidebar-logout-border: var(--text-secondary);
+  --sidebar-logout-text: var(--text-secondary);
+  --sidebar-logout-hover-border: var(--error-color);
+  --sidebar-logout-hover-text: var(--error-color);
 }
 
 /* Dark Theme */
@@ -99,9 +119,29 @@
   --text-muted: #888888;
   --border-color: rgba(255, 255, 255, 0.1);
 
-  --sidebar-bg: #16213e;
-  --sidebar-border: 1px solid rgba(255, 255, 255, 0.1);
+  --sidebar-bg: #101827;
+  --sidebar-border: 1px solid rgba(255, 255, 255, 0.14);
   --sidebar-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
+  --sidebar-header-bg: linear-gradient(180deg, #1b2335 0%, #151d2f 100%);
+  --sidebar-nav-text: #e8edf7;
+  --sidebar-nav-text-hover: #f7faff;
+  --sidebar-nav-text-active: #ffffff;
+  --sidebar-nav-hover-bg: rgba(255, 255, 255, 0.14);
+  --sidebar-nav-active-bg: rgba(255, 255, 255, 0.22);
+  --sidebar-nav-indicator: var(--primary-color);
+  --sidebar-surface-bg: #0d1423;
+  --sidebar-surface-border: rgba(255, 255, 255, 0.14);
+  --sidebar-muted-text: #e0e7f3;
+  --sidebar-toggle-bg: rgba(255, 255, 255, 0.04);
+  --sidebar-toggle-border: rgba(255, 255, 255, 0.18);
+  --sidebar-toggle-text: #f4f7ff;
+  --sidebar-toggle-hover-bg: rgba(255, 255, 255, 0.12);
+  --sidebar-toggle-hover-border: var(--primary-color);
+  --sidebar-toggle-hover-text: #ffffff;
+  --sidebar-logout-border: rgba(255, 255, 255, 0.32);
+  --sidebar-logout-text: #edf2ff;
+  --sidebar-logout-hover-border: #ff8e8e;
+  --sidebar-logout-hover-text: #ffd2d2;
 
   --primary-light: #2d1a24;
 
@@ -181,7 +221,7 @@ a:hover {
 
 .sidebar-header {
   padding: 25px 20px;
-  background: var(--primary-gradient);
+  background: var(--sidebar-header-bg);
   color: white;
   text-align: center;
 }
@@ -213,9 +253,10 @@ a:hover {
 }
 
 .sidebar-nav a {
-  display: block;
+  display: flex;
+  align-items: center;
   padding: 14px 25px;
-  color: var(--text-secondary);
+  color: var(--sidebar-nav-text);
   font-size: 0.95rem;
   transition: all 0.2s ease;
   border-left: 4px solid transparent;
@@ -223,15 +264,15 @@ a:hover {
 }
 
 .sidebar-nav a:hover {
-  background-color: var(--primary-light);
-  color: var(--primary-color);
-  border-left-color: var(--primary-color);
+  background-color: var(--sidebar-nav-hover-bg);
+  color: var(--sidebar-nav-text-hover);
+  border-left-color: var(--sidebar-nav-indicator);
 }
 
 .sidebar-nav a.active {
-  background-color: var(--primary-light);
-  color: var(--primary-color);
-  border-left-color: var(--primary-color);
+  background-color: var(--sidebar-nav-active-bg);
+  color: var(--sidebar-nav-text-active);
+  border-left-color: var(--sidebar-nav-indicator);
   font-weight: 600;
 }
 
@@ -247,7 +288,7 @@ a:hover {
 /* Compact Header */
 .sidebar-header-compact {
   padding: 16px 16px;
-  background: var(--primary-gradient);
+  background: var(--sidebar-header-bg);
   display: flex;
   align-items: center;
 }
@@ -299,7 +340,7 @@ a:hover {
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  color: var(--text-secondary);
+  color: var(--sidebar-nav-text);
   font-size: 0.95rem;
   font-weight: 500;
   text-decoration: none;
@@ -308,22 +349,22 @@ a:hover {
 }
 
 .nav-top-link:hover {
-  background-color: var(--primary-light);
-  color: var(--primary-color);
-  border-left-color: var(--primary-color);
+  background-color: var(--sidebar-nav-hover-bg);
+  color: var(--sidebar-nav-text-hover);
+  border-left-color: var(--sidebar-nav-indicator);
 }
 
 .nav-top-link.active {
-  background-color: var(--primary-light);
-  color: var(--primary-color);
-  border-left-color: var(--primary-color);
+  background-color: var(--sidebar-nav-active-bg);
+  color: var(--sidebar-nav-text-active);
+  border-left-color: var(--sidebar-nav-indicator);
   font-weight: 600;
 }
 
 /* Navigation divider */
 .nav-divider {
   height: 1px;
-  background: var(--border-color);
+  background: var(--sidebar-surface-border);
   margin: 8px 16px;
 }
 
@@ -340,7 +381,7 @@ a:hover {
   padding: 10px 16px;
   background: transparent;
   border: none;
-  color: var(--text-secondary);
+  color: var(--sidebar-nav-text);
   font-size: 0.9rem;
   font-weight: 500;
   cursor: pointer;
@@ -349,12 +390,12 @@ a:hover {
 }
 
 .nav-group-header:hover {
-  background-color: var(--primary-light);
-  color: var(--primary-color);
+  background-color: var(--sidebar-nav-hover-bg);
+  color: var(--sidebar-nav-text-hover);
 }
 
 .nav-group.active > .nav-group-header {
-  color: var(--primary-color);
+  color: var(--sidebar-nav-text-active);
 }
 
 .nav-group-icon {
@@ -407,7 +448,7 @@ a:hover {
   align-items: center;
   gap: 8px;
   padding: 8px 16px 8px 50px;
-  color: var(--text-secondary);
+  color: var(--sidebar-nav-text);
   font-size: 0.85rem;
   text-decoration: none;
   transition: all 0.15s ease;
@@ -423,15 +464,15 @@ a:hover {
 
 .nav-group-items a:hover,
 .nav-group-items .theme-toggle-compact:hover {
-  background-color: var(--primary-light);
-  color: var(--primary-color);
-  border-left-color: var(--primary-color);
+  background-color: var(--sidebar-nav-hover-bg);
+  color: var(--sidebar-nav-text-hover);
+  border-left-color: var(--sidebar-nav-indicator);
 }
 
 .nav-group-items a.active {
-  background-color: var(--primary-light);
-  color: var(--primary-color);
-  border-left-color: var(--primary-color);
+  background-color: var(--sidebar-nav-active-bg);
+  color: var(--sidebar-nav-text-active);
+  border-left-color: var(--sidebar-nav-indicator);
   font-weight: 600;
 }
 
@@ -442,7 +483,7 @@ a:hover {
 }
 
 .nav-item-theme {
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--sidebar-surface-border);
   margin-top: 4px;
   padding-top: 4px;
 }
@@ -450,8 +491,8 @@ a:hover {
 /* Compact Footer */
 .sidebar-footer {
   padding: 12px 16px;
-  border-top: 1px solid var(--border-color);
-  background: var(--bg-color);
+  border-top: 1px solid var(--sidebar-surface-border);
+  background: var(--sidebar-surface-bg);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -488,7 +529,7 @@ a:hover {
 .user-name {
   font-size: 0.85rem;
   font-weight: 500;
-  color: var(--text-primary);
+  color: var(--sidebar-nav-text-active);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -496,7 +537,7 @@ a:hover {
 
 .user-team {
   font-size: 0.75rem;
-  color: var(--text-muted);
+  color: var(--sidebar-muted-text);
 }
 
 .btn-logout-compact {
@@ -504,8 +545,8 @@ a:hover {
   height: 36px;
   border-radius: 50%;
   background: transparent;
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
+  border: 1px solid var(--sidebar-logout-border);
+  color: var(--sidebar-logout-text);
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
@@ -516,21 +557,21 @@ a:hover {
 }
 
 .btn-logout-compact:hover {
-  background: var(--error-bg);
-  border-color: var(--error-color);
-  color: var(--error-color);
+  background: var(--sidebar-nav-hover-bg);
+  border-color: var(--sidebar-logout-hover-border);
+  color: var(--sidebar-logout-hover-text);
 }
 
 .user-info {
   padding: 15px 20px;
-  border-top: 1px solid var(--border-color);
-  background: var(--bg-color);
+  border-top: 1px solid var(--sidebar-surface-border);
+  background: var(--sidebar-surface-bg);
   margin-top: auto;
 }
 
 .user-email {
   font-size: 0.875rem;
-  color: var(--text-secondary);
+  color: var(--sidebar-muted-text);
   margin-bottom: var(--spacing-sm);
   word-break: break-all;
 }
@@ -539,22 +580,22 @@ a:hover {
   width: 100%;
   padding: var(--spacing-sm);
   background-color: transparent;
-  border: 1px solid var(--text-secondary);
-  color: var(--text-secondary);
+  border: 1px solid var(--sidebar-logout-border);
+  color: var(--sidebar-logout-text);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .btn-logout:hover {
-  border-color: var(--error-color);
-  color: var(--error-color);
+  border-color: var(--sidebar-logout-hover-border);
+  color: var(--sidebar-logout-hover-text);
 }
 
 /* Theme Toggle */
 .sidebar-theme-toggle {
   padding: 10px 20px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--sidebar-surface-border);
 }
 
 .theme-toggle-btn {
@@ -564,19 +605,19 @@ a:hover {
   justify-content: center;
   gap: 8px;
   padding: 10px;
-  background: var(--bg-color);
-  border: 1px solid var(--border-color);
+  background: var(--sidebar-toggle-bg);
+  border: 1px solid var(--sidebar-toggle-border);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s ease;
-  color: var(--text-primary);
+  color: var(--sidebar-toggle-text);
   font-size: 0.9rem;
 }
 
 .theme-toggle-btn:hover {
-  background: var(--primary-light);
-  border-color: var(--primary-color);
-  color: var(--primary-color);
+  background: var(--sidebar-toggle-hover-bg);
+  border-color: var(--sidebar-toggle-hover-border);
+  color: var(--sidebar-toggle-hover-text);
 }
 
 .theme-icon {

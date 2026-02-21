@@ -107,6 +107,19 @@ async function validateScoutingData(data) {
     }
   }
 
+  // Verify team lead profile exists (required for foreign key constraint)
+  if (data.teamLeadUid) {
+    const { data: teamLeadProfile, error: teamLeadError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', data.teamLeadUid)
+      .single();
+
+    if (teamLeadError || !teamLeadProfile) {
+      errors.push('Team Lead profile not found. Please contact your team lead or re-link your account.');
+    }
+  }
+
   if (errors.length > 0) {
     throw new Error(`Validation failed: ${errors.join(', ')}`);
   }
@@ -118,7 +131,12 @@ async function validateScoutingData(data) {
     scouterName: sanitizeString(data.scouterName || '', 100),
     notes: sanitizeString(data.notes || '', 1000),
     allianceColor: ['red', 'blue'].includes(data.allianceColor) ? data.allianceColor : 'red',
-    robotRole: ['shooter', 'cycler', 'defense'].includes(data.robotRole) ? data.robotRole : null
+    robotRole: ['shooter', 'cycler', 'defense'].includes(data.robotRole) ? data.robotRole : null,
+    // startingPosition must be valid or null (empty string would fail DB CHECK constraint)
+    startingPosition: ['left', 'center', 'right'].includes(data.startingPosition) ? data.startingPosition : null,
+    // Tower climb fields - sanitize to valid values or 'none'
+    autoTowerClimb: ['none', 'level1'].includes(data.autoTowerClimb) ? data.autoTowerClimb : 'none',
+    endgameTowerLevel: ['none', 'level1', 'level2', 'level3'].includes(data.endgameTowerLevel) ? data.endgameTowerLevel : 'none'
   };
 
   // Normalize scoutingId if present (legacy support)
@@ -133,8 +151,10 @@ async function validateScoutingData(data) {
 
   // Ensure numeric fields are integers and within reasonable bounds
   const numericFields = [
-    'teamNumber', 'matchNumber', 'autoFuel', 'autoTowerLevel',
-    'teleopFuel', 'teleopTowerLevel', 'endgameClimb', 'allianceShifts'
+    'teamNumber', 'matchNumber',
+    'autoFuelScored', 'autoCyclesCompleted',
+    'teleopFuelActive', 'teleopFuelInactive', 'teleopBallsCycled',
+    'endgameFuelScored', 'defenseRating'
   ];
 
   for (const field of numericFields) {

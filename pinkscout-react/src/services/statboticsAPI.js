@@ -26,7 +26,7 @@ const cache = new Map();
 const CACHE_TTL = {
   team: 30 * 60 * 1000,       // 30 minutes for team data
   teamEvent: 5 * 60 * 1000,   // 5 minutes for team-event data (updates during events)
-  eventStats: 5 * 60 * 1000,  // 5 minutes for event stats
+  eventStats: 10 * 60 * 1000, // 10 minutes for event stats (EPA updates slowly)
   teamYear: 60 * 60 * 1000,   // 1 hour for yearly stats (historical)
   topTeams: 30 * 60 * 1000    // 30 minutes for world rankings
 };

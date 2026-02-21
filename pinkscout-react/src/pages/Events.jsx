@@ -192,51 +192,70 @@ export default function Events() {
     setActiveTab('teams');
     setCrossEventScoutingData({});  // Reset cross-event data
 
-    // Load all data in parallel with individual error handling
-    // Use Promise.allSettled to avoid one failure breaking everything
-    const [teamsResult, matchesResult, rankingsResult, statsResult, scoutingResult, awardsResult] = await Promise.allSettled([
+    // Reset non-critical data while loading
+    setTeamStats([]);
+    setEventAwards([]);
+
+    // PHASE 1: Load critical data first (teams, matches, rankings, scouting)
+    // These are required for the initial view - load in parallel for speed
+    const [teamsResult, matchesResult, rankingsResult, scoutingResult] = await Promise.allSettled([
       getEventTeams(event.key),
       getEventMatches(event.key),
       getEventRankings(event.key),
-      getEventTeamStats(event.key),
-      getEventScoutingData(event.key, roleContext),
-      getEventAwards(event.key)
+      getEventScoutingData(event.key, roleContext)
     ]);
 
-    // Extract values with fallbacks for failed promises
+    // Extract critical values with fallbacks
     const teams = teamsResult.status === 'fulfilled' ? teamsResult.value : [];
     const matches = matchesResult.status === 'fulfilled' ? matchesResult.value : [];
     const rankings = rankingsResult.status === 'fulfilled' ? rankingsResult.value : [];
-    const stats = statsResult.status === 'fulfilled' ? statsResult.value : [];
     const scouting = scoutingResult.status === 'fulfilled' ? scoutingResult.value : [];
-    const awards = awardsResult.status === 'fulfilled' ? awardsResult.value : [];
 
-    console.log('Event data loaded:', {
-      teams: teams.length,
-      matches: matches.length,
-      rankings: rankings.length,
-      stats: stats.length,
-      scouting: scouting.length,
-      awards: awards.length
-    });
-
-    // Log any errors
-    [teamsResult, matchesResult, rankingsResult, statsResult, scoutingResult, awardsResult].forEach((result, i) => {
+    // Log any critical errors
+    [teamsResult, matchesResult, rankingsResult, scoutingResult].forEach((result, i) => {
       if (result.status === 'rejected') {
-        const names = ['teams', 'matches', 'rankings', 'stats', 'scouting', 'awards'];
+        const names = ['teams', 'matches', 'rankings', 'scouting'];
         console.warn(`Failed to load ${names[i]}:`, result.reason);
       }
     });
 
+    // Set critical data immediately - user can start viewing
     setEventTeams(teams);
     setEventMatches(matches);
     setEventRankings(rankings);
-    setTeamStats(stats);
     setScoutingData(scouting);
-    setEventAwards(awards);
-    setLoadingDetails(false);
+    setLoadingDetails(false);  // Show content now!
 
-    // Fetch cross-event scouting data for all teams at this event (async, non-blocking)
+    if (import.meta.env.DEV) {
+      console.log('Critical event data loaded:', {
+        teams: teams.length,
+        matches: matches.length,
+        rankings: rankings.length,
+        scouting: scouting.length
+      });
+    }
+
+    // PHASE 2: Load non-critical data asynchronously (stats, awards)
+    // These are optional enhancements - load in background
+    Promise.allSettled([
+      getEventTeamStats(event.key),
+      getEventAwards(event.key)
+    ]).then(([statsResult, awardsResult]) => {
+      const stats = statsResult.status === 'fulfilled' ? statsResult.value : [];
+      const awards = awardsResult.status === 'fulfilled' ? awardsResult.value : [];
+
+      setTeamStats(stats);
+      setEventAwards(awards);
+
+      if (import.meta.env.DEV) {
+        console.log('Secondary event data loaded:', {
+          stats: stats.length,
+          awards: awards.length
+        });
+      }
+    });
+
+    // PHASE 3: Load cross-event scouting data (async, non-blocking)
     // This enables cross-event scouting decay for match predictions
     if (teams.length > 0) {
       const teamNumbers = teams.map(t => t.team_number).filter(Boolean);

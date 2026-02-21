@@ -45,7 +45,7 @@
  * FORM FIELDS (2026 REBUILT™ Game):
  * - Team Number, Match Number, Event Key, Starting Position
  * - Alliance Color (Red/Blue)
- * - Auto: Shots made/attempted, cycles, tower climb, team won auto
+ * - Auto: Fuel scored, cycles, tower climb, team won auto
  * - Teleop: Fuel scored (active Hub), cycle tracking
  * - Endgame: Tower climb level (L1=15pts, L2=20pts, L3=30pts)
  * - Robot Role: Shooter, Cycler, or Defense
@@ -173,7 +173,6 @@ export default function Scouting() {
 
     // --- Auto Period (2026 REBUILT™) - First 20 seconds, robot runs on its own ---
     autoFuelScored: 0,        // Fuel (balls) scored in active Hub (1 point each)
-    autoShotsAttempted: 0,    // Total shots attempted (for calculating accuracy %)
     autoCyclesCompleted: 0,   // Complete cycles during auto
     autoTowerClimb: 'none',   // Tower climb in auto: 'none' or 'level1' (10 pts, max 2 robots)
 
@@ -501,7 +500,6 @@ export default function Scouting() {
           allianceColor: 'red',
           startingPosition: '',
           autoFuelScored: 0,
-          autoShotsAttempted: 0,
           autoCyclesCompleted: 0,
           autoTowerClimb: 'none',
           teleopFuelActive: 0,
@@ -817,23 +815,13 @@ export default function Scouting() {
           </p>
 
           <div className="form-grid">
-            {/* Auto Shots Made */}
+            {/* Auto Fuel Scored */}
             <div className="form-group counter-group">
-              <label>⚽ Auto Shots Made (1 pt each)</label>
+              <label>⚽ Auto Fuel Scored (1 pt each)</label>
               <div className="counter">
                 <button type="button" onClick={() => handleIncrement('autoFuelScored', -1)}>−</button>
                 <span>{formData.autoFuelScored}</span>
                 <button type="button" onClick={() => handleIncrement('autoFuelScored', 1)}>+</button>
-              </div>
-            </div>
-
-            {/* Auto Shots Attempted */}
-            <div className="form-group counter-group">
-              <label>🎯 Auto Shots Attempted</label>
-              <div className="counter">
-                <button type="button" onClick={() => handleIncrement('autoShotsAttempted', -1)}>−</button>
-                <span>{formData.autoShotsAttempted}</span>
-                <button type="button" onClick={() => handleIncrement('autoShotsAttempted', 1)}>+</button>
               </div>
             </div>
 
@@ -890,20 +878,6 @@ export default function Scouting() {
               </button>
             </div>
           </div>
-
-          {/* Auto Accuracy Display */}
-          {formData.autoShotsAttempted > 0 && (
-            <div style={{
-              marginTop: '1rem',
-              padding: '0.75rem',
-              background: 'var(--surface-secondary)',
-              borderRadius: '0.5rem',
-              fontSize: '0.9rem'
-            }}>
-              <strong>Auto Accuracy:</strong> {formData.autoFuelScored}/{formData.autoShotsAttempted}
-              ({Math.round((formData.autoFuelScored / formData.autoShotsAttempted) * 100)}%)
-            </div>
-          )}
         </div>
 
         {/* =============================================================== */}

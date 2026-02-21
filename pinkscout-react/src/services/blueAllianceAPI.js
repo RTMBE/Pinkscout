@@ -26,14 +26,15 @@ import { API_KEYS, API_URLS } from './supabase';
 
 const cache = new Map();
 
-// Cache TTL - Reduced for real-time updates during competitions
+// Cache TTL - Optimized for performance vs freshness balance
 const CACHE_TTL = {
   events: 5 * 60 * 1000,       // 5 minutes for event list
   eventDetails: 5 * 60 * 1000, // 5 minutes for event details
-  teams: 15 * 60 * 1000,       // 15 minutes for team data (rarely changes)
+  teams: 30 * 60 * 1000,       // 30 minutes for team data (rarely changes during event)
   matches: 15 * 1000,          // 15 seconds for matches (near real-time during events)
   rankings: 30 * 1000,         // 30 seconds for rankings
-  liveMatches: 10 * 1000       // 10 seconds for live match data
+  liveMatches: 10 * 1000,      // 10 seconds for live match data
+  awards: 30 * 60 * 1000       // 30 minutes for awards (only change after event)
 };
 
 // Last-Modified tracking for conditional requests
@@ -459,7 +460,7 @@ export async function getEventRankings(eventKey, forceRefresh = false) {
  */
 export async function getEventAwards(eventKey) {
   try {
-    return await tbaFetch(`/event/${eventKey}/awards`, CACHE_TTL.eventDetails);
+    return await tbaFetch(`/event/${eventKey}/awards`, CACHE_TTL.awards);
   } catch (error) {
     if (import.meta.env.DEV) {
       console.error('Error fetching event awards:', error);

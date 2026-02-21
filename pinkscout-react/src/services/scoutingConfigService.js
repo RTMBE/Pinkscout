@@ -35,7 +35,6 @@ export const FIELD_CATEGORIES = {
 // Default 2026 REBUILT game fields
 export const DEFAULT_FIELDS = [
   { id: 'auto_fuel_scored', name: 'Auto Fuel Scored', type: 'counter', category: 'auto', min: 0, max: 50, weight: 1.5 },
-  { id: 'auto_shots_attempted', name: 'Auto Shots Attempted', type: 'counter', category: 'auto', min: 0, max: 50, weight: 0 },
   { id: 'auto_cycles_completed', name: 'Auto Cycles', type: 'counter', category: 'auto', min: 0, max: 10, weight: 2 },
   { id: 'auto_tower_climb', name: 'Auto Tower Climb', type: 'select', category: 'auto', options: ['none', 'level1'], weight: 10 },
   { id: 'teleop_fuel_active', name: 'Teleop Active Hub Fuel', type: 'counter', category: 'teleop', min: 0, max: 100, weight: 1 },

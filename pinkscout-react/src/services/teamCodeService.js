@@ -71,16 +71,28 @@ export async function generateTeamCode(teamLeadUid, teamLeadEmail) {
   const existingCode = await getTeamLeadCode(teamLeadUid);
   if (existingCode) {
     // Ensure profile is marked as Team Lead (in case they toggled off and back on)
-    const { error: profileError } = await supabase
+    // Use .select() to verify the update actually happened
+    const { data: updatedProfile, error: profileError } = await supabase
       .from('profiles')
       .update({
         is_team_lead: true,
         team_code: existingCode
       })
-      .eq('id', teamLeadUid);
+      .eq('id', teamLeadUid)
+      .select('id, is_team_lead, team_code')
+      .single();
 
-    if (profileError) {
-      console.error('Error updating profile:', profileError);
+    if (profileError || !updatedProfile || updatedProfile.is_team_lead !== true) {
+      console.error('Error updating profile with existing code:', {
+        error: profileError,
+        profile: updatedProfile
+      });
+      // Throw if we can't mark them as Team Lead
+      throw new Error('Failed to enable Team Lead status. Please try again.');
+    }
+
+    if (import.meta.env.DEV) {
+      console.log('✅ Profile re-verified as Team Lead with existing code:', existingCode);
     }
 
     return existingCode;
@@ -137,21 +149,32 @@ export async function generateTeamCode(teamLeadUid, teamLeadEmail) {
   while (profileUpdateAttempts < maxProfileAttempts && !profileUpdateSuccess) {
     profileUpdateAttempts++;
 
-    const { error: profileError } = await supabase
+    // IMPORTANT: Use .select() to verify the update actually happened
+    // Without .select(), Supabase returns no error even if 0 rows were updated
+    const { data: updatedProfile, error: profileError } = await supabase
       .from('profiles')
       .update({
         is_team_lead: true,
         team_code: code
       })
-      .eq('id', teamLeadUid);
+      .eq('id', teamLeadUid)
+      .select('id, is_team_lead, team_code')
+      .single();
 
-    if (!profileError) {
+    if (!profileError && updatedProfile && updatedProfile.is_team_lead === true) {
       profileUpdateSuccess = true;
       if (import.meta.env.DEV) {
-        console.log(`✅ Profile updated with is_team_lead=true (attempt ${profileUpdateAttempts})`);
+        console.log(`✅ Profile updated with is_team_lead=true (attempt ${profileUpdateAttempts})`, updatedProfile);
       }
     } else {
-      console.error(`Error updating profile (attempt ${profileUpdateAttempts}):`, profileError);
+      // Log detailed error info for debugging
+      if (import.meta.env.DEV) {
+        console.error(`Profile update attempt ${profileUpdateAttempts}:`, {
+          error: profileError,
+          updatedProfile,
+          expectedUid: teamLeadUid
+        });
+      }
       if (profileUpdateAttempts < maxProfileAttempts) {
         // Wait a bit before retrying
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -163,7 +186,7 @@ export async function generateTeamCode(teamLeadUid, teamLeadEmail) {
   // The team code was created but without marking the profile as Team Lead,
   // the functionality won't work properly
   if (!profileUpdateSuccess) {
-    throw new Error('Failed to update profile as Team Lead. Please try again.');
+    throw new Error('Failed to update profile as Team Lead. The database update did not complete. Please try again or contact support.');
   }
 
   if (import.meta.env.DEV) {
@@ -429,15 +452,19 @@ export async function regenerateTeamCode(teamLeadUid, teamLeadEmail) {
     throw new Error(`Failed to create new team code: ${codeError.message}`);
   }
 
-  // Update user profile with new code
-  const { error: profileError } = await supabase
+  // Update user profile with new code - verify with .select()
+  const { data: updatedProfile, error: profileError } = await supabase
     .from('profiles')
-    .update({ team_code: code })
-    .eq('id', teamLeadUid);
+    .update({ team_code: code, is_team_lead: true })
+    .eq('id', teamLeadUid)
+    .select('id, team_code, is_team_lead')
+    .single();
 
-  if (profileError) {
+  if (profileError || !updatedProfile) {
     console.error('Error updating profile with new code:', profileError);
-    // Non-critical - code was created, profile update can be retried
+    // This is more critical now - log but continue since code was created
+  } else if (import.meta.env.DEV) {
+    console.log('✅ Profile updated with new team code:', updatedProfile);
   }
 
   if (import.meta.env.DEV) {

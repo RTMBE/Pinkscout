@@ -367,13 +367,33 @@ export function AuthProvider({ children }) {
       profileData.team_code = teamCode;
     }
 
-    const { error: profileError } = await supabase
+    // IMPORTANT: Use .select() to verify the profile was actually created
+    // and contains the correct is_team_lead value
+    const { data: createdProfile, error: profileError } = await supabase
       .from('profiles')
-      .insert(profileData);
+      .insert(profileData)
+      .select('id, is_team_lead, team_lead_uid, team_code')
+      .single();
 
     if (profileError) {
       console.error('Error creating profile:', profileError);
-      // Don't throw - user was created, they can update profile later
+      // For Team Leads, this is critical - they need a profile to generate a team code
+      if (isTeamLead) {
+        throw new Error('Failed to create Team Lead profile. Please try signing up again.');
+      }
+      // For members, they can update profile later
+    } else if (import.meta.env.DEV) {
+      console.log('✅ Profile created:', createdProfile);
+    }
+
+    // Verify is_team_lead was saved correctly for Team Leads
+    if (isTeamLead && createdProfile && createdProfile.is_team_lead !== true) {
+      console.error('Profile created but is_team_lead is not true:', createdProfile);
+      // Try to fix it
+      await supabase
+        .from('profiles')
+        .update({ is_team_lead: true })
+        .eq('id', newUser.id);
     }
 
     // If Team Lead, generate their team code after profile creation
@@ -381,11 +401,13 @@ export function AuthProvider({ children }) {
       try {
         const generatedCode = await generateTeamCode(newUser.id, newUser.email);
         teamCode = generatedCode;
-      } catch (error) {
-        // Non-critical - they can generate code later from Team Admin section
         if (import.meta.env.DEV) {
-          console.error('Error generating team code:', error);
+          console.log('✅ Team code generated for new Team Lead:', generatedCode);
         }
+      } catch (error) {
+        // For Team Leads, this is important - log prominently but allow signup to complete
+        console.error('Error generating team code during signup:', error);
+        // They can generate code later from Profile page
       }
     }
 
@@ -406,15 +428,28 @@ export function AuthProvider({ children }) {
       snakeCaseUpdates[snakeKey] = value;
     }
 
-    const { error } = await supabase
+    // IMPORTANT: Use .select() to verify the update actually happened
+    // Without .select(), Supabase returns no error even if 0 rows were updated
+    const { data: updatedProfile, error } = await supabase
       .from('profiles')
       .update(snakeCaseUpdates)
-      .eq('id', user.id);
+      .eq('id', user.id)
+      .select('*')
+      .single();
 
     if (error) throw error;
 
-    // Update local profile state with camelCase keys for consistent access
-    setUserProfile(prev => ({ ...prev, ...updates }));
+    // Verify the update actually happened
+    if (!updatedProfile) {
+      throw new Error('Profile update failed - no data returned');
+    }
+
+    if (import.meta.env.DEV) {
+      console.log('✅ Profile updated:', Object.keys(snakeCaseUpdates), updatedProfile);
+    }
+
+    // Update local profile state with the returned profile (convert to camelCase)
+    setUserProfile(snakeToCamelCase(updatedProfile));
 
     return true;
   }

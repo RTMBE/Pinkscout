@@ -2941,7 +2941,7 @@ a:hover {
     transform: scale(0.95);
   }
 
-  /* Mobile overlay */
+  /* Mobile overlay - always in DOM, controlled by opacity for smooth fade */
   .mobile-sidebar-overlay {
     display: block;
     position: fixed;
@@ -2951,23 +2951,35 @@ a:hover {
     bottom: 0;
     background-color: rgba(0, 0, 0, 0.5);
     z-index: 999;
-    animation: fadeIn 0.2s ease-out;
+    /* Hidden by default */
+    opacity: 0;
+    pointer-events: none;
+    /* Smooth fade in/out */
+    transition: opacity 0.25s ease-out;
+    /* GPU acceleration */
+    will-change: opacity;
   }
 
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+  /* Overlay visible when active */
+  .mobile-sidebar-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
   }
 
   /* Sidebar - hidden by default, slides in when open */
   .sidebar {
-    transform: translateX(-100%);
-    transition: transform 0.3s ease-out;
+    /* Use translate3d for GPU acceleration - prevents glitches */
+    transform: translate3d(-100%, 0, 0);
+    transition: transform 0.25s ease-out;
     z-index: 1000;
+    /* GPU acceleration hints - prevents flickering */
+    will-change: transform;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
   }
 
   .sidebar.mobile-open {
-    transform: translateX(0);
+    transform: translate3d(0, 0, 0);
   }
 
   .main-content {

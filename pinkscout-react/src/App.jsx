@@ -157,13 +157,12 @@ function Layout({ children }) {
       </button>
 
       {/* Overlay for mobile - closes sidebar when clicked */}
-      {mobileMenuOpen && (
-        <div
-          className="mobile-sidebar-overlay"
-          onClick={handleOverlayClick}
-          aria-hidden="true"
-        />
-      )}
+      {/* Always in DOM for smooth fade-out animation */}
+      <div
+        className={`mobile-sidebar-overlay ${mobileMenuOpen ? 'active' : ''}`}
+        onClick={handleOverlayClick}
+        aria-hidden="true"
+      />
 
       <Sidebar isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
       <main className="main-content">

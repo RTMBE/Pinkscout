@@ -2512,6 +2512,14 @@ a:hover {
   max-width: 800px;
 }
 
+/* Prevent zoom on rapid taps for ALL scouting form buttons */
+.scouting-form button {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 .alliance-toggle {
   display: flex;
   gap: var(--spacing-sm);
@@ -2526,6 +2534,11 @@ a:hover {
   cursor: pointer;
   font-weight: 600;
   transition: all 0.2s;
+  /* Prevent zoom on rapid taps (mobile) */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .alliance-btn.red {
@@ -2569,10 +2582,20 @@ a:hover {
   font-size: 1.25rem;
   cursor: pointer;
   transition: background-color 0.2s;
+  /* Prevent zoom on rapid taps (mobile) */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .counter button:hover {
   background-color: var(--primary-color);
+}
+
+.counter button:active {
+  background-color: var(--primary-color);
+  transform: scale(0.95);
 }
 
 .counter span {

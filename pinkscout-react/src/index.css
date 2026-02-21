@@ -476,6 +476,18 @@ a:hover {
   font-weight: 600;
 }
 
+/* Ensure theme toggle text is always visible */
+.nav-group-items .theme-toggle-compact span {
+  color: inherit;
+}
+
+/* Dark mode active state for theme toggle */
+[data-theme="dark"] .nav-group-items .theme-toggle-compact {
+  color: var(--sidebar-nav-text-active);
+  background-color: var(--sidebar-nav-active-bg);
+  border-left-color: var(--sidebar-nav-indicator);
+}
+
 .nav-item-icon {
   font-size: 0.9rem;
   width: 18px;
@@ -541,9 +553,8 @@ a:hover {
 }
 
 .btn-logout-compact {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
+  padding: 6px 12px;
+  border-radius: 6px;
   background: transparent;
   border: 1px solid var(--sidebar-logout-border);
   color: var(--sidebar-logout-text);
@@ -552,8 +563,10 @@ a:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1rem;
+  font-size: 0.85rem;
   flex-shrink: 0;
+  gap: 4px;
+  white-space: nowrap;
 }
 
 .btn-logout-compact:hover {
@@ -1952,16 +1965,132 @@ a:hover {
   color: var(--text-secondary);
 }
 
+/* Saved Events Section */
+.saved-events-section {
+  margin-bottom: var(--spacing-xl);
+  padding: var(--spacing-lg);
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.1), rgba(255, 193, 7, 0.05));
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+}
+
+.saved-events-section h2 {
+  margin: 0 0 var(--spacing-md) 0;
+  font-size: 1.25rem;
+  color: var(--text-primary);
+}
+
+.saved-events-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: var(--spacing-md);
+}
+
+.event-result-card {
+  position: relative;
+}
+
+.event-result-card.is-saved {
+  border-color: rgba(255, 193, 7, 0.5);
+  background: linear-gradient(135deg, var(--card-bg), rgba(255, 193, 7, 0.05));
+}
+
+.saved-event-card {
+  background: var(--card-bg);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+}
+
+.save-event-btn {
+  position: absolute;
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 4px;
+  opacity: 0.5;
+  transition: all 0.2s ease;
+  z-index: 1;
+}
+
+.save-event-btn:hover {
+  opacity: 1;
+  transform: scale(1.2);
+}
+
+.save-event-btn.saved {
+  opacity: 1;
+  color: #ffc107;
+}
+
+.save-event-btn-inline {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0 var(--spacing-sm);
+  opacity: 0.6;
+  transition: all 0.2s ease;
+  vertical-align: middle;
+}
+
+.save-event-btn-inline:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+
+.save-event-btn-inline.saved {
+  opacity: 1;
+  color: #ffc107;
+}
+
+/* Live Indicator & Refresh */
+.event-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-left: auto;
+}
+
+.live-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #ff4444, #cc0000);
+  color: white;
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  animation: pulse-live 2s ease-in-out infinite;
+}
+
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.btn-refresh {
+  font-size: 0.85rem;
+  padding: 6px 12px;
+}
+
 /* Event Detail Page */
 .event-detail-header {
   display: flex;
   align-items: flex-start;
   gap: var(--spacing-lg);
   margin-bottom: var(--spacing-lg);
+  flex-wrap: wrap;
 }
 
 .event-detail-title h1 {
   margin: 0 0 var(--spacing-sm) 0;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
 }
 
 .event-detail-title p {

@@ -33,7 +33,7 @@ const NAV_GROUPS = {
   teams: {
     label: 'Teams',
     icon: '🤖',
-    routes: ['/teams', '/compare']
+    routes: ['/teams']
   },
   competition: {
     label: 'Competition',
@@ -43,7 +43,7 @@ const NAV_GROUPS = {
   insights: {
     label: 'Insights',
     icon: '📊',
-    routes: ['/analytics', '/rules']
+    routes: ['/analytics', '/compare', '/rules']
   },
   account: {
     label: 'Account',
@@ -191,11 +191,6 @@ export default function Sidebar({ isOpen = false, onClose }) {
                   <span className="nav-item-icon">🔍</span> Search
                 </NavLink>
               </li>
-              <li>
-                <NavLink to="/compare" onClick={onClose}>
-                  <span className="nav-item-icon">📊</span> Compare
-                </NavLink>
-              </li>
             </ul>
           )}
         </div>
@@ -250,6 +245,11 @@ export default function Sidebar({ isOpen = false, onClose }) {
               <li>
                 <NavLink to="/analytics" onClick={onClose}>
                   <span className="nav-item-icon">📈</span> Analytics
+                </NavLink>
+              </li>
+              <li>
+                <NavLink to="/compare" onClick={onClose}>
+                  <span className="nav-item-icon">⚖️</span> Compare
                 </NavLink>
               </li>
               <li>
@@ -314,7 +314,8 @@ export default function Sidebar({ isOpen = false, onClose }) {
             </div>
           </div>
           <button className="btn-logout-compact" onClick={handleLogout} title="Sign Out">
-            🚪
+            <span style={{ marginRight: '4px' }}>🚪</span>
+            <span style={{ fontSize: '0.75rem' }}>Sign Out</span>
           </button>
         </div>
       )}

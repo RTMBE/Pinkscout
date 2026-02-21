@@ -17,12 +17,13 @@
  * =============================================================================
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { getEventList, getEventTeams, getEventMatches, getEventRankings, getEventAwards } from '../services/blueAllianceAPI';
+import { getEventList, getEventTeams, getEventMatches, getEventRankings, getEventAwards, forceRefreshMatches, forceRefreshRankings } from '../services/blueAllianceAPI';
 import { getEventTeamStats } from '../services/statboticsAPI';
 import { getEventScoutingData, getCrossEventScoutingData } from '../services/scoutingService';
+import { getSavedEvents, toggleSaveEvent, isEventSaved } from '../services/savedEventsService';
 import { classifyEPA, getEPAPercentile, calculateAutoPoints, calculateTeleopPoints } from '../utils/epaUtils';
 import { predictMatch } from '../utils/predictionUtils';
 import { useAuth } from '../contexts/AuthContext';
@@ -129,6 +130,37 @@ export default function Events() {
   const [sortBy, setSortBy] = useState('rank'); // 'rank', 'epa_total', 'epa_auto', 'epa_teleop', 'wins'
   const [sortDirection, setSortDirection] = useState('asc'); // 'asc' or 'desc'
 
+  // Saved events state
+  const [savedEvents, setSavedEvents] = useState([]);
+  const [savedEventKeys, setSavedEventKeys] = useState(new Set());
+  const [loadingSavedEvents, setLoadingSavedEvents] = useState(true);
+
+  // Auto-refresh state for real-time updates
+  const [lastRefresh, setLastRefresh] = useState(null);
+  const [isPolling, setIsPolling] = useState(false);
+  const pollIntervalRef = useRef(null);
+
+  // ==========================================================================
+  // LOAD SAVED EVENTS ON MOUNT
+  // ==========================================================================
+
+  useEffect(() => {
+    loadSavedEvents();
+  }, []);
+
+  const loadSavedEvents = async () => {
+    try {
+      setLoadingSavedEvents(true);
+      const saved = await getSavedEvents();
+      setSavedEvents(saved);
+      setSavedEventKeys(new Set(saved.map(e => e.event_key)));
+    } catch (err) {
+      console.error('Error loading saved events:', err);
+    } finally {
+      setLoadingSavedEvents(false);
+    }
+  };
+
   // ==========================================================================
   // LOAD EVENTS ON MOUNT/YEAR CHANGE
   // ==========================================================================
@@ -231,6 +263,99 @@ export default function Events() {
     setSelectedEvent(null);
     setSelectedMatch(null);
   };
+
+  // ==========================================================================
+  // TOGGLE SAVE EVENT
+  // ==========================================================================
+
+  const handleToggleSave = async (event, e) => {
+    e?.stopPropagation(); // Prevent triggering event selection
+    try {
+      const isSaved = await toggleSaveEvent(event);
+      if (isSaved) {
+        setSavedEventKeys(prev => new Set([...prev, event.key]));
+        setSavedEvents(prev => [...prev, { event_key: event.key, event_name: event.name, cached_data: event }]);
+      } else {
+        setSavedEventKeys(prev => {
+          const next = new Set(prev);
+          next.delete(event.key);
+          return next;
+        });
+        setSavedEvents(prev => prev.filter(e => e.event_key !== event.key));
+      }
+    } catch (err) {
+      console.error('Error toggling save:', err);
+    }
+  };
+
+  // ==========================================================================
+  // REAL-TIME POLLING FOR LIVE EVENTS
+  // ==========================================================================
+
+  const refreshEventData = useCallback(async () => {
+    if (!selectedEvent) return;
+
+    try {
+      const [newMatches, newRankings] = await Promise.all([
+        forceRefreshMatches(selectedEvent.key),
+        forceRefreshRankings(selectedEvent.key)
+      ]);
+
+      setEventMatches(newMatches);
+      setEventRankings(newRankings);
+      setLastRefresh(new Date());
+
+      if (import.meta.env.DEV) {
+        console.log('🔄 Real-time refresh completed:', { matches: newMatches.length, rankings: newRankings.length });
+      }
+    } catch (err) {
+      console.warn('Error refreshing event data:', err);
+    }
+  }, [selectedEvent]);
+
+  // Start/stop polling when viewing event details
+  useEffect(() => {
+    // Only poll when:
+    // 1. Viewing event details
+    // 2. Page is visible
+    // 3. Event is current or recent (within last week)
+    if (view !== 'detail' || !selectedEvent) {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+        setIsPolling(false);
+      }
+      return;
+    }
+
+    // Check if event is current (happening now or in last week)
+    const eventEnd = new Date(selectedEvent.end_date);
+    const now = new Date();
+    const daysSinceEnd = (now - eventEnd) / (1000 * 60 * 60 * 24);
+    const isRecentEvent = daysSinceEnd < 7; // Poll for events that ended within 7 days
+
+    if (!isRecentEvent) {
+      setIsPolling(false);
+      return;
+    }
+
+    setIsPolling(true);
+    setLastRefresh(new Date());
+
+    // Poll every 15 seconds when page is visible
+    pollIntervalRef.current = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refreshEventData();
+      }
+    }, 15000);
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, [view, selectedEvent, refreshEventData]);
 
   // ==========================================================================
   // FILTER EVENTS
@@ -561,6 +686,44 @@ export default function Events() {
         </div>
       </div>
 
+      {/* Saved Events Section */}
+      {savedEvents.length > 0 && !searchTerm && (
+        <div className="saved-events-section">
+          <h2>⭐ Saved Events</h2>
+          <div className="saved-events-grid">
+            {savedEvents.map(saved => {
+              const event = saved.cached_data || {
+                key: saved.event_key,
+                name: saved.event_name,
+                start_date: saved.start_date,
+                city: saved.city,
+                state_prov: saved.state_prov
+              };
+              return (
+                <div
+                  key={saved.event_key}
+                  className="event-result-card saved-event-card"
+                  onClick={() => selectEvent(event)}
+                >
+                  <button
+                    className="save-event-btn saved"
+                    onClick={(e) => handleToggleSave(event, e)}
+                    title="Remove from saved"
+                  >
+                    ⭐
+                  </button>
+                  <h3 className="event-result-name">{saved.event_name}</h3>
+                  <div className="event-result-meta">
+                    {saved.city && <span>📍 {saved.city}, {saved.state_prov || saved.country}</span>}
+                    {saved.start_date && <span>📅 {saved.start_date}</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Event Results */}
       {loading ? (
         <div className="loading-container">
@@ -577,9 +740,16 @@ export default function Events() {
             filteredEvents.map(event => (
               <div
                 key={event.key}
-                className="event-result-card"
+                className={`event-result-card ${savedEventKeys.has(event.key) ? 'is-saved' : ''}`}
                 onClick={() => selectEvent(event)}
               >
+                <button
+                  className={`save-event-btn ${savedEventKeys.has(event.key) ? 'saved' : ''}`}
+                  onClick={(e) => handleToggleSave(event, e)}
+                  title={savedEventKeys.has(event.key) ? 'Remove from saved' : 'Save event'}
+                >
+                  {savedEventKeys.has(event.key) ? '⭐' : '☆'}
+                </button>
                 <div className="event-result-header">
                   <span className="event-type-badge">
                     {event.event_type_string || 'Regional'}
@@ -618,11 +788,30 @@ export default function Events() {
           ← Back to Search
         </button>
         <div className="event-detail-title">
-          <h1>{selectedEvent?.name}</h1>
+          <h1>
+            {selectedEvent?.name}
+            <button
+              className={`save-event-btn-inline ${savedEventKeys.has(selectedEvent?.key) ? 'saved' : ''}`}
+              onClick={(e) => handleToggleSave(selectedEvent, e)}
+              title={savedEventKeys.has(selectedEvent?.key) ? 'Remove from saved' : 'Save event'}
+            >
+              {savedEventKeys.has(selectedEvent?.key) ? '⭐' : '☆'}
+            </button>
+          </h1>
           <p>
             📍 {selectedEvent?.city}, {selectedEvent?.state_prov || selectedEvent?.country} •
             📅 {selectedEvent?.start_date} to {selectedEvent?.end_date}
           </p>
+        </div>
+        <div className="event-detail-actions">
+          {isPolling && (
+            <span className="live-indicator" title={`Last updated: ${lastRefresh?.toLocaleTimeString()}`}>
+              🔴 LIVE
+            </span>
+          )}
+          <button onClick={refreshEventData} className="btn btn-secondary btn-refresh" title="Refresh data">
+            🔄 Refresh
+          </button>
         </div>
       </div>
 

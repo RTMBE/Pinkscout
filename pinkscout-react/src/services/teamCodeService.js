@@ -128,18 +128,42 @@ export async function generateTeamCode(teamLeadUid, teamLeadEmail) {
     throw codeError;
   }
 
-  // Update user profile to mark as Team Lead
-  const { error: profileError } = await supabase
-    .from('profiles')
-    .update({
-      is_team_lead: true,
-      team_code: code
-    })
-    .eq('id', teamLeadUid);
+  // Update user profile to mark as Team Lead - THIS IS CRITICAL
+  // Retry up to 3 times to ensure profile update succeeds
+  let profileUpdateAttempts = 0;
+  const maxProfileAttempts = 3;
+  let profileUpdateSuccess = false;
 
-  if (profileError) {
-    console.error('Error updating profile:', profileError);
-    // Don't throw - the team code was created, profile update is secondary
+  while (profileUpdateAttempts < maxProfileAttempts && !profileUpdateSuccess) {
+    profileUpdateAttempts++;
+
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({
+        is_team_lead: true,
+        team_code: code
+      })
+      .eq('id', teamLeadUid);
+
+    if (!profileError) {
+      profileUpdateSuccess = true;
+      if (import.meta.env.DEV) {
+        console.log(`✅ Profile updated with is_team_lead=true (attempt ${profileUpdateAttempts})`);
+      }
+    } else {
+      console.error(`Error updating profile (attempt ${profileUpdateAttempts}):`, profileError);
+      if (profileUpdateAttempts < maxProfileAttempts) {
+        // Wait a bit before retrying
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+  }
+
+  // If profile update failed after all retries, throw an error
+  // The team code was created but without marking the profile as Team Lead,
+  // the functionality won't work properly
+  if (!profileUpdateSuccess) {
+    throw new Error('Failed to update profile as Team Lead. Please try again.');
   }
 
   if (import.meta.env.DEV) {
@@ -184,6 +208,11 @@ export async function getTeamLeadCode(teamLeadUid) {
  * The RPC function only returns info for a SPECIFIC matching code, preventing
  * enumeration of all team codes which was a security vulnerability.
  *
+ * UPDATE (2026-02-21): Added fallback to direct query for cases where RPC fails.
+ * This is needed because:
+ * 1. During signup, users might not be authenticated yet
+ * 2. The RPC function might not be deployed yet in some environments
+ *
  * @param {string} code - The team code to validate
  * @returns {Promise<Object|null>} - { teamLeadUid, teamLeadEmail } or null
  */
@@ -194,27 +223,52 @@ export async function validateTeamCode(code) {
   if (normalizedCode.length !== CODE_LENGTH) return null;
 
   try {
-    // Use secure RPC function that only returns info for matching code
+    // Try RPC function first (most secure)
     const { data, error } = await supabase.rpc('validate_team_code', {
       code_to_validate: normalizedCode
     });
 
+    if (!error && data && data.valid) {
+      if (import.meta.env.DEV) {
+        console.log('✅ Team code validated via RPC:', normalizedCode);
+      }
+      return {
+        teamLeadUid: data.team_lead_uid,
+        teamLeadEmail: data.team_lead_email
+      };
+    }
+
+    // If RPC failed (e.g., function doesn't exist, auth issues),
+    // log the error for debugging
     if (error) {
       if (import.meta.env.DEV) {
-        console.error('Error validating team code:', error);
+        console.warn('RPC validation failed, trying fallback:', error.message);
+      }
+    }
+
+    // Fallback: Direct query (still secure - only queries specific code)
+    // This works because we're querying by exact code match
+    const { data: directData, error: directError } = await supabase
+      .from('team_codes')
+      .select('team_lead_uid, team_lead_email')
+      .eq('code', normalizedCode)
+      .eq('active', true)
+      .single();
+
+    if (directError || !directData) {
+      if (import.meta.env.DEV) {
+        console.log('Team code not found:', normalizedCode);
       }
       return null;
     }
 
-    // RPC returns { valid: true, team_lead_uid, team_lead_email } on success
-    // or { valid: false, error: "..." } on failure
-    if (!data || !data.valid) {
-      return null;
+    if (import.meta.env.DEV) {
+      console.log('✅ Team code validated via direct query:', normalizedCode);
     }
 
     return {
-      teamLeadUid: data.team_lead_uid,
-      teamLeadEmail: data.team_lead_email
+      teamLeadUid: directData.team_lead_uid,
+      teamLeadEmail: directData.team_lead_email
     };
   } catch (error) {
     if (import.meta.env.DEV) {

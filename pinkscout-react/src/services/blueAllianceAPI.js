@@ -25,12 +25,19 @@ import { API_KEYS, API_URLS } from './supabase';
 // =============================================================================
 
 const cache = new Map();
+
+// Cache TTL - Reduced for real-time updates during competitions
 const CACHE_TTL = {
-  events: 5 * 60 * 1000,      // 5 minutes for event list
-  eventDetails: 10 * 60 * 1000, // 10 minutes for event details
-  teams: 30 * 60 * 1000,      // 30 minutes for team data (rarely changes)
-  matches: 2 * 60 * 1000      // 2 minutes for matches (updates during events)
+  events: 5 * 60 * 1000,       // 5 minutes for event list
+  eventDetails: 5 * 60 * 1000, // 5 minutes for event details
+  teams: 15 * 60 * 1000,       // 15 minutes for team data (rarely changes)
+  matches: 15 * 1000,          // 15 seconds for matches (near real-time during events)
+  rankings: 30 * 1000,         // 30 seconds for rankings
+  liveMatches: 10 * 1000       // 10 seconds for live match data
 };
+
+// Last-Modified tracking for conditional requests
+const lastModified = new Map();
 
 /**
  * Get cached data or null if expired/missing
@@ -62,12 +69,12 @@ export function clearCache(key = null) {
 }
 
 // =============================================================================
-// HELPER: Make authenticated request to TBA (with caching)
+// HELPER: Make authenticated request to TBA (with caching & conditional requests)
 // =============================================================================
 
-async function tbaFetch(endpoint, cacheTTL = null) {
-  // Check cache first
-  if (cacheTTL) {
+async function tbaFetch(endpoint, cacheTTL = null, forceRefresh = false) {
+  // Check cache first (unless force refresh)
+  if (cacheTTL && !forceRefresh) {
     const cached = getFromCache(endpoint, cacheTTL);
     if (cached) {
       if (import.meta.env.DEV) {
@@ -77,11 +84,28 @@ async function tbaFetch(endpoint, cacheTTL = null) {
     }
   }
 
-  const response = await fetch(`${API_URLS.TBA}${endpoint}`, {
-    headers: {
-      'X-TBA-Auth-Key': API_KEYS.TBA
+  // Build headers with If-Modified-Since for conditional requests
+  const headers = {
+    'X-TBA-Auth-Key': API_KEYS.TBA
+  };
+
+  // Use Last-Modified for conditional requests (saves bandwidth)
+  const lastMod = lastModified.get(endpoint);
+  if (lastMod && !forceRefresh) {
+    headers['If-Modified-Since'] = lastMod;
+  }
+
+  const response = await fetch(`${API_URLS.TBA}${endpoint}`, { headers });
+
+  // 304 Not Modified - return cached data
+  if (response.status === 304) {
+    const cached = cache.get(endpoint);
+    if (cached) {
+      // Refresh cache timestamp
+      cached.timestamp = Date.now();
+      return cached.data;
     }
-  });
+  }
 
   if (!response.ok) {
     throw new Error(`TBA API error: ${response.status}`);
@@ -89,12 +113,32 @@ async function tbaFetch(endpoint, cacheTTL = null) {
 
   const data = await response.json();
 
+  // Store Last-Modified header for future requests
+  const modHeader = response.headers.get('Last-Modified');
+  if (modHeader) {
+    lastModified.set(endpoint, modHeader);
+  }
+
   // Cache the response
   if (cacheTTL) {
     setCache(endpoint, data);
   }
 
   return data;
+}
+
+/**
+ * Force refresh data from TBA (bypasses cache)
+ * Use for real-time updates during competitions
+ */
+export async function forceRefreshMatches(eventKey) {
+  clearCache(`/event/${eventKey}/matches`);
+  return getEventMatches(eventKey, true);
+}
+
+export async function forceRefreshRankings(eventKey) {
+  clearCache(`/event/${eventKey}/rankings`);
+  return getEventRankings(eventKey, true);
 }
 
 // =============================================================================
@@ -171,13 +215,14 @@ export async function getEventTeams(eventKey) {
 
 /**
  * Fetch all matches at an event
- * 
+ *
  * @param {string} eventKey - Event key (e.g., "2024casj")
+ * @param {boolean} forceRefresh - Skip cache and fetch fresh data
  * @returns {Array} - Array of match objects
  */
-export async function getEventMatches(eventKey) {
+export async function getEventMatches(eventKey, forceRefresh = false) {
   try {
-    const matches = await tbaFetch(`/event/${eventKey}/matches`, CACHE_TTL.matches);
+    const matches = await tbaFetch(`/event/${eventKey}/matches`, CACHE_TTL.matches, forceRefresh);
 
     // Sort matches by competition level and match number
     const levelOrder = { qm: 0, ef: 1, qf: 2, sf: 3, f: 4 };
@@ -220,23 +265,63 @@ export async function getTeamInfo(teamNumber) {
 }
 
 // =============================================================================
-// GET SEARCH INDEX (for team name search)
+// GET ALL TEAMS FOR SEARCH (using paginated TBA API)
 // =============================================================================
 
+// In-memory team cache for search
+let allTeamsCache = null;
+let allTeamsCacheTime = 0;
+const ALL_TEAMS_CACHE_TTL = 60 * 60 * 1000; // 1 hour cache for all teams
+
 /**
- * Fetch the search index containing all teams and events
- * Used for team name search functionality
+ * Fetch all teams from TBA (paginated)
+ * Caches results for 1 hour to avoid repeated large fetches
  *
- * @returns {Object} - { teams: [{key, nickname}], events: [{key, name}] }
+ * @returns {Array} - Array of all teams [{key, nickname, team_number}]
  */
-export async function getSearchIndex() {
+async function getAllTeamsForSearch() {
+  // Check cache first
+  if (allTeamsCache && Date.now() - allTeamsCacheTime < ALL_TEAMS_CACHE_TTL) {
+    return allTeamsCache;
+  }
+
   try {
-    return await tbaFetch('/search_index', CACHE_TTL.teams);
+    // TBA API v3 returns teams in pages of ~500 teams each
+    // There are typically 20+ pages of teams
+    const allTeams = [];
+    const currentYear = new Date().getFullYear();
+
+    // Fetch all pages in parallel (up to 20 pages should cover all teams)
+    const pagePromises = [];
+    for (let page = 0; page < 20; page++) {
+      pagePromises.push(
+        tbaFetch(`/teams/${currentYear}/${page}`, CACHE_TTL.teams)
+          .catch(() => []) // Return empty array on error
+      );
+    }
+
+    const pages = await Promise.all(pagePromises);
+
+    for (const page of pages) {
+      if (Array.isArray(page)) {
+        allTeams.push(...page);
+      }
+    }
+
+    // Cache the results
+    allTeamsCache = allTeams;
+    allTeamsCacheTime = Date.now();
+
+    if (import.meta.env.DEV) {
+      console.log(`📋 Loaded ${allTeams.length} teams for search`);
+    }
+
+    return allTeams;
   } catch (error) {
     if (import.meta.env.DEV) {
-      console.error('Error fetching search index:', error);
+      console.error('Error fetching all teams:', error);
     }
-    return { teams: [], events: [] };
+    return allTeamsCache || []; // Return cached data if available
   }
 }
 
@@ -254,17 +339,33 @@ export async function searchTeams(query, maxResults = 10) {
   const searchQuery = query.trim().toLowerCase();
   const isNumeric = /^\d+$/.test(searchQuery);
 
-  // Get search index
-  const searchIndex = await getSearchIndex();
-  if (!searchIndex.teams || searchIndex.teams.length === 0) {
+  // Get all teams for search
+  const allTeams = await getAllTeamsForSearch();
+  if (!allTeams || allTeams.length === 0) {
+    // Fallback: try direct team lookup for numeric queries
+    if (isNumeric) {
+      try {
+        const teamInfo = await getTeamInfo(searchQuery);
+        if (teamInfo) {
+          return [{
+            teamNumber: searchQuery,
+            nickname: teamInfo.nickname || `Team ${searchQuery}`,
+            matchType: 'direct_lookup',
+            score: 100
+          }];
+        }
+      } catch (err) {
+        // Ignore errors
+      }
+    }
     return [];
   }
 
   const results = [];
 
-  for (const team of searchIndex.teams) {
-    // Extract team number from key (e.g., "frc254" -> "254")
-    const teamNumber = team.key.replace('frc', '');
+  for (const team of allTeams) {
+    // Extract team number from key (e.g., "frc254" -> "254") or use team_number
+    const teamNumber = String(team.team_number || team.key?.replace('frc', '') || '');
     const nickname = team.nickname || '';
 
     let matchType = null;
@@ -324,11 +425,12 @@ export async function searchTeams(query, maxResults = 10) {
  * Fetch qualification rankings for an event
  *
  * @param {string} eventKey - Event key (e.g., "2024casj")
+ * @param {boolean} forceRefresh - Skip cache and fetch fresh data
  * @returns {Object} - Rankings data including team ranks
  */
-export async function getEventRankings(eventKey) {
+export async function getEventRankings(eventKey, forceRefresh = false) {
   try {
-    const data = await tbaFetch(`/event/${eventKey}/rankings`, CACHE_TTL.matches);
+    const data = await tbaFetch(`/event/${eventKey}/rankings`, CACHE_TTL.rankings, forceRefresh);
     return data?.rankings || [];
   } catch (error) {
     if (import.meta.env.DEV) {

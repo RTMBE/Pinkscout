@@ -272,10 +272,19 @@ export default function Profile() {
     try {
       if (becomeTeamLead) {
         // Becoming a Team Lead - generate team code
-        await generateTeamCode(user.id, user.email);
+        // The generateTeamCode function now throws if profile update fails
+        const generatedCode = await generateTeamCode(user.id, user.email);
+
+        // Set the code immediately so it's visible in the UI
+        setTeamCode(generatedCode);
+
+        // Refresh role context to update isTeamLead flag
         await refreshRoleContext();
-        setSuccess('You are now a Team Lead! Your team code is shown above.');
-        loadTeamData();
+
+        // Load full team data (members, etc.)
+        await loadTeamData();
+
+        setSuccess(`You are now a Team Lead! Your team code is: ${generatedCode}`);
       } else {
         // Removing Team Lead status
         await updateUserProfile({ isTeamLead: false, teamLeadUid: null, teamCode: null });
@@ -286,7 +295,7 @@ export default function Profile() {
       }
     } catch (err) {
       console.error('Error toggling team lead:', err);
-      setError('Failed to update team lead status');
+      setError(err.message || 'Failed to update team lead status. Please try again.');
     } finally {
       setIsTogglingTeamLead(false);
     }

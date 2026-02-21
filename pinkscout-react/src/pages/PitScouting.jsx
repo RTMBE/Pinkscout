@@ -405,10 +405,8 @@ export default function PitScouting() {
                 <label>Intake Type</label>
                 <select name="intakeType" value={formData.intakeType} onChange={handleChange}>
                   <option value="">Select...</option>
-                  <option value="none">No Intake</option>
                   <option value="over_bumper">Over Bumper</option>
-                  <option value="under_bumper">Under Bumper</option>
-                  <option value="both">Both</option>
+                  <option value="through_bumper">Through Bumper</option>
                 </select>
               </div>
             </div>

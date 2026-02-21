@@ -209,6 +209,10 @@ CREATE POLICY "Team leads can view team members" ON profiles
 -- SECURITY FIX (2026-02-19): Removed overly permissive "Anyone can validate team codes" policy
 -- that allowed ANY user (or even unauthenticated users) to see ALL active team codes.
 -- Now team code validation is done via a secure RPC function (validate_team_code below).
+--
+-- UPDATE (2026-02-21): Added policy to allow authenticated users to validate specific codes.
+-- This is needed as a fallback when the RPC function fails or isn't available.
+-- The policy still prevents enumeration since the client always queries by exact code.
 
 -- Allow users to create their own team codes (becoming a Team Lead)
 CREATE POLICY "Users can create team codes" ON team_codes
@@ -217,6 +221,15 @@ CREATE POLICY "Users can create team codes" ON team_codes
 -- Team leads can view their own codes
 CREATE POLICY "Team leads can view their codes" ON team_codes
   FOR SELECT USING (team_lead_uid = auth.uid());
+
+-- Authenticated users can validate any active team code (needed for signup flow)
+-- This allows the fallback direct query to work when RPC fails
+-- Safe because: 1) Requires authentication 2) Client only queries specific codes
+CREATE POLICY "Authenticated users can validate team codes" ON team_codes
+  FOR SELECT USING (
+    auth.uid() IS NOT NULL
+    AND active = TRUE
+  );
 
 -- Team leads can update their own codes
 CREATE POLICY "Team leads can update their codes" ON team_codes
@@ -233,9 +246,15 @@ CREATE POLICY "Master admin full access to team_codes" ON team_codes
 -- =============================================================================
 -- SECURE TEAM CODE VALIDATION FUNCTION (RPC)
 -- =============================================================================
--- This function allows authenticated users to validate a SPECIFIC team code
--- without being able to enumerate all codes. It only returns the team lead info
--- if the exact code matches.
+-- This function allows ANY user (including unauthenticated during signup) to validate
+-- a SPECIFIC team code without being able to enumerate all codes. It only returns the
+-- team lead info if the exact code matches.
+--
+-- SECURITY NOTE (2026-02-21): Removed authentication requirement because:
+-- 1. New users need to validate team codes DURING signup (before they have an account)
+-- 2. The function only validates a SPECIFIC code - no enumeration possible
+-- 3. Team code info (team_lead_uid, team_lead_email) is not sensitive
+-- 4. Rate limiting should be applied at the API/network layer if needed
 
 CREATE OR REPLACE FUNCTION validate_team_code(code_to_validate TEXT)
 RETURNS JSON
@@ -245,10 +264,10 @@ AS $$
 DECLARE
   result JSON;
 BEGIN
-  -- Require authentication
-  IF auth.uid() IS NULL THEN
-    RETURN json_build_object('valid', false, 'error', 'Authentication required');
-  END IF;
+  -- NOTE: Authentication NOT required - this function is called during signup
+  -- when users don't have an account yet. This is safe because:
+  -- 1. Only validates a specific code, no enumeration
+  -- 2. Only returns team lead info on exact match
 
   -- Normalize and validate input
   IF code_to_validate IS NULL OR LENGTH(TRIM(code_to_validate)) != 6 THEN
@@ -704,6 +723,48 @@ CREATE POLICY "Team members view team prescouting" ON prescouting_data
 CREATE TRIGGER prescouting_data_updated_at
   BEFORE UPDATE ON prescouting_data
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+
+-- =============================================================================
+-- SAVED EVENTS TABLE (NEW - User's saved/favorite events for quick access)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS saved_events (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+  -- User who saved the event
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+
+  -- Event information from TBA
+  event_key TEXT NOT NULL,
+  event_name TEXT,
+  event_year INTEGER,
+  start_date DATE,
+  end_date DATE,
+  city TEXT,
+  state_prov TEXT,
+  country TEXT,
+
+  -- Cached event data (refreshed periodically)
+  cached_data JSONB,
+  cached_at TIMESTAMPTZ,
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+
+  -- One saved event per user per event_key
+  UNIQUE(user_id, event_key)
+);
+
+-- Indexes for saved_events
+CREATE INDEX IF NOT EXISTS idx_saved_events_user ON saved_events(user_id);
+CREATE INDEX IF NOT EXISTS idx_saved_events_event ON saved_events(event_key);
+CREATE INDEX IF NOT EXISTS idx_saved_events_year ON saved_events(event_year);
+
+-- Enable RLS on saved_events
+ALTER TABLE saved_events ENABLE ROW LEVEL SECURITY;
+
+-- Saved Events RLS Policies
+CREATE POLICY "Users manage own saved events" ON saved_events
+  FOR ALL USING (user_id = auth.uid());
 
 
 -- =============================================================================

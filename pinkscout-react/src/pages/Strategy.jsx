@@ -1,27 +1,24 @@
 /**
  * =============================================================================
- * STRATEGY BOARD PAGE - Drawing board for match strategies
+ * STRATEGY BOARD PAGE - Interactive FRC Strategy Planning for 2026 ReBUILT
  * =============================================================================
- * 
+ *
  * PURPOSE:
- * A tablet-optimized drawing board for planning match strategies.
- * Allows users to draw on a field image background.
- * 
+ * A comprehensive tablet-optimized strategy board for FRC match planning.
+ *
  * FEATURES:
  * - FRC 2026 REBUILT field background image
- * - Drawing tools (pen, arrow, eraser)
- * - Color selection (red, blue, black)
- * - Brush size (S/M/L)
- * - Save/Load drawings
- * - Match-specific or default strategies
+ * - Strategy mode tabs (Autonomous, TeleOp, Endgame)
+ * - Draggable robot icons (3 red, 3 blue)
+ * - Drawing tools (pen, arrow, rectangle, circle, eraser)
+ * - Text annotation tool
+ * - Defense zone marking (semi-transparent shapes)
+ * - Toggle overlays (scoring zones, game pieces)
+ * - Multiple colors and brush sizes
+ * - Save/Load drawings per game phase
  * - Export to PNG and copy to clipboard
  * - Touch/stylus support for tablets
- * 
- * NOTES:
- * - Canvas is implemented using native HTML5 Canvas API
- * - No external canvas library to keep bundle size small
- * - Supports touch and stylus input
- * 
+ *
  * =============================================================================
  */
 
@@ -29,8 +26,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../contexts/AuthContext';
 import { getEventList, getTeamEvents } from '../services/blueAllianceAPI';
-import { 
-  saveStrategyDrawing, 
+import {
+  saveStrategyDrawing,
   getStrategyDrawings,
   getDefaultStrategyDrawing,
   deleteStrategyDrawing
@@ -43,17 +40,33 @@ const FIELD_IMAGE_URL = '/Feild2026.png';
 const STORAGE_KEY_YEAR = 'pinkscout_strategy_year';
 const STORAGE_KEY_EVENT = 'pinkscout_strategy_event';
 
-// Drawing tools
-const TOOLS = {
-  PEN: 'pen',
-  ERASER: 'eraser',
-  ARROW: 'arrow'
+// Strategy phases/modes
+const PHASES = {
+  AUTO: 'autonomous',
+  TELEOP: 'teleop',
+  ENDGAME: 'endgame'
 };
 
-// Colors
+// Drawing tools
+const TOOLS = {
+  SELECT: 'select',
+  PEN: 'pen',
+  ARROW: 'arrow',
+  RECTANGLE: 'rectangle',
+  CIRCLE: 'circle',
+  TEXT: 'text',
+  ERASER: 'eraser'
+};
+
+// Colors (expanded palette)
 const COLORS = {
   RED: '#e53935',
   BLUE: '#1e88e5',
+  GREEN: '#43a047',
+  YELLOW: '#fdd835',
+  ORANGE: '#fb8c00',
+  PURPLE: '#8e24aa',
+  WHITE: '#ffffff',
   BLACK: '#333333'
 };
 
@@ -64,12 +77,27 @@ const BRUSH_SIZES = {
   LARGE: 12
 };
 
+// Robot starting positions (relative to canvas, will be scaled)
+const ROBOT_STARTING_POSITIONS = {
+  red: [
+    { id: 'red1', x: 0.92, y: 0.25, label: 'R1' },
+    { id: 'red2', x: 0.92, y: 0.50, label: 'R2' },
+    { id: 'red3', x: 0.92, y: 0.75, label: 'R3' }
+  ],
+  blue: [
+    { id: 'blue1', x: 0.08, y: 0.25, label: 'B1' },
+    { id: 'blue2', x: 0.08, y: 0.50, label: 'B2' },
+    { id: 'blue3', x: 0.08, y: 0.75, label: 'B3' }
+  ]
+};
+
 export default function Strategy() {
   const { user, userProfile, roleContext } = useAuth();
   const currentYear = new Date().getFullYear();
 
-  // Canvas ref
+  // Canvas refs
   const canvasRef = useRef(null);
+  const overlayCanvasRef = useRef(null);
   const containerRef = useRef(null);
 
   // ==========================================================================
@@ -89,6 +117,9 @@ export default function Strategy() {
   const [eventSearch, setEventSearch] = useState('');
   const [showEventDropdown, setShowEventDropdown] = useState(false);
 
+  // Strategy Phase (Auto/TeleOp/Endgame)
+  const [activePhase, setActivePhase] = useState(PHASES.AUTO);
+
   // Drawing State
   const [tool, setTool] = useState(TOOLS.PEN);
   const [color, setColor] = useState(COLORS.RED);
@@ -96,16 +127,45 @@ export default function Strategy() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-  // Arrow drawing state
-  const [arrowStart, setArrowStart] = useState(null);
+  // Shape/Arrow drawing state
+  const [shapeStart, setShapeStart] = useState(null);
   const [canvasSnapshot, setCanvasSnapshot] = useState(null);
 
-  // Saved Drawings
+  // Text annotation state
+  const [textInput, setTextInput] = useState('');
+  const [textPosition, setTextPosition] = useState(null);
+  const [showTextInput, setShowTextInput] = useState(false);
+
+  // Robot positions (draggable)
+  const [robots, setRobots] = useState(() => {
+    const allRobots = [];
+    ROBOT_STARTING_POSITIONS.red.forEach(r => allRobots.push({ ...r, alliance: 'red' }));
+    ROBOT_STARTING_POSITIONS.blue.forEach(r => allRobots.push({ ...r, alliance: 'blue' }));
+    return allRobots;
+  });
+  const [draggingRobot, setDraggingRobot] = useState(null);
+
+  // Text annotations placed on field
+  const [annotations, setAnnotations] = useState([]);
+
+  // Overlay toggles
+  const [showScoringZones, setShowScoringZones] = useState(true);
+  const [showGamePieces, setShowGamePieces] = useState(true);
+  const [showRobots, setShowRobots] = useState(true);
+
+  // Saved Drawings (per phase)
   const [savedDrawings, setSavedDrawings] = useState([]);
   const [currentDrawingId, setCurrentDrawingId] = useState(null);
   const [drawingTitle, setDrawingTitle] = useState('');
   const [isDefault, setIsDefault] = useState(false);
   const [matchKey, setMatchKey] = useState('');
+
+  // Phase-specific drawing data
+  const [phaseDrawings, setPhaseDrawings] = useState({
+    [PHASES.AUTO]: null,
+    [PHASES.TELEOP]: null,
+    [PHASES.ENDGAME]: null
+  });
 
   // UI State
   const [saving, setSaving] = useState(false);
@@ -212,13 +272,13 @@ export default function Strategy() {
     drawFieldBackground();
   }, []);
 
-  const drawFieldBackground = () => {
+  const drawFieldBackground = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
 
     // Clear canvas
-    ctx.fillStyle = '#2d5016';
+    ctx.fillStyle = '#1a1a1a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Draw field image if loaded
@@ -234,7 +294,66 @@ export default function Strategy() {
       ctx.lineTo(canvas.width / 2, canvas.height - 10);
       ctx.stroke();
     }
+
+    // Draw overlays if enabled
+    if (showScoringZones) {
+      drawScoringZoneOverlays(ctx, canvas.width, canvas.height);
+    }
+  }, [showScoringZones]);
+
+  // Draw scoring zone overlays
+  const drawScoringZoneOverlays = (ctx, width, height) => {
+    ctx.globalAlpha = 0.15;
+
+    // Red alliance zone (right side)
+    ctx.fillStyle = COLORS.RED;
+    ctx.fillRect(width * 0.85, 0, width * 0.15, height);
+
+    // Blue alliance zone (left side)
+    ctx.fillStyle = COLORS.BLUE;
+    ctx.fillRect(0, 0, width * 0.15, height);
+
+    ctx.globalAlpha = 1.0;
   };
+
+  // Draw robots on the field
+  const drawRobots = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !showRobots) return;
+    const ctx = canvas.getContext('2d');
+
+    const robotSize = Math.min(canvas.width, canvas.height) * 0.07;
+
+    robots.forEach(robot => {
+      const x = robot.x * canvas.width;
+      const y = robot.y * canvas.height;
+
+      // Robot body
+      ctx.fillStyle = robot.alliance === 'red' ? COLORS.RED : COLORS.BLUE;
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+
+      ctx.beginPath();
+      ctx.arc(x, y, robotSize / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Robot label
+      ctx.fillStyle = '#fff';
+      ctx.font = `bold ${robotSize * 0.4}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(robot.label, x, y);
+    });
+  }, [robots, showRobots]);
+
+  // Redraw robots when they change
+  useEffect(() => {
+    if (fieldLoaded && canvasRef.current) {
+      // Only redraw robots overlay, not the whole canvas
+      drawRobots();
+    }
+  }, [robots, showRobots, fieldLoaded, drawRobots]);
 
   // ==========================================================================
   // DRAWING HANDLERS
@@ -262,18 +381,51 @@ export default function Strategy() {
     };
   };
 
+  // Check if clicking on a robot
+  const getRobotAtPosition = (x, y) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const robotSize = Math.min(canvas.width, canvas.height) * 0.08;
+
+    for (const robot of robots) {
+      const rx = robot.x * canvas.width;
+      const ry = robot.y * canvas.height;
+      const dist = Math.sqrt((x - rx) ** 2 + (y - ry) ** 2);
+      if (dist < robotSize / 2) {
+        return robot;
+      }
+    }
+    return null;
+  };
+
   const startDrawing = (e) => {
     e.preventDefault();
-    setIsDrawing(true);
-    setHasUnsavedChanges(true);
-
     const { x, y } = getCanvasCoordinates(e);
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
 
-    if (tool === TOOLS.ARROW) {
-      // Save canvas state for arrow preview
-      setArrowStart({ x, y });
+    // Check if selecting/dragging a robot
+    if (tool === TOOLS.SELECT || showRobots) {
+      const robot = getRobotAtPosition(x, y);
+      if (robot) {
+        setDraggingRobot(robot.id);
+        return;
+      }
+    }
+
+    // Text tool - show input at position
+    if (tool === TOOLS.TEXT) {
+      setTextPosition({ x, y });
+      setShowTextInput(true);
+      return;
+    }
+
+    setIsDrawing(true);
+    setHasUnsavedChanges(true);
+
+    // Save snapshot for shape tools
+    if ([TOOLS.ARROW, TOOLS.RECTANGLE, TOOLS.CIRCLE].includes(tool)) {
+      setShapeStart({ x, y });
       setCanvasSnapshot(ctx.getImageData(0, 0, canvas.width, canvas.height));
     } else {
       ctx.beginPath();
@@ -282,26 +434,48 @@ export default function Strategy() {
   };
 
   const draw = (e) => {
-    if (!isDrawing) return;
     e.preventDefault();
-
     const { x, y } = getCanvasCoordinates(e);
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
 
-    if (tool === TOOLS.ARROW && arrowStart && canvasSnapshot) {
-      // Restore canvas and draw preview arrow
+    // Handle robot dragging
+    if (draggingRobot) {
+      setRobots(prev => prev.map(r =>
+        r.id === draggingRobot
+          ? { ...r, x: x / canvas.width, y: y / canvas.height }
+          : r
+      ));
+      setHasUnsavedChanges(true);
+      return;
+    }
+
+    if (!isDrawing) return;
+
+    // Shape preview
+    if (shapeStart && canvasSnapshot) {
       ctx.putImageData(canvasSnapshot, 0, 0);
-      drawArrow(ctx, arrowStart.x, arrowStart.y, x, y);
-    } else if (tool === TOOLS.ERASER) {
+
+      if (tool === TOOLS.ARROW) {
+        drawArrow(ctx, shapeStart.x, shapeStart.y, x, y);
+      } else if (tool === TOOLS.RECTANGLE) {
+        drawRectangle(ctx, shapeStart.x, shapeStart.y, x, y, false);
+      } else if (tool === TOOLS.CIRCLE) {
+        drawCircle(ctx, shapeStart.x, shapeStart.y, x, y, false);
+      }
+      return;
+    }
+
+    // Pen / Eraser drawing
+    if (tool === TOOLS.ERASER) {
       ctx.globalCompositeOperation = 'destination-out';
       ctx.strokeStyle = 'rgba(0,0,0,1)';
-      ctx.lineWidth = brushSize;
+      ctx.lineWidth = brushSize * 3;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.lineTo(x, y);
       ctx.stroke();
-    } else {
+    } else if (tool === TOOLS.PEN) {
       ctx.globalCompositeOperation = 'source-over';
       ctx.strokeStyle = color;
       ctx.lineWidth = brushSize;
@@ -313,19 +487,34 @@ export default function Strategy() {
   };
 
   const stopDrawing = (e) => {
-    if (tool === TOOLS.ARROW && isDrawing && arrowStart) {
-      const { x, y } = getCanvasCoordinates(e);
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
+    // Stop robot dragging
+    if (draggingRobot) {
+      setDraggingRobot(null);
+      return;
+    }
 
-      // Restore canvas and draw final arrow
-      if (canvasSnapshot) {
-        ctx.putImageData(canvasSnapshot, 0, 0);
+    if (!isDrawing) return;
+
+    const { x, y } = getCanvasCoordinates(e);
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+
+    // Finalize shapes
+    if (shapeStart && canvasSnapshot) {
+      ctx.putImageData(canvasSnapshot, 0, 0);
+
+      if (tool === TOOLS.ARROW) {
+        drawArrow(ctx, shapeStart.x, shapeStart.y, x, y);
+      } else if (tool === TOOLS.RECTANGLE) {
+        drawRectangle(ctx, shapeStart.x, shapeStart.y, x, y, true);
+      } else if (tool === TOOLS.CIRCLE) {
+        drawCircle(ctx, shapeStart.x, shapeStart.y, x, y, true);
       }
-      drawArrow(ctx, arrowStart.x, arrowStart.y, x, y);
-      setArrowStart(null);
+
+      setShapeStart(null);
       setCanvasSnapshot(null);
     }
+
     setIsDrawing(false);
   };
 
@@ -364,6 +553,85 @@ export default function Strategy() {
     ctx.fill();
   };
 
+  // Draw rectangle (for defense zones)
+  const drawRectangle = (ctx, fromX, fromY, toX, toY, fill = false) => {
+    const width = toX - fromX;
+    const height = toY - fromY;
+
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = brushSize;
+
+    if (fill) {
+      // Semi-transparent fill for defense zones
+      ctx.fillStyle = color + '40'; // 25% opacity
+      ctx.fillRect(fromX, fromY, width, height);
+    }
+    ctx.strokeRect(fromX, fromY, width, height);
+  };
+
+  // Draw circle/ellipse
+  const drawCircle = (ctx, fromX, fromY, toX, toY, fill = false) => {
+    const centerX = (fromX + toX) / 2;
+    const centerY = (fromY + toY) / 2;
+    const radiusX = Math.abs(toX - fromX) / 2;
+    const radiusY = Math.abs(toY - fromY) / 2;
+
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = brushSize;
+
+    ctx.beginPath();
+    ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
+
+    if (fill) {
+      ctx.fillStyle = color + '40'; // 25% opacity
+      ctx.fill();
+    }
+    ctx.stroke();
+  };
+
+  // Add text annotation
+  const addTextAnnotation = () => {
+    if (!textInput.trim() || !textPosition) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.font = `bold ${Math.max(14, brushSize * 2.5)}px Arial`;
+    ctx.fillStyle = color;
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
+
+    // Draw text with outline for visibility
+    ctx.strokeText(textInput, textPosition.x, textPosition.y);
+    ctx.fillText(textInput, textPosition.x, textPosition.y);
+
+    // Save to annotations list
+    setAnnotations(prev => [...prev, {
+      id: Date.now(),
+      text: textInput,
+      x: textPosition.x / canvas.width,
+      y: textPosition.y / canvas.height,
+      color: color
+    }]);
+
+    setTextInput('');
+    setTextPosition(null);
+    setShowTextInput(false);
+    setHasUnsavedChanges(true);
+  };
+
+  // Reset robots to starting positions
+  const resetRobots = () => {
+    const allRobots = [];
+    ROBOT_STARTING_POSITIONS.red.forEach(r => allRobots.push({ ...r, alliance: 'red' }));
+    ROBOT_STARTING_POSITIONS.blue.forEach(r => allRobots.push({ ...r, alliance: 'blue' }));
+    setRobots(allRobots);
+    setHasUnsavedChanges(true);
+  };
+
   // ==========================================================================
   // CANVAS ACTIONS
   // ==========================================================================
@@ -373,6 +641,8 @@ export default function Strategy() {
       return;
     }
     drawFieldBackground();
+    resetRobots();
+    setAnnotations([]);
     setHasUnsavedChanges(false);
   };
 
@@ -563,7 +833,8 @@ export default function Strategy() {
                       <div
                         key={event.key}
                         className={`dropdown-item ${selectedEvent === event.key ? 'selected' : ''}`}
-                        onClick={() => {
+                        onMouseDown={(e) => {
+                          e.preventDefault();
                           setSelectedEvent(event.key);
                           setEventSearch('');
                           setShowEventDropdown(false);
@@ -585,7 +856,43 @@ export default function Strategy() {
         {/* Drawing Board */}
         {selectedEvent && (
           <div className="card">
-            <h2>🎨 Drawing Board</h2>
+            <h2>🎨 Strategy Board - 2026 ReBUILT</h2>
+
+            {/* Phase Tabs */}
+            <div style={{
+              display: 'flex',
+              gap: '0',
+              marginBottom: '1rem',
+              borderRadius: '8px',
+              overflow: 'hidden',
+              border: '2px solid var(--border-color)'
+            }}>
+              {Object.entries(PHASES).map(([key, phase]) => (
+                <button
+                  key={phase}
+                  type="button"
+                  onClick={() => setActivePhase(phase)}
+                  style={{
+                    flex: 1,
+                    padding: '0.75rem 1rem',
+                    border: 'none',
+                    background: activePhase === phase
+                      ? phase === PHASES.AUTO ? '#43a047'
+                        : phase === PHASES.TELEOP ? '#1e88e5'
+                        : '#fb8c00'
+                      : 'var(--bg-secondary)',
+                    color: activePhase === phase ? '#fff' : 'var(--text-color)',
+                    fontWeight: activePhase === phase ? 'bold' : 'normal',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {phase === PHASES.AUTO ? '🤖 Autonomous'
+                    : phase === PHASES.TELEOP ? '🎮 TeleOp'
+                    : '🏁 Endgame'}
+                </button>
+              ))}
+            </div>
 
             {/* Drawing Title & Options */}
             <div className="form-row" style={{ marginBottom: '1rem' }}>
@@ -622,19 +929,29 @@ export default function Strategy() {
             {/* Toolbar */}
             <div className="strategy-toolbar" style={{
               display: 'flex',
-              flexWrap: 'wrap',
-              gap: '1rem',
+              flexDirection: 'column',
+              gap: '0.75rem',
               marginBottom: '1rem',
               padding: '1rem',
               background: 'var(--bg-secondary)',
               borderRadius: '8px'
             }}>
-              {/* Tools */}
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+              {/* Row 1: Tools */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
+                <span style={{ fontWeight: 'bold', minWidth: '50px' }}>Tools:</span>
+                <button
+                  type="button"
+                  className={`btn btn-small ${tool === TOOLS.SELECT ? 'btn-primary' : ''}`}
+                  onClick={() => setTool(TOOLS.SELECT)}
+                  title="Select/Move Robots"
+                >
+                  👆 Select
+                </button>
                 <button
                   type="button"
                   className={`btn btn-small ${tool === TOOLS.PEN ? 'btn-primary' : ''}`}
                   onClick={() => setTool(TOOLS.PEN)}
+                  title="Freehand Pen"
                 >
                   ✏️ Pen
                 </button>
@@ -642,78 +959,195 @@ export default function Strategy() {
                   type="button"
                   className={`btn btn-small ${tool === TOOLS.ARROW ? 'btn-primary' : ''}`}
                   onClick={() => setTool(TOOLS.ARROW)}
+                  title="Draw Arrow"
                 >
                   ➡️ Arrow
                 </button>
                 <button
                   type="button"
+                  className={`btn btn-small ${tool === TOOLS.RECTANGLE ? 'btn-primary' : ''}`}
+                  onClick={() => setTool(TOOLS.RECTANGLE)}
+                  title="Draw Rectangle (Defense Zones)"
+                >
+                  ⬜ Rect
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-small ${tool === TOOLS.CIRCLE ? 'btn-primary' : ''}`}
+                  onClick={() => setTool(TOOLS.CIRCLE)}
+                  title="Draw Circle"
+                >
+                  ⭕ Circle
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-small ${tool === TOOLS.TEXT ? 'btn-primary' : ''}`}
+                  onClick={() => setTool(TOOLS.TEXT)}
+                  title="Add Text Annotation"
+                >
+                  📝 Text
+                </button>
+                <button
+                  type="button"
                   className={`btn btn-small ${tool === TOOLS.ERASER ? 'btn-primary' : ''}`}
                   onClick={() => setTool(TOOLS.ERASER)}
+                  title="Eraser"
                 >
                   🧹 Eraser
                 </button>
               </div>
 
-              {/* Colors */}
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                <span>Color:</span>
-                {Object.entries(COLORS).map(([name, c]) => (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => setColor(c)}
-                    style={{
-                      width: '28px',
-                      height: '28px',
-                      borderRadius: '50%',
-                      backgroundColor: c,
-                      border: color === c ? '3px solid var(--primary-color)' : '2px solid #ccc',
-                      cursor: 'pointer'
-                    }}
-                    title={name}
-                  />
-                ))}
+              {/* Row 2: Colors & Size */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 'bold', minWidth: '50px' }}>Color:</span>
+                  {Object.entries(COLORS).map(([name, c]) => (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => setColor(c)}
+                      style={{
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '50%',
+                        backgroundColor: c,
+                        border: color === c ? '3px solid var(--primary-color)' : '2px solid #666',
+                        cursor: 'pointer',
+                        boxShadow: color === c ? '0 0 8px var(--primary-color)' : 'none'
+                      }}
+                      title={name}
+                    />
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 'bold' }}>Size:</span>
+                  {Object.entries(BRUSH_SIZES).map(([name, size]) => (
+                    <button
+                      key={name}
+                      type="button"
+                      className={`btn btn-small ${brushSize === size ? 'btn-primary' : ''}`}
+                      onClick={() => setBrushSize(size)}
+                    >
+                      {name[0]}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* Brush Size */}
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                <span>Size:</span>
-                {Object.entries(BRUSH_SIZES).map(([name, size]) => (
-                  <button
-                    key={name}
-                    type="button"
-                    className={`btn btn-small ${brushSize === size ? 'btn-primary' : ''}`}
-                    onClick={() => setBrushSize(size)}
-                  >
-                    {name[0]}
+              {/* Row 3: Overlays & Actions */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center', justifyContent: 'space-between' }}>
+                {/* Overlay Toggles */}
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 'bold' }}>Show:</span>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={showScoringZones}
+                      onChange={(e) => setShowScoringZones(e.target.checked)}
+                    />
+                    Zones
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={showRobots}
+                      onChange={(e) => setShowRobots(e.target.checked)}
+                    />
+                    Robots
+                  </label>
+                  <button type="button" className="btn btn-small" onClick={resetRobots} title="Reset robot positions">
+                    🔄 Reset Robots
                   </button>
-                ))}
-              </div>
+                </div>
 
-              {/* Actions */}
-              <div style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
-                <button type="button" className="btn btn-small" onClick={newDrawing}>
-                  📄 New
-                </button>
-                <button type="button" className="btn btn-small" onClick={clearCanvas}>
-                  🗑️ Clear
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-small btn-primary"
-                  onClick={saveDrawing}
-                  disabled={saving}
-                >
-                  {saving ? '...' : '💾 Save'}
-                </button>
-                <button type="button" className="btn btn-small" onClick={exportAsPNG} title="Download as PNG">
-                  📥 Export
-                </button>
-                <button type="button" className="btn btn-small" onClick={copyToClipboard} title="Copy to clipboard">
-                  📋 Copy
-                </button>
+                {/* Actions */}
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button type="button" className="btn btn-small" onClick={newDrawing}>
+                    📄 New
+                  </button>
+                  <button type="button" className="btn btn-small" onClick={clearCanvas}>
+                    🗑️ Clear
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-small btn-primary"
+                    onClick={saveDrawing}
+                    disabled={saving}
+                  >
+                    {saving ? '...' : '💾 Save'}
+                  </button>
+                  <button type="button" className="btn btn-small" onClick={exportAsPNG} title="Download as PNG">
+                    📥 Export
+                  </button>
+                  <button type="button" className="btn btn-small" onClick={copyToClipboard} title="Copy to clipboard">
+                    📋 Copy
+                  </button>
+                </div>
               </div>
             </div>
+
+            {/* Text Input Modal */}
+            {showTextInput && textPosition && (
+              <div style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: 'rgba(0,0,0,0.5)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1000
+              }}>
+                <div style={{
+                  background: 'var(--bg-primary)',
+                  padding: '1.5rem',
+                  borderRadius: '12px',
+                  minWidth: '300px',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+                }}>
+                  <h3 style={{ margin: '0 0 1rem 0' }}>📝 Add Annotation</h3>
+                  <input
+                    type="text"
+                    value={textInput}
+                    onChange={(e) => setTextInput(e.target.value)}
+                    placeholder="Enter text..."
+                    autoFocus
+                    style={{ width: '100%', marginBottom: '1rem' }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') addTextAnnotation();
+                      if (e.key === 'Escape') {
+                        setShowTextInput(false);
+                        setTextPosition(null);
+                        setTextInput('');
+                      }
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                    <button
+                      type="button"
+                      className="btn btn-small"
+                      onClick={() => {
+                        setShowTextInput(false);
+                        setTextPosition(null);
+                        setTextInput('');
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-small btn-primary"
+                      onClick={addTextAnnotation}
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Canvas */}
             <div
@@ -723,12 +1157,19 @@ export default function Strategy() {
                 border: '2px solid var(--border-color)',
                 borderRadius: '8px',
                 overflow: 'hidden',
-                touchAction: 'none'
+                touchAction: 'none',
+                position: 'relative'
               }}
             >
               <canvas
                 ref={canvasRef}
-                style={{ width: '100%', cursor: 'crosshair' }}
+                style={{
+                  width: '100%',
+                  cursor: tool === TOOLS.SELECT ? 'grab'
+                    : tool === TOOLS.TEXT ? 'text'
+                    : tool === TOOLS.ERASER ? 'cell'
+                    : 'crosshair'
+                }}
                 onMouseDown={startDrawing}
                 onMouseMove={draw}
                 onMouseUp={stopDrawing}
@@ -737,6 +1178,42 @@ export default function Strategy() {
                 onTouchMove={draw}
                 onTouchEnd={stopDrawing}
               />
+
+              {/* Phase indicator on canvas */}
+              <div style={{
+                position: 'absolute',
+                top: '8px',
+                left: '8px',
+                background: activePhase === PHASES.AUTO ? '#43a047'
+                  : activePhase === PHASES.TELEOP ? '#1e88e5'
+                  : '#fb8c00',
+                color: '#fff',
+                padding: '4px 12px',
+                borderRadius: '4px',
+                fontWeight: 'bold',
+                fontSize: '0.85rem',
+                pointerEvents: 'none'
+              }}>
+                {activePhase === PHASES.AUTO ? '🤖 AUTO'
+                  : activePhase === PHASES.TELEOP ? '🎮 TELEOP'
+                  : '🏁 ENDGAME'}
+              </div>
+            </div>
+
+            {/* Instructions */}
+            <div style={{
+              marginTop: '0.75rem',
+              fontSize: '0.85rem',
+              color: 'var(--text-muted)',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '1rem'
+            }}>
+              <span>💡 <strong>Tips:</strong></span>
+              <span>Drag robots to position them</span>
+              <span>Use rectangles for defense zones</span>
+              <span>Draw arrows for paths</span>
+              <span>Add text labels for notes</span>
             </div>
           </div>
         )}

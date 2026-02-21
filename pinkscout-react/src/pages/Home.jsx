@@ -186,29 +186,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Getting Started */}
-      <div className="content-card">
-        <h2>Getting Started</h2>
-        <ol className="getting-started-list">
-          <li>
-            <strong>Scout a match:</strong> Go to{' '}
-            <Link to="/scouting">Scout</Link> and fill out the form for each match you observe.
-          </li>
-          <li>
-            <strong>Search teams:</strong> Use{' '}
-            <Link to="/teams">Teams</Link> to look up any FRC team and see their EPA rating.
-          </li>
-          <li>
-            <strong>View dashboard:</strong> Check the{' '}
-            <Link to="/dashboard">Dashboard</Link> for an overview of all scouting data.
-          </li>
-          <li>
-            <strong>Analyze data:</strong> Use{' '}
-            <Link to="/analytics">Analytics</Link> to compare teams and view performance charts.
-          </li>
-        </ol>
-      </div>
-
       {/* World Rankings Section */}
       <div className="content-card world-rankings-section">
         <h2>🌍 World Rankings {new Date().getFullYear()}</h2>

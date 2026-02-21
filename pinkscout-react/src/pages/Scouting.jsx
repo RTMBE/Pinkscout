@@ -861,17 +861,33 @@ export default function Scouting() {
               </select>
             </div>
 
-            {/* Team Won Auto */}
-            <div className="form-group checkbox-group">
-              <label>
-                <input
-                  type="checkbox"
-                  name="hubControlFirst"
-                  checked={formData.hubControlFirst}
-                  onChange={handleChange}
-                />
-                � Team Won Auto
+            {/* Team Won Auto - Large prominent toggle */}
+            <div className="form-group" style={{ gridColumn: 'span 2' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                🏆 Team Won Auto?
               </label>
+              <button
+                type="button"
+                onClick={() => setFormData(prev => ({ ...prev, hubControlFirst: !prev.hubControlFirst }))}
+                style={{
+                  width: '100%',
+                  padding: '1.25rem 1.5rem',
+                  fontSize: '1.25rem',
+                  fontWeight: 'bold',
+                  borderRadius: '12px',
+                  border: '3px solid',
+                  borderColor: formData.hubControlFirst ? '#43a047' : 'var(--border-color)',
+                  background: formData.hubControlFirst
+                    ? 'linear-gradient(135deg, #43a047, #66bb6a)'
+                    : 'var(--bg-secondary)',
+                  color: formData.hubControlFirst ? '#fff' : 'var(--text-color)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: formData.hubControlFirst ? '0 4px 12px rgba(67, 160, 71, 0.4)' : 'none'
+                }}
+              >
+                {formData.hubControlFirst ? '✅ YES - Won Auto!' : '❌ NO - Did Not Win Auto'}
+              </button>
             </div>
           </div>
 

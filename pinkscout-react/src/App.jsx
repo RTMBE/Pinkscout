@@ -36,7 +36,6 @@ function TeamRedirect() {
 
 // Import layout components
 import Sidebar from './components/Sidebar';
-import MobileBottomNav from './components/MobileBottomNav';
 import OfflineIndicator from './components/OfflineIndicator';
 
 // =============================================================================
@@ -168,7 +167,6 @@ function Layout({ children }) {
       <main className="main-content">
         {children}
       </main>
-      <MobileBottomNav />
     </div>
   );
 }

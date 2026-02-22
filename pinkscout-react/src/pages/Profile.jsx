@@ -17,7 +17,7 @@ import { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../contexts/AuthContext';
 import { getAllScoutingData } from '../services/scoutingService';
-import { getTeamMembers, regenerateTeamCode, getTeamLeadCode, generateTeamCode } from '../services/teamCodeService';
+import { getTeamMembers, regenerateTeamCode, getTeamLeadCode, generateTeamCode, validateTeamCode, linkMemberToTeam } from '../services/teamCodeService';
 import { getUserSettings, saveUserSettings, isMobileDevice } from '../services/userSettingsService';
 import TeamSharing from '../components/TeamSharing';
 
@@ -45,6 +45,10 @@ export default function Profile() {
 
   // Team Lead toggle state
   const [isTogglingTeamLead, setIsTogglingTeamLead] = useState(false);
+
+  // Join Team state (for non-Team-Leads)
+  const [joinTeamCode, setJoinTeamCode] = useState('');
+  const [joiningTeam, setJoiningTeam] = useState(false);
 
   // User Settings state
   const [userSettings, setUserSettings] = useState({
@@ -301,6 +305,42 @@ export default function Profile() {
     }
   };
 
+  // Handler for joining a team (for non-Team-Leads)
+  const handleJoinTeam = async (e) => {
+    e.preventDefault();
+    if (!joinTeamCode.trim()) {
+      setError('Please enter a team code');
+      return;
+    }
+
+    setJoiningTeam(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      // Validate the team code
+      const teamInfo = await validateTeamCode(joinTeamCode.trim());
+      if (!teamInfo) {
+        setError('Invalid team code. Please check with your Team Lead.');
+        return;
+      }
+
+      // Link member to team
+      await linkMemberToTeam(user.id, teamInfo.teamLeadUid, joinTeamCode.trim());
+
+      // Refresh role context to pick up new team association
+      await refreshRoleContext();
+
+      setJoinTeamCode('');
+      setSuccess(`Successfully joined the team! Team Lead: ${teamInfo.teamLeadEmail}`);
+    } catch (err) {
+      console.error('Error joining team:', err);
+      setError(err.message || 'Failed to join team. Please try again.');
+    } finally {
+      setJoiningTeam(false);
+    }
+  };
+
   // ==========================================================================
   // RENDER
   // ==========================================================================
@@ -469,6 +509,63 @@ export default function Profile() {
       {/* Team Data Sharing (Team Leads only) */}
       {roleContext?.isTeamLead && (
         <TeamSharing userUid={user?.id} userRole={roleContext?.role} />
+      )}
+
+      {/* Join Team Section (for non-Team-Leads only) */}
+      {!roleContext?.isTeamLead && (
+        <div className="content-card" style={{ marginBottom: '1.5rem' }}>
+          <h3>🎫 Join a Team</h3>
+          {roleContext?.teamLeadUid ? (
+            <div>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                You are a member of a team. Your scouting data is shared with your Team Lead.
+              </p>
+              <div style={{
+                background: 'var(--surface-alt)',
+                padding: '1rem',
+                borderRadius: '8px',
+                fontSize: '0.9rem',
+                color: 'var(--text-secondary)'
+              }}>
+                Team Code: <strong style={{ color: 'var(--primary)' }}>{roleContext?.teamCode || 'N/A'}</strong>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleJoinTeam} style={{ marginTop: '1rem' }}>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                Enter your Team Lead's invite code to join their team and share scouting data.
+              </p>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <input
+                  type="text"
+                  value={joinTeamCode}
+                  onChange={(e) => setJoinTeamCode(e.target.value.toUpperCase())}
+                  placeholder="Enter 6-character code"
+                  maxLength={6}
+                  style={{
+                    flex: '1 1 150px',
+                    padding: '0.75rem 1rem',
+                    fontSize: '1.1rem',
+                    fontFamily: 'monospace',
+                    letterSpacing: '0.2em',
+                    textTransform: 'uppercase',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-color)',
+                    background: 'var(--input-bg)',
+                    color: 'var(--text-color)'
+                  }}
+                />
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={joiningTeam || !joinTeamCode.trim()}
+                >
+                  {joiningTeam ? 'Joining...' : '🎫 Join Team'}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
       )}
 
       {/* Profile Form */}

@@ -22,6 +22,7 @@ import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../contexts/AuthContext';
 import { getAdminList, addAdmin, removeAdmin, getAPIStatus, performCompleteDataWipe } from '../services/adminService';
 import { getAllScoutingData, deleteScoutingData } from '../services/scoutingService';
+import { exportToCSV, exportToJSON } from '../services/dataExportService';
 
 // =============================================================================
 // ALLOWED ADMIN EMAILS - Only these emails can access the admin page
@@ -334,6 +335,26 @@ export default function Admin() {
               </Link>
             </div>
           </div>
+
+          {/* Export Buttons */}
+          {scoutingData.length > 0 && (
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => exportToCSV(filteredData)}
+                className="btn btn-secondary"
+                title="Export to CSV for spreadsheet analysis"
+              >
+                📥 Export CSV ({filteredData.length} entries)
+              </button>
+              <button
+                onClick={() => exportToJSON(filteredData)}
+                className="btn btn-secondary"
+                title="Export to JSON for custom tools"
+              >
+                📥 Export JSON
+              </button>
+            </div>
+          )}
 
           {/* Empty State */}
           {filteredData.length === 0 && (

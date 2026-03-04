@@ -125,6 +125,18 @@ export default defineConfig(({ mode }) => ({
   server: {
     port: 3000,
     open: true
+  },
+
+  // Test configuration for Vitest
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.js'],
+    include: ['src/**/*.{test,spec}.{js,jsx}'],
+    coverage: {
+      reporter: ['text', 'json', 'html'],
+      exclude: ['node_modules/', 'src/test/']
+    }
   }
 }))
 

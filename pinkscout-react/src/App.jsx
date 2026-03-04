@@ -37,6 +37,7 @@ function TeamRedirect() {
 // Import layout components
 import Sidebar from './components/Sidebar';
 import OfflineIndicator from './components/OfflineIndicator';
+import MobileBottomNav from './components/MobileBottomNav';
 
 // =============================================================================
 // LAZY LOAD PAGE COMPONENTS
@@ -167,6 +168,7 @@ function Layout({ children }) {
       <main className="main-content">
         {children}
       </main>
+      <MobileBottomNav />
     </div>
   );
 }

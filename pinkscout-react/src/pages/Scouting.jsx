@@ -74,8 +74,8 @@ import { Helmet } from 'react-helmet-async';
 // Our custom service for saving scouting data to the database
 import { saveScoutingData } from '../services/scoutingService';
 
-// Blue Alliance API functions to get event lists
-import { getEventList, getTeamEvents } from '../services/blueAllianceAPI';
+// Blue Alliance API functions to get event lists and match schedules
+import { getEventList, getTeamEvents, getEventMatches } from '../services/blueAllianceAPI';
 
 // Custom hook to access the logged-in user's info and permissions
 import { useAuth } from '../contexts/AuthContext';
@@ -157,6 +157,13 @@ export default function Scouting() {
   // We can use these to focus inputs or detect clicks outside the dropdown
   const eventSearchRef = useRef(null);  // Reference to the search input
   const dropdownRef = useRef(null);      // Reference to the dropdown container
+
+  // ---------------------------------------------------------------------------
+  // TBA Match Schedule State - For auto-filling team numbers
+  // ---------------------------------------------------------------------------
+  const [eventMatches, setEventMatches] = useState([]);       // All matches for selected event
+  const [loadingMatches, setLoadingMatches] = useState(false); // Loading state for matches
+  const [alliancePosition, setAlliancePosition] = useState(1); // Position 1, 2, or 3 within alliance
 
   // ===========================================================================
   // FORM DATA STATE - All the match scouting data fields
@@ -286,6 +293,66 @@ export default function Scouting() {
       setLoadingEvents(false);
     }
   };
+
+  // ---------------------------------------------------------------------------
+  // Load match schedule when event is selected
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    const loadMatches = async () => {
+      if (!selectedEvent) {
+        setEventMatches([]);
+        return;
+      }
+      setLoadingMatches(true);
+      try {
+        const matches = await getEventMatches(selectedEvent);
+        setEventMatches(matches);
+      } catch (err) {
+        console.warn('Could not load matches for auto-fill:', err);
+        setEventMatches([]);
+      } finally {
+        setLoadingMatches(false);
+      }
+    };
+    loadMatches();
+  }, [selectedEvent]);
+
+  // ---------------------------------------------------------------------------
+  // Auto-fill team number from match schedule
+  // ---------------------------------------------------------------------------
+  const autoFillTeamNumber = useMemo(() => {
+    // Find the match that matches our criteria
+    if (!eventMatches.length || !formData.matchNumber) return null;
+
+    const matchNum = parseInt(formData.matchNumber);
+    if (isNaN(matchNum)) return null;
+
+    // Look for qualification matches (qm) first, as they're most common
+    const match = eventMatches.find(m =>
+      m.comp_level === 'qm' && m.match_number === matchNum
+    );
+
+    if (!match) return null;
+
+    // TBA stores alliances as: match.alliances.red.team_keys = ["frc1551", "frc254", "frc118"]
+    const allianceKey = formData.allianceColor; // 'red' or 'blue'
+    const teamKeys = match.alliances?.[allianceKey]?.team_keys || [];
+
+    // alliancePosition is 1, 2, or 3 (user-selected)
+    const teamKey = teamKeys[alliancePosition - 1]; // Convert to 0-indexed
+
+    if (!teamKey) return null;
+
+    // Extract team number from "frc1551" format
+    return teamKey.replace('frc', '');
+  }, [eventMatches, formData.matchNumber, formData.allianceColor, alliancePosition]);
+
+  // Effect to auto-fill team number when it changes
+  useEffect(() => {
+    if (autoFillTeamNumber && !formData.teamNumber) {
+      setFormData(prev => ({ ...prev, teamNumber: autoFillTeamNumber }));
+    }
+  }, [autoFillTeamNumber]);
 
   // ===========================================================================
   // EVENT HANDLERS - Functions that respond to user interactions
@@ -783,6 +850,52 @@ export default function Scouting() {
                   Blue
                 </button>
               </div>
+            </div>
+
+            {/* --- Alliance Position (for TBA auto-fill) --- */}
+            <div className="form-group">
+              <label>
+                Position in Alliance
+                {autoFillTeamNumber && (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--primary-color)', marginLeft: '0.5rem' }}>
+                    → Team {autoFillTeamNumber}
+                  </span>
+                )}
+              </label>
+              <div className="alliance-toggle" style={{ maxWidth: '200px' }}>
+                {[1, 2, 3].map(pos => (
+                  <button
+                    key={pos}
+                    type="button"
+                    className={`alliance-btn ${alliancePosition === pos ? 'active' : ''}`}
+                    onClick={() => {
+                      setAlliancePosition(pos);
+                      // Clear team number when changing position to allow auto-fill
+                      setFormData(prev => ({ ...prev, teamNumber: '' }));
+                    }}
+                    style={{
+                      background: alliancePosition === pos
+                        ? (formData.allianceColor === 'red' ? 'var(--error-color)' : 'var(--primary-color)')
+                        : 'var(--bg-secondary)',
+                      color: alliancePosition === pos ? 'white' : 'inherit',
+                      flex: 1,
+                      padding: '0.5rem'
+                    }}
+                  >
+                    {pos}
+                  </button>
+                ))}
+              </div>
+              {loadingMatches && (
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
+                  Loading match schedule...
+                </span>
+              )}
+              {!loadingMatches && eventMatches.length > 0 && (
+                <span style={{ fontSize: '0.75rem', color: 'var(--success-color)', marginTop: '0.25rem', display: 'block' }}>
+                  ✓ {eventMatches.length} matches loaded for auto-fill
+                </span>
+              )}
             </div>
 
             {/* --- Starting Position Dropdown --- */}

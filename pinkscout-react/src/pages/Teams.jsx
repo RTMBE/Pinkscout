@@ -931,12 +931,12 @@ export default function Teams() {
                       const teleopPoints = calculateTeleopPoints(entry);
                       return (
                         <tr key={entry.id || idx}>
-                          <td>{entry.matchNumber || '-'}</td>
-                          <td>{entry.eventKey || '-'}</td>
-                          <td>{autoPoints}</td>
-                          <td>{teleopPoints}</td>
-                          <td><strong>{autoPoints + teleopPoints}</strong></td>
-                          <td>{entry.scouterName || 'Unknown'}</td>
+                          <td data-label="Match">{entry.matchNumber || '-'}</td>
+                          <td data-label="Event">{entry.eventKey || '-'}</td>
+                          <td data-label="Auto Pts">{autoPoints}</td>
+                          <td data-label="Teleop Pts">{teleopPoints}</td>
+                          <td data-label="Total"><strong>{autoPoints + teleopPoints}</strong></td>
+                          <td data-label="Scouter">{entry.scouterName || 'Unknown'}</td>
                         </tr>
                       );
                     })}

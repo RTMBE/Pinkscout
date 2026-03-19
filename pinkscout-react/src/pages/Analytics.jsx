@@ -443,12 +443,12 @@ export default function Analytics() {
               <tbody>
                 {teams.map(team => (
                   <tr key={team.teamNumber}>
-                    <td>
+                    <td data-label="Team">
                       <strong>{team.teamNumber}</strong>
                       <br />
                       <small>{team.name}</small>
                     </td>
-                    <td>
+                    <td data-label="Class">
                       <span
                         className="classification-badge"
                         style={{ backgroundColor: team.classification.color }}
@@ -456,17 +456,17 @@ export default function Analytics() {
                         {team.classification.emoji} {team.classification.label}
                       </span>
                     </td>
-                    <td>{team.epaValue.toFixed(1)}</td>
-                    <td>
+                    <td data-label="EPA">{team.epaValue.toFixed(1)}</td>
+                    <td data-label="ECS">
                       <span className="ecs-score" title="Estimated Contribution Score">
                         {team.ecsScore > 0 ? team.ecsScore.toFixed(1) : '—'}
                       </span>
                     </td>
-                    <td>{team.epaPercentile.toFixed(0)}%</td>
-                    <td>{team.scoutingAvg.autoPoints.toFixed(1)}</td>
-                    <td>{team.scoutingAvg.teleopPoints.toFixed(1)}</td>
-                    <td>{team.scoutingAvg.matchCount}</td>
-                    <td>
+                    <td data-label="Percentile">{team.epaPercentile.toFixed(0)}%</td>
+                    <td data-label="Avg Auto">{team.scoutingAvg.autoPoints.toFixed(1)}</td>
+                    <td data-label="Avg Teleop">{team.scoutingAvg.teleopPoints.toFixed(1)}</td>
+                    <td data-label="Matches">{team.scoutingAvg.matchCount}</td>
+                    <td data-label="">
                       <button
                         onClick={() => removeTeam(team.teamNumber)}
                         className="btn btn-danger btn-small"
@@ -560,24 +560,24 @@ export default function Analytics() {
               <tbody>
                 {teams.filter(t => t.pitScouting).map(team => (
                   <tr key={team.teamNumber}>
-                    <td>
+                    <td data-label="Team">
                       <strong>{team.teamNumber}</strong>
                       <br />
                       <small>{team.name}</small>
                     </td>
-                    <td>
+                    <td data-label="Drive">
                       <span className={`drive-badge drive-${team.pitScouting.drive_type || 'unknown'}`}>
                         {formatDriveType(team.pitScouting.drive_type)}
                       </span>
                     </td>
-                    <td>
+                    <td data-label="Climb">
                       <span className={`climb-badge climb-${team.pitScouting.climb_level || 'none'}`}>
                         {formatClimbLevel(team.pitScouting.climb_level)}
                       </span>
                     </td>
-                    <td>{formatShooterType(team.pitScouting.shooter_type)}</td>
-                    <td>{formatIntakeType(team.pitScouting.intake_type)}</td>
-                    <td>
+                    <td data-label="Shooter">{formatShooterType(team.pitScouting.shooter_type)}</td>
+                    <td data-label="Intake">{formatIntakeType(team.pitScouting.intake_type)}</td>
+                    <td data-label="Strategy">
                       <small>{team.pitScouting.preferred_strategy || '—'}</small>
                     </td>
                   </tr>

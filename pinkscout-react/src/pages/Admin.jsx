@@ -391,30 +391,30 @@ export default function Admin() {
                 <tbody>
                   {filteredData.slice(0, 100).map(entry => (
                     <tr key={entry.id}>
-                      <td>
+                      <td data-label="Team">
                         <Link to={`/teams?team=${entry.teamNumber}`}>
                           {entry.teamNumber}
                         </Link>
                       </td>
-                      <td>{entry.matchNumber || '-'}</td>
-                      <td>{entry.eventKey || '-'}</td>
-                      <td>{entry.scouterName || 'Unknown'}</td>
-                      <td>
+                      <td data-label="Match">{entry.matchNumber || '-'}</td>
+                      <td data-label="Event">{entry.eventKey || '-'}</td>
+                      <td data-label="Scouter">{entry.scouterName || 'Unknown'}</td>
+                      <td data-label="Auto Pts">
                         {((entry.autoSpeaker || 0) * 5) +
                          ((entry.autoAmp || 0) * 2) +
                          (entry.autoMobility ? 2 : 0)}
                       </td>
-                      <td>
+                      <td data-label="Teleop Pts">
                         {((entry.teleopSpeaker || 0) * 2) +
                          ((entry.teleopAmp || 0) * 1) +
                          ((entry.amplifiedScored || 0) * 5)}
                       </td>
-                      <td>
+                      <td data-label="Date">
                         {entry.createdAt
                           ? new Date(entry.createdAt).toLocaleDateString()
                           : '-'}
                       </td>
-                      <td>
+                      <td data-label="">
                         <button
                           onClick={() => handleDelete(entry.id)}
                           className="btn btn-danger btn-small"

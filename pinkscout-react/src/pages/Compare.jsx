@@ -459,19 +459,19 @@ export default function Compare() {
               <tbody>
                 {teams.map(team => (
                   <tr key={team.teamNumber}>
-                    <td>
+                    <td data-label="Team">
                       <span className="team-indicator" style={{ backgroundColor: TEAM_COLORS[team.colorIndex]?.border }} />
                       <strong>{team.teamNumber}</strong>
                       <br /><small>{team.name}</small>
                     </td>
-                    <td>{team.epaValue.toFixed(1)}</td>
-                    <td style={{ color: '#9C27B0', fontWeight: 'bold' }}>{team.ecsScore.toFixed(1)}</td>
-                    <td>{team.epaPercentile.toFixed(0)}%</td>
-                    <td>{team.scoutingAvg.autoPoints.toFixed(1)}</td>
-                    <td>{team.scoutingAvg.teleopPoints.toFixed(1)}</td>
-                    <td>{team.scoutingAvg.endgamePoints.toFixed(1)}</td>
-                    <td>{team.scoutingAvg.matchCount}</td>
-                    <td>
+                    <td data-label="EPA">{team.epaValue.toFixed(1)}</td>
+                    <td data-label="ECS" style={{ color: '#9C27B0', fontWeight: 'bold' }}>{team.ecsScore.toFixed(1)}</td>
+                    <td data-label="Percentile">{team.epaPercentile.toFixed(0)}%</td>
+                    <td data-label="Avg Auto">{team.scoutingAvg.autoPoints.toFixed(1)}</td>
+                    <td data-label="Avg Teleop">{team.scoutingAvg.teleopPoints.toFixed(1)}</td>
+                    <td data-label="Avg Endgame">{team.scoutingAvg.endgamePoints.toFixed(1)}</td>
+                    <td data-label="Matches">{team.scoutingAvg.matchCount}</td>
+                    <td data-label="">
                       <button onClick={() => removeTeam(team.teamNumber)} className="btn btn-danger btn-small">×</button>
                     </td>
                   </tr>

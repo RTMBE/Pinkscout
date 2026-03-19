@@ -3965,4 +3965,186 @@ body.theme-high-contrast a {
   }
 }
 
+/* =============================================================================
+   MOBILE RESPONSIVE DATA TABLES
+   Convert tables to card-based layout on mobile (scroll down, not sideways)
+   ============================================================================= */
+
+/* Mobile table responsive container */
+@media (max-width: 768px) {
+  /* Hide horizontal scroll, force vertical layout */
+  .table-container,
+  .table-responsive {
+    overflow-x: visible;
+    overflow-y: visible;
+  }
+
+  /* Convert table to block layout */
+  .data-table,
+  .comparison-table {
+    display: block;
+    width: 100%;
+  }
+
+  /* Hide table headers on mobile */
+  .data-table thead,
+  .comparison-table thead {
+    display: none;
+  }
+
+  /* Make tbody a flex container for vertical stacking */
+  .data-table tbody,
+  .comparison-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  /* Each row becomes a card */
+  .data-table tbody tr,
+  .comparison-table tbody tr {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius);
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    gap: 0.5rem;
+  }
+
+  /* Each cell becomes a row with label */
+  .data-table tbody td,
+  .comparison-table tbody td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color);
+    width: 100%;
+  }
+
+  .data-table tbody td:last-child,
+  .comparison-table tbody td:last-child {
+    border-bottom: none;
+  }
+
+  /* Add labels before each cell using data attributes */
+  .data-table tbody td::before,
+  .comparison-table tbody td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    margin-right: 1rem;
+  }
+
+  /* First cell (usually team number) styling */
+  .data-table tbody td:first-child,
+  .comparison-table tbody td:first-child {
+    background: var(--primary-color);
+    color: white;
+    margin: -1rem -1rem 0.5rem -1rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+    font-weight: bold;
+    border-bottom: none;
+  }
+
+  .data-table tbody td:first-child::before,
+  .comparison-table tbody td:first-child::before {
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  /* Action buttons in mobile cards */
+  .data-table tbody td:last-child,
+  .comparison-table tbody td:last-child {
+    justify-content: flex-end;
+    padding-top: 0.75rem;
+    margin-top: 0.5rem;
+  }
+
+  /* Classification badges in mobile */
+  .classification-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+  }
+
+  /* Recommended Alliance mobile layout */
+  .alliance-columns {
+    display: flex;
+    flex-direction: column !important;
+    gap: 1.5rem;
+  }
+
+  .alliance-columns > div {
+    width: 100% !important;
+  }
+
+  /* Team row cards in recommended alliance */
+  .team-row-card {
+    padding: 0.75rem;
+  }
+
+  /* Analytics page specific */
+  .analytics-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Compare page charts container */
+  .charts-container {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .chart-wrapper {
+    width: 100% !important;
+    min-height: 250px;
+  }
+
+  /* Admin page filters */
+  .admin-filters {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .admin-filters select,
+  .admin-filters input {
+    width: 100%;
+  }
+
+  /* Pit scouting entries mobile */
+  .pit-entries-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Extra small screens (320px - 480px) */
+@media (max-width: 480px) {
+  .data-table tbody td,
+  .comparison-table tbody td {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+
+  .data-table tbody td::before,
+  .comparison-table tbody td::before {
+    margin-right: 0;
+    margin-bottom: 0.25rem;
+  }
+
+  /* Stack buttons vertically on very small screens */
+  .btn-group,
+  .card-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .btn-group .btn,
+  .card-actions .btn {
+    width: 100%;
+  }
+}
 

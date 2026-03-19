@@ -504,12 +504,12 @@ export default function PitScouting() {
                   <tbody>
                     {existingEntries.map(entry => (
                       <tr key={entry.id}>
-                        <td><strong>{entry.team_number}</strong></td>
-                        <td>{entry.drive_type || '-'}</td>
-                        <td>{entry.climb_level || '-'}</td>
-                        <td>{entry.shooter_type || '-'}</td>
-                        <td>{entry.intake_type || '-'}</td>
-                        <td>
+                        <td data-label="Team"><strong>{entry.team_number}</strong></td>
+                        <td data-label="Drive">{entry.drive_type || '-'}</td>
+                        <td data-label="Climb">{entry.climb_level || '-'}</td>
+                        <td data-label="Shooter">{entry.shooter_type || '-'}</td>
+                        <td data-label="Intake">{entry.intake_type || '-'}</td>
+                        <td data-label="">
                           <button
                             className="btn btn-small"
                             onClick={() => handleEditEntry(entry)}

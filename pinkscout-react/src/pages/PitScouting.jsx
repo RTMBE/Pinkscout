@@ -396,9 +396,11 @@ export default function PitScouting() {
                 <label>Shooter Type</label>
                 <select name="shooterType" value={formData.shooterType} onChange={handleChange}>
                   <option value="">Select...</option>
-                  <option value="none">No Shooter</option>
-                  <option value="fixed_turret">Fixed Turret</option>
-                  <option value="adjustable_turret">Adjustable Turret</option>
+                  <option value="turret">Turret</option>
+                  <option value="static_1">Static 1</option>
+                  <option value="static_2">Static 2</option>
+                  <option value="static_3">Static 3</option>
+                  <option value="static_4">Static 4</option>
                 </select>
               </div>
               <div className="form-group">
@@ -407,6 +409,7 @@ export default function PitScouting() {
                   <option value="">Select...</option>
                   <option value="over_bumper">Over Bumper</option>
                   <option value="through_bumper">Through Bumper</option>
+                  <option value="none">None</option>
                 </select>
               </div>
             </div>

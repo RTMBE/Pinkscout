@@ -389,8 +389,8 @@ CREATE TABLE IF NOT EXISTS pit_scouting (
   -- Robot Configuration
   drive_type TEXT CHECK (drive_type IN ('tank', 'mecanum', 'swerve', 'other')),
   climb_level TEXT CHECK (climb_level IN ('none', 'level1', 'level2', 'level3')),
-  shooter_type TEXT CHECK (shooter_type IN ('fixed_turret', 'adjustable_turret', 'none')),
-  intake_type TEXT CHECK (intake_type IN ('over_bumper', 'under_bumper', 'both', 'none')),
+  shooter_type TEXT CHECK (shooter_type IN ('turret', 'static_1', 'static_2', 'static_3', 'static_4', 'fixed_turret', 'adjustable_turret', 'none')),
+  intake_type TEXT CHECK (intake_type IN ('over_bumper', 'through_bumper', 'under_bumper', 'both', 'none')),
   preferred_strategy TEXT,
 
   -- Optional robot image

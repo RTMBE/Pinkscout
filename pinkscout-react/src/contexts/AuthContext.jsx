@@ -368,11 +368,11 @@ export function AuthProvider({ children }) {
     }
 
     // IMPORTANT: Use .select() to verify the profile was actually created
-    // and contains the correct is_team_lead value
+    // and contains the correct is_team_lead value, team_number, and team_code
     const { data: createdProfile, error: profileError } = await supabase
       .from('profiles')
       .insert(profileData)
-      .select('id, is_team_lead, team_lead_uid, team_code')
+      .select('id, is_team_lead, team_lead_uid, team_code, team_number, scouting_id')
       .single();
 
     if (profileError) {
@@ -393,6 +393,33 @@ export function AuthProvider({ children }) {
       await supabase
         .from('profiles')
         .update({ is_team_lead: true })
+        .eq('id', newUser.id);
+    }
+
+    // Verify team_number was saved correctly if provided
+    if (teamNumber && createdProfile && createdProfile.team_number !== parseInt(teamNumber, 10)) {
+      console.error('Profile created but team_number not saved correctly:', {
+        expected: parseInt(teamNumber, 10),
+        actual: createdProfile.team_number
+      });
+      // Try to fix it
+      const teamNum = parseInt(teamNumber, 10);
+      await supabase
+        .from('profiles')
+        .update({ team_number: teamNum, scouting_id: String(teamNum) })
+        .eq('id', newUser.id);
+    }
+
+    // Verify team_code was saved correctly for members
+    if (!isTeamLead && teamCode && createdProfile && createdProfile.team_code !== teamCode) {
+      console.error('Profile created but team_code not saved correctly:', {
+        expected: teamCode,
+        actual: createdProfile.team_code
+      });
+      // Try to fix it
+      await supabase
+        .from('profiles')
+        .update({ team_code: teamCode, team_lead_uid: teamLeadUid })
         .eq('id', newUser.id);
     }
 

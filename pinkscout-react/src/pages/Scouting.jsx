@@ -175,6 +175,7 @@ export default function Scouting() {
     // --- Match Info ---
     teamNumber: '',           // The FRC team number being scouted (e.g., 1551)
     matchNumber: '',          // Which match number (e.g., Quals 1, 2, 3...)
+    matchType: 'qm',          // Match type: 'qm' (quals), 'sf' (semis), 'f' (finals)
     allianceColor: 'red',     // Which alliance: 'red' or 'blue'
     startingPosition: '',     // Where robot started: 'left', 'center', or 'right'
 
@@ -327,9 +328,12 @@ export default function Scouting() {
     const matchNum = parseInt(formData.matchNumber);
     if (isNaN(matchNum)) return null;
 
-    // Look for qualification matches (qm) first, as they're most common
+    // Use the selected match type (qm = quals, sf = semis, f = finals)
+    const matchType = formData.matchType || 'qm';
+
+    // Find match by comp_level and match_number
     const match = eventMatches.find(m =>
-      m.comp_level === 'qm' && m.match_number === matchNum
+      m.comp_level === matchType && m.match_number === matchNum
     );
 
     if (!match) return null;
@@ -345,7 +349,7 @@ export default function Scouting() {
 
     // Extract team number from "frc1551" format
     return teamKey.replace('frc', '');
-  }, [eventMatches, formData.matchNumber, formData.allianceColor, alliancePosition]);
+  }, [eventMatches, formData.matchNumber, formData.matchType, formData.allianceColor, alliancePosition]);
 
   // Effect to auto-fill team number when it changes
   useEffect(() => {
@@ -479,10 +483,9 @@ export default function Scouting() {
       ...prev,  // Spread operator: copy all existing fields
       // Set the changed field to its new value:
       // - For checkboxes: use the checked boolean (true/false)
-      // - For numbers: parse to integer
+      // - For number inputs (matchNumber, teamNumber): keep as string to allow typing
       // - For everything else: use the raw value
-      [name]: type === 'checkbox' ? checked :
-              type === 'number' ? parseInt(value) || 0 : value
+      [name]: type === 'checkbox' ? checked : value
     }));
   };
 
@@ -564,6 +567,7 @@ export default function Scouting() {
         setFormData({
           teamNumber: '',
           matchNumber: '',
+          matchType: 'qm',
           allianceColor: 'red',
           startingPosition: '',
           autoFuelScored: 0,
@@ -829,6 +833,34 @@ export default function Scouting() {
               />
             </div>
 
+            {/* --- Match Type Selector (Quals/Semis/Finals) --- */}
+            <div className="form-group">
+              <label>Match Type</label>
+              <div className="alliance-toggle">
+                <button
+                  type="button"
+                  className={`alliance-btn ${formData.matchType === 'qm' ? 'active' : ''}`}
+                  onClick={() => setFormData(prev => ({ ...prev, matchType: 'qm' }))}
+                >
+                  Quals
+                </button>
+                <button
+                  type="button"
+                  className={`alliance-btn ${formData.matchType === 'sf' ? 'active' : ''}`}
+                  onClick={() => setFormData(prev => ({ ...prev, matchType: 'sf' }))}
+                >
+                  Semis
+                </button>
+                <button
+                  type="button"
+                  className={`alliance-btn ${formData.matchType === 'f' ? 'active' : ''}`}
+                  onClick={() => setFormData(prev => ({ ...prev, matchType: 'f' }))}
+                >
+                  Finals
+                </button>
+              </div>
+            </div>
+
             {/* --- Alliance Color Toggle Buttons --- */}
             {/* Instead of a dropdown, we use styled buttons for quick selection */}
             {/* Template literal in className: adds 'active' class if this color is selected */}
@@ -933,7 +965,14 @@ export default function Scouting() {
               <label>⚽ Auto Fuel Scored (1 pt each)</label>
               <div className="counter">
                 <button type="button" onClick={() => handleIncrement('autoFuelScored', -1)}>−</button>
-                <span>{formData.autoFuelScored}</span>
+                <input
+                  type="number"
+                  name="autoFuelScored"
+                  value={formData.autoFuelScored}
+                  onChange={(e) => setFormData(prev => ({ ...prev, autoFuelScored: Math.max(0, parseInt(e.target.value) || 0) }))}
+                  min="0"
+                  style={{ width: '60px', textAlign: 'center', fontSize: '1.25rem', fontWeight: 'bold' }}
+                />
                 <button type="button" onClick={() => handleIncrement('autoFuelScored', 1)}>+</button>
               </div>
             </div>
@@ -943,7 +982,14 @@ export default function Scouting() {
               <label>🔄 Auto Cycles Completed</label>
               <div className="counter">
                 <button type="button" onClick={() => handleIncrement('autoCyclesCompleted', -1)}>−</button>
-                <span>{formData.autoCyclesCompleted}</span>
+                <input
+                  type="number"
+                  name="autoCyclesCompleted"
+                  value={formData.autoCyclesCompleted}
+                  onChange={(e) => setFormData(prev => ({ ...prev, autoCyclesCompleted: Math.max(0, parseInt(e.target.value) || 0) }))}
+                  min="0"
+                  style={{ width: '60px', textAlign: 'center', fontSize: '1.25rem', fontWeight: 'bold' }}
+                />
                 <button type="button" onClick={() => handleIncrement('autoCyclesCompleted', 1)}>+</button>
               </div>
             </div>
@@ -1011,7 +1057,14 @@ export default function Scouting() {
               <label>⚽ Fuel in Active Hub (1 pt each)</label>
               <div className="counter">
                 <button type="button" onClick={() => handleIncrement('teleopFuelActive', -1)}>−</button>
-                <span>{formData.teleopFuelActive}</span>
+                <input
+                  type="number"
+                  name="teleopFuelActive"
+                  value={formData.teleopFuelActive}
+                  onChange={(e) => setFormData(prev => ({ ...prev, teleopFuelActive: Math.max(0, parseInt(e.target.value) || 0) }))}
+                  min="0"
+                  style={{ width: '60px', textAlign: 'center', fontSize: '1.25rem', fontWeight: 'bold' }}
+                />
                 <button type="button" onClick={() => handleIncrement('teleopFuelActive', 1)}>+</button>
               </div>
             </div>
@@ -1021,7 +1074,14 @@ export default function Scouting() {
               <label>🚫 Fuel in Inactive Hub (0 pts)</label>
               <div className="counter">
                 <button type="button" onClick={() => handleIncrement('teleopFuelInactive', -1)}>−</button>
-                <span>{formData.teleopFuelInactive}</span>
+                <input
+                  type="number"
+                  name="teleopFuelInactive"
+                  value={formData.teleopFuelInactive}
+                  onChange={(e) => setFormData(prev => ({ ...prev, teleopFuelInactive: Math.max(0, parseInt(e.target.value) || 0) }))}
+                  min="0"
+                  style={{ width: '60px', textAlign: 'center', fontSize: '1.25rem', fontWeight: 'bold' }}
+                />
                 <button type="button" onClick={() => handleIncrement('teleopFuelInactive', 1)}>+</button>
               </div>
             </div>
@@ -1031,7 +1091,14 @@ export default function Scouting() {
               <label>🔄 Balls Cycled (shooting to your side)</label>
               <div className="counter">
                 <button type="button" onClick={() => handleIncrement('teleopBallsCycled', -1)}>−</button>
-                <span>{formData.teleopBallsCycled}</span>
+                <input
+                  type="number"
+                  name="teleopBallsCycled"
+                  value={formData.teleopBallsCycled}
+                  onChange={(e) => setFormData(prev => ({ ...prev, teleopBallsCycled: Math.max(0, parseInt(e.target.value) || 0) }))}
+                  min="0"
+                  style={{ width: '60px', textAlign: 'center', fontSize: '1.25rem', fontWeight: 'bold' }}
+                />
                 <button type="button" onClick={() => handleIncrement('teleopBallsCycled', 1)}>+</button>
               </div>
             </div>
@@ -1070,7 +1137,14 @@ export default function Scouting() {
               <label>⚽ Fuel Scored (Endgame)</label>
               <div className="counter">
                 <button type="button" onClick={() => handleIncrement('endgameFuelScored', -1)}>−</button>
-                <span>{formData.endgameFuelScored}</span>
+                <input
+                  type="number"
+                  name="endgameFuelScored"
+                  value={formData.endgameFuelScored}
+                  onChange={(e) => setFormData(prev => ({ ...prev, endgameFuelScored: Math.max(0, parseInt(e.target.value) || 0) }))}
+                  min="0"
+                  style={{ width: '60px', textAlign: 'center', fontSize: '1.25rem', fontWeight: 'bold' }}
+                />
                 <button type="button" onClick={() => handleIncrement('endgameFuelScored', 1)}>+</button>
               </div>
             </div>

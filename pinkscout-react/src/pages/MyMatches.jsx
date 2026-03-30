@@ -20,6 +20,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import { useAuth } from '../contexts/AuthContext';
+import { useDataSharing } from '../hooks/useDataSharing';
 import { getTeamEvents, getTeamEventMatches, getEventTeams, getEventRankings } from '../services/blueAllianceAPI';
 import { getEventTeamStats } from '../services/statboticsAPI';
 import { getEventScoutingData, getCrossEventScoutingData } from '../services/scoutingService';
@@ -28,6 +29,7 @@ import { predictMatch } from '../utils/predictionUtils';
 
 export default function MyMatches() {
   const { userProfile, roleContext } = useAuth();
+  const { useAllEventData } = useDataSharing();
   const navigate = useNavigate();
   const teamNumber = userProfile?.teamNumber;
 
@@ -135,7 +137,7 @@ export default function MyMatches() {
         getTeamEventMatches(teamNumber, event.key),
         getEventTeams(event.key),
         getEventTeamStats(event.key),
-        getEventScoutingData(event.key, roleContext),
+        getEventScoutingData(event.key, roleContext, { useAllEventData }),
         getEventRankings(event.key)
       ]);
 
@@ -156,7 +158,7 @@ export default function MyMatches() {
       // This enables cross-event scouting decay for match predictions
       if (loadedTeams.length > 0) {
         const teamNumbers = loadedTeams.map(t => t.team_number).filter(Boolean);
-        getCrossEventScoutingData(teamNumbers, roleContext)
+        getCrossEventScoutingData(teamNumbers, roleContext, { useAllEventData })
           .then(crossEventData => {
             setCrossEventScoutingData(crossEventData);
             if (import.meta.env.DEV) {

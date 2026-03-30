@@ -22,11 +22,13 @@ import { getTeamInfo, getTeamAllAwards, getTeamAwardsForYear, getTeamMatchesForY
 import { getTeamScoutingData } from '../services/scoutingService';
 import { scaleStatboticsEPA, classifyEPA, getEPAPercentile, calculateAutoPoints, calculateTeleopPoints, EPA_TYPES, EPA_TYPE_LABELS, getEPAByType, calculateTrueEPA } from '../utils/epaUtils';
 import { useAuth } from '../contexts/AuthContext';
+import { useDataSharing } from '../hooks/useDataSharing';
 import { calculateAverageECS, getScoutingConfig, DEFAULT_SCORING_WEIGHTS } from '../services/scoutingConfigService';
 import { getPerformanceMetrics } from '../utils/performanceMetrics';
 
 export default function Teams() {
   const { roleContext } = useAuth();
+  const { useAllEventData } = useDataSharing();
   // ==========================================================================
   // STATE
   // ==========================================================================
@@ -206,7 +208,7 @@ export default function Teams() {
       const [statboticsResult, tbaResult, scoutingResult, awardsResult, thisYearMatchesResult, thisYearStatsResult] = await Promise.allSettled([
         getStatboticsTeam(teamNumberToSearch),
         getTeamInfo(teamNumberToSearch),
-        getTeamScoutingData(teamNumberToSearch, { roleContext }),
+        getTeamScoutingData(teamNumberToSearch, { roleContext, useAllEventData }),
         getTeamAllAwards(teamNumberToSearch),
         getTeamMatchesForYear(teamNumberToSearch, currentYear),
         getTeamYearStats(teamNumberToSearch, currentYear)

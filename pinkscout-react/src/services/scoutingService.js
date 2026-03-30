@@ -307,13 +307,17 @@ async function triggerEPARecalculation(teamNumber, eventKey) {
  * Get all scouting entries, filtered by role context
  * - Master admin: sees all data
  * - Team Lead (isTeamLead) OR Member with teamLeadUid: sees all data with matching teamLeadUid
+ *   UNLESS useAllEventData is true, then sees all data (for data sharing)
  * - Legacy Scout Lead (canViewAll + scoutingId): sees all data with matching scoutingId
  * - Scout: sees only their OWN entries (by scouterUid)
  *
  * @param {Object} roleContext - From useAuth().roleContext
+ * @param {Object} options - Optional { useAllEventData: boolean }
  * @returns {Array} - Array of scouting entries with IDs
  */
-export async function getAllScoutingData(roleContext = null) {
+export async function getAllScoutingData(roleContext = null, options = {}) {
+  const { useAllEventData = false } = options;
+
   try {
     let query = supabase
       .from(SCOUTING_COLLECTION)
@@ -323,6 +327,9 @@ export async function getAllScoutingData(roleContext = null) {
     // Apply role-based filtering
     if (roleContext?.isMasterAdmin) {
       // Master admin sees everything - no filter
+    } else if (useAllEventData && roleContext?.canViewAll) {
+      // Data sharing enabled - Team Lead sees ALL data from all teams
+      // No team_lead_uid filter applied
     } else if (roleContext?.teamLeadUid) {
       // Team Lead OR Member with teamLeadUid: sees all data linked to their Team Lead
       query = query.eq('team_lead_uid', roleContext.teamLeadUid);
@@ -360,17 +367,18 @@ export async function getAllScoutingData(roleContext = null) {
  * Filtered by roleContext for team isolation:
  * - Master admin: sees all
  * - Team Lead/Member with teamLeadUid: sees all with matching teamLeadUid
+ *   UNLESS useAllEventData is true, then sees all data (for data sharing)
  * - Legacy Scout Lead (canViewAll + scoutingId): sees all with matching scoutingId
  * - Scout: sees only their own entries
  *
  * @param {number|string} teamNumber - The team number to fetch data for
- * @param {Object} options - Optional filters { year, eventKey, roleContext }
+ * @param {Object} options - Optional filters { year, eventKey, roleContext, useAllEventData }
  * @returns {Array} - Array of scouting entries for the team
  */
 export async function getTeamScoutingData(teamNumber, options = {}) {
   try {
     const teamNum = parseInt(teamNumber);
-    const { year, eventKey, roleContext } = options;
+    const { year, eventKey, roleContext, useAllEventData = false } = options;
 
     let query = supabase
       .from(SCOUTING_COLLECTION)
@@ -381,6 +389,9 @@ export async function getTeamScoutingData(teamNumber, options = {}) {
     // Apply role-based filtering
     if (roleContext?.isMasterAdmin) {
       // Master admin sees all - no filter
+    } else if (useAllEventData && roleContext?.canViewAll) {
+      // Data sharing enabled - see all data for this team from all scouting teams
+      // No team_lead_uid filter applied
     } else if (roleContext?.teamLeadUid) {
       query = query.eq('team_lead_uid', roleContext.teamLeadUid);
     } else if (roleContext?.canViewAll && roleContext?.scoutingId) {
@@ -432,14 +443,18 @@ export async function getTeamScoutingData(teamNumber, options = {}) {
  * Filtered by roleContext for team isolation:
  * - Master admin: sees all
  * - Team Lead/Member with teamLeadUid: sees all with matching teamLeadUid
+ *   UNLESS useAllEventData is true, then sees all data (for data sharing)
  * - Legacy Scout Lead (canViewAll + scoutingId): sees all with matching scoutingId
  * - Scout: sees only their own entries
  *
  * @param {string} eventKey - The event key to fetch data for
  * @param {Object} roleContext - From useAuth().roleContext
+ * @param {Object} options - Optional { useAllEventData: boolean }
  * @returns {Array} - Array of scouting entries for the event
  */
-export async function getEventScoutingData(eventKey, roleContext = null) {
+export async function getEventScoutingData(eventKey, roleContext = null, options = {}) {
+  const { useAllEventData = false } = options;
+
   try {
     let query = supabase
       .from(SCOUTING_COLLECTION)
@@ -450,6 +465,9 @@ export async function getEventScoutingData(eventKey, roleContext = null) {
     // Apply role-based filtering
     if (roleContext?.isMasterAdmin) {
       // Master admin sees all - no filter
+    } else if (useAllEventData && roleContext?.canViewAll) {
+      // Data sharing enabled - see all data for this event from all scouting teams
+      // No team_lead_uid filter applied
     } else if (roleContext?.teamLeadUid) {
       query = query.eq('team_lead_uid', roleContext.teamLeadUid);
     } else if (roleContext?.canViewAll && roleContext?.scoutingId) {
@@ -752,10 +770,12 @@ export function calculateTeamAggregates(entries) {
  * @param {number} teamNumber - Team number
  * @param {string} eventKey - Event key
  * @param {Object} roleContext - For role-based filtering
+ * @param {Object} options - Optional { useAllEventData: boolean }
  * @returns {Object} - Team summary with aggregates
  */
-export async function getTeamEventSummary(teamNumber, eventKey, roleContext = null) {
-  const entries = await getTeamScoutingData(teamNumber, { eventKey, roleContext });
+export async function getTeamEventSummary(teamNumber, eventKey, roleContext = null, options = {}) {
+  const { useAllEventData = false } = options;
+  const entries = await getTeamScoutingData(teamNumber, { eventKey, roleContext, useAllEventData });
   const aggregates = calculateTeamAggregates(entries);
 
   return {
@@ -832,9 +852,12 @@ export async function getPaginatedScoutingData(options = {}) {
  *
  * @param {Array<number>} teamNumbers - Array of team numbers to fetch data for
  * @param {Object} roleContext - Role context for filtering
+ * @param {Object} options - Optional { useAllEventData: boolean }
  * @returns {Object} - Map of teamNumber -> entries array
  */
-export async function getCrossEventScoutingData(teamNumbers, roleContext = null) {
+export async function getCrossEventScoutingData(teamNumbers, roleContext = null, options = {}) {
+  const { useAllEventData = false } = options;
+
   if (!teamNumbers || teamNumbers.length === 0) {
     return {};
   }
@@ -850,6 +873,9 @@ export async function getCrossEventScoutingData(teamNumbers, roleContext = null)
     // Apply role-based filtering
     if (roleContext?.isMasterAdmin) {
       // Master admin sees all - no filter
+    } else if (useAllEventData && roleContext?.canViewAll) {
+      // Data sharing enabled - see all data for these teams from all scouting teams
+      // No team_lead_uid filter applied
     } else if (roleContext?.teamLeadUid) {
       query = query.eq('team_lead_uid', roleContext.teamLeadUid);
     } else if (roleContext?.canViewAll && roleContext?.scoutingId) {

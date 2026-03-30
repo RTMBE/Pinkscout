@@ -369,11 +369,21 @@ export function AuthProvider({ children }) {
 
     // IMPORTANT: Use .select() to verify the profile was actually created
     // and contains the correct is_team_lead value, team_number, and team_code
-    const { data: createdProfile, error: profileError } = await supabase
-      .from('profiles')
-      .insert(profileData)
-      .select('id, is_team_lead, team_lead_uid, team_code, team_number, scouting_id')
-      .single();
+    let createdProfile = null;
+    let profileError = null;
+
+    try {
+      const result = await supabase
+        .from('profiles')
+        .insert(profileData)
+        .select('id, is_team_lead, team_lead_uid, team_code, team_number, scouting_id')
+        .single();
+
+      createdProfile = result.data;
+      profileError = result.error;
+    } catch (err) {
+      profileError = err;
+    }
 
     if (profileError) {
       console.error('Error creating profile:', profileError);
@@ -381,46 +391,73 @@ export function AuthProvider({ children }) {
       if (isTeamLead) {
         throw new Error('Failed to create Team Lead profile. Please try signing up again.');
       }
-      // For members, they can update profile later
+      // For members, the error might be a conflict - try upsert approach
+      // This handles the case where the profile was partially created by a trigger
+      try {
+        const { data: upsertProfile, error: upsertError } = await supabase
+          .from('profiles')
+          .upsert(profileData, { onConflict: 'id' })
+          .select('id, is_team_lead, team_lead_uid, team_code, team_number, scouting_id')
+          .single();
+
+        if (!upsertError && upsertProfile) {
+          createdProfile = upsertProfile;
+          profileError = null;
+          if (import.meta.env.DEV) {
+            console.log('✅ Profile upserted after initial insert failed:', upsertProfile);
+          }
+        }
+      } catch (upsertErr) {
+        console.error('Upsert also failed:', upsertErr);
+      }
     } else if (import.meta.env.DEV) {
       console.log('✅ Profile created:', createdProfile);
     }
 
-    // Verify is_team_lead was saved correctly for Team Leads
+    // Track what needs to be fixed
+    const needsFixes = {};
+
+    // Check is_team_lead
     if (isTeamLead && createdProfile && createdProfile.is_team_lead !== true) {
-      console.error('Profile created but is_team_lead is not true:', createdProfile);
-      // Try to fix it
-      await supabase
-        .from('profiles')
-        .update({ is_team_lead: true })
-        .eq('id', newUser.id);
+      needsFixes.is_team_lead = true;
     }
 
-    // Verify team_number was saved correctly if provided
-    if (teamNumber && createdProfile && createdProfile.team_number !== parseInt(teamNumber, 10)) {
-      console.error('Profile created but team_number not saved correctly:', {
-        expected: parseInt(teamNumber, 10),
-        actual: createdProfile.team_number
-      });
-      // Try to fix it
-      const teamNum = parseInt(teamNumber, 10);
-      await supabase
-        .from('profiles')
-        .update({ team_number: teamNum, scouting_id: String(teamNum) })
-        .eq('id', newUser.id);
+    // Check team_number
+    const expectedTeamNum = teamNumber ? parseInt(teamNumber, 10) : null;
+    if (expectedTeamNum && (!createdProfile || createdProfile.team_number !== expectedTeamNum)) {
+      needsFixes.team_number = expectedTeamNum;
+      needsFixes.scouting_id = String(expectedTeamNum);
     }
 
-    // Verify team_code was saved correctly for members
-    if (!isTeamLead && teamCode && createdProfile && createdProfile.team_code !== teamCode) {
-      console.error('Profile created but team_code not saved correctly:', {
-        expected: teamCode,
-        actual: createdProfile.team_code
-      });
-      // Try to fix it
-      await supabase
+    // Check team_code for members
+    if (!isTeamLead && teamCode && (!createdProfile || createdProfile.team_code !== teamCode)) {
+      needsFixes.team_code = teamCode;
+      needsFixes.team_lead_uid = teamLeadUid;
+    }
+
+    // Apply all fixes in a single update and verify
+    if (Object.keys(needsFixes).length > 0) {
+      console.log('🔧 Fixing missing profile fields:', Object.keys(needsFixes));
+
+      const { data: fixedProfile, error: fixError } = await supabase
         .from('profiles')
-        .update({ team_code: teamCode, team_lead_uid: teamLeadUid })
-        .eq('id', newUser.id);
+        .update(needsFixes)
+        .eq('id', newUser.id)
+        .select('id, is_team_lead, team_lead_uid, team_code, team_number, scouting_id')
+        .single();
+
+      if (fixError) {
+        console.error('Error fixing profile:', fixError);
+        // This is critical for members - throw an error they can see
+        if (!isTeamLead && (needsFixes.team_code || needsFixes.team_lead_uid)) {
+          throw new Error('Failed to link your account to your team. Please try again or update your settings after login.');
+        }
+      } else if (fixedProfile) {
+        createdProfile = fixedProfile;
+        if (import.meta.env.DEV) {
+          console.log('✅ Profile fixed successfully:', fixedProfile);
+        }
+      }
     }
 
     // If Team Lead, generate their team code after profile creation

@@ -27,6 +27,7 @@ import { getSavedEvents, toggleSaveEvent, isEventSaved } from '../services/saved
 import { classifyEPA, getEPAPercentile, calculateAutoPoints, calculateTeleopPoints } from '../utils/epaUtils';
 import { predictMatch } from '../utils/predictionUtils';
 import { useAuth } from '../contexts/AuthContext';
+import { useDataSharing } from '../hooks/useDataSharing';
 
 // =============================================================================
 // TEAM LOGO COMPONENT - Shows team logo with fallback avatar
@@ -96,6 +97,7 @@ function TeamLogo({ teamNumber, year, className = 'team-logo', alt }) {
 
 export default function Events() {
   const { roleContext } = useAuth();
+  const { useAllEventData } = useDataSharing();
   // ==========================================================================
   // STATE
   // ==========================================================================
@@ -202,7 +204,7 @@ export default function Events() {
       getEventTeams(event.key),
       getEventMatches(event.key),
       getEventRankings(event.key),
-      getEventScoutingData(event.key, roleContext)
+      getEventScoutingData(event.key, roleContext, { useAllEventData })
     ]);
 
     // Extract critical values with fallbacks
@@ -259,7 +261,7 @@ export default function Events() {
     // This enables cross-event scouting decay for match predictions
     if (teams.length > 0) {
       const teamNumbers = teams.map(t => t.team_number).filter(Boolean);
-      getCrossEventScoutingData(teamNumbers, roleContext)
+      getCrossEventScoutingData(teamNumbers, roleContext, { useAllEventData })
         .then(crossEventData => {
           setCrossEventScoutingData(crossEventData);
           if (import.meta.env.DEV) {

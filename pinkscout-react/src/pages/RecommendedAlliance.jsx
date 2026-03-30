@@ -58,6 +58,9 @@ import { Helmet } from 'react-helmet-async';
 // Auth context - provides user profile and role information
 import { useAuth } from '../contexts/AuthContext';
 
+// Data sharing hook - gets user's preference for viewing all data or just their team's
+import { useDataSharing } from '../hooks/useDataSharing';
+
 // The Blue Alliance API - fetches team events, teams at events, and rankings
 import { getTeamEvents, getEventTeams, getEventRankings } from '../services/blueAllianceAPI';
 
@@ -89,6 +92,7 @@ export default function RecommendedAlliance() {
   // HOOKS - Get auth context and navigation
   // ---------------------------------------------------------------------------
   const { userProfile, roleContext } = useAuth();  // Current user's profile
+  const { useAllEventData } = useDataSharing();    // Data sharing preference
   const navigate = useNavigate();                   // Function to navigate to other pages
   const teamNumber = userProfile?.teamNumber;       // User's FRC team number (e.g., 4639)
 
@@ -188,10 +192,10 @@ export default function RecommendedAlliance() {
       // Promise.allSettled - like Promise.all but doesn't fail if one request fails
       // Returns objects with { status: 'fulfilled'|'rejected', value|reason }
       const [teams, rankingsData, scouting, pitScouting] = await Promise.allSettled([
-        getEventTeams(event.key),                      // All teams at this event
-        getEventRankings(event.key),                   // Official rankings
-        getEventScoutingData(event.key, roleContext),  // Our scouting data
-        getPitScoutingByEvent(event.key, roleContext)  // Robot configuration data
+        getEventTeams(event.key),                                      // All teams at this event
+        getEventRankings(event.key),                                   // Official rankings
+        getEventScoutingData(event.key, roleContext, { useAllEventData }),  // Our scouting data (with sharing)
+        getPitScoutingByEvent(event.key, roleContext)                  // Robot configuration data
       ]);
 
       // Set state only if the promise succeeded

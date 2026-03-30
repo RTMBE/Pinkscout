@@ -186,3 +186,57 @@ export function calculateAverageECS(matches, weights = DEFAULT_SCORING_WEIGHTS) 
   return Math.round((total / matches.length) * 10) / 10;
 }
 
+// =============================================================================
+// DATA SHARING SETTINGS
+// =============================================================================
+
+/**
+ * Get data sharing setting for a team lead
+ * @param {string} teamLeadUid - Team lead's user ID
+ * @returns {Promise<boolean>} - True if using all event data (default), false for team-only
+ */
+export async function getDataSharingSetting(teamLeadUid) {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('use_all_event_data')
+      .eq('id', teamLeadUid)
+      .single();
+
+    if (error) {
+      console.error('Error getting data sharing setting:', error);
+      return true; // Default to true (use all data)
+    }
+
+    // Default to true if null or undefined
+    return data?.use_all_event_data !== false;
+  } catch (error) {
+    console.error('Error getting data sharing setting:', error);
+    return true; // Default to true
+  }
+}
+
+/**
+ * Update data sharing setting for a team lead
+ * @param {string} teamLeadUid - Team lead's user ID
+ * @param {boolean} useAllData - True to use all event data, false for team-only
+ * @returns {Promise<boolean>} - Success status
+ */
+export async function updateDataSharingSetting(teamLeadUid, useAllData) {
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ use_all_event_data: useAllData })
+      .eq('id', teamLeadUid);
+
+    if (error) {
+      console.error('Error updating data sharing setting:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error updating data sharing setting:', error);
+    return false;
+  }
+}

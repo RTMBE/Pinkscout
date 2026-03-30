@@ -24,11 +24,13 @@ import { getTeamScoutingData } from '../services/scoutingService';
 import { searchTeams } from '../services/blueAllianceAPI';
 import { scaleStatboticsEPA, classifyEPA, getEPAPercentile } from '../utils/epaUtils';
 import { useAuth } from '../contexts/AuthContext';
+import { useDataSharing } from '../hooks/useDataSharing';
 import { getPitScoutingForTeam } from '../services/pitScoutingService';
 import { calculateAverageECS, getScoutingConfig, DEFAULT_SCORING_WEIGHTS } from '../services/scoutingConfigService';
 
 export default function Analytics() {
   const { roleContext } = useAuth();
+  const { useAllEventData } = useDataSharing();
   // ==========================================================================
   // STATE
   // ==========================================================================
@@ -185,7 +187,7 @@ export default function Analytics() {
       // Build array of promises - include pit scouting if event key is set
       const promises = [
         getStatboticsTeam(teamNumber),
-        getTeamScoutingData(teamNumber, { roleContext })
+        getTeamScoutingData(teamNumber, { roleContext, useAllEventData })
       ];
 
       // Add pit scouting fetch if event key is available

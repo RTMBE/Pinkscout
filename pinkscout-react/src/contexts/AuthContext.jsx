@@ -319,6 +319,23 @@ export function AuthProvider({ children }) {
   }
 
   // =========================================================================
+  // DISCORD OAUTH LOGIN
+  // =========================================================================
+  // Sign in with Discord - no email limits, completely free!
+
+  async function signInWithDiscord() {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'discord',
+      options: {
+        redirectTo: `${window.location.origin}/dashboard`
+      }
+    });
+
+    if (error) throw error;
+    return data;
+  }
+
+  // =========================================================================
   // SIGNUP FUNCTION
   // =========================================================================
 
@@ -605,6 +622,7 @@ export function AuthProvider({ children }) {
     roleContext,        // RBAC context: { role, scoutingId, isMasterAdmin, canViewAll }
     login,              // Function: login(email, password)
     signInWithGoogle,   // Function: signInWithGoogle() - OAuth login
+    signInWithDiscord,  // Function: signInWithDiscord() - OAuth login
     signup,             // Function: signup(email, password, username, signupCode, teamNumber)
     logout,             // Function: logout()
     updateUserProfile,  // Function: updateUserProfile(updates)

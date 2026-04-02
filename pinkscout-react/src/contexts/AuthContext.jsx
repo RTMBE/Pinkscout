@@ -298,6 +298,27 @@ export function AuthProvider({ children }) {
   }
 
   // =========================================================================
+  // GOOGLE OAUTH LOGIN
+  // =========================================================================
+  // Sign in with Google - no email limits, completely free!
+
+  async function signInWithGoogle() {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/dashboard`,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent'
+        }
+      }
+    });
+
+    if (error) throw error;
+    return data;
+  }
+
+  // =========================================================================
   // SIGNUP FUNCTION
   // =========================================================================
 
@@ -583,6 +604,7 @@ export function AuthProvider({ children }) {
     loading,            // Boolean: is auth state being checked?
     roleContext,        // RBAC context: { role, scoutingId, isMasterAdmin, canViewAll }
     login,              // Function: login(email, password)
+    signInWithGoogle,   // Function: signInWithGoogle() - OAuth login
     signup,             // Function: signup(email, password, username, signupCode, teamNumber)
     logout,             // Function: logout()
     updateUserProfile,  // Function: updateUserProfile(updates)

@@ -331,17 +331,34 @@ export function AuthProvider({ children }) {
     }
 
     // Create user in Supabase Auth
+    // Note: emailRedirectTo helps with email confirmation flow
+    // If email confirmation is disabled in Supabase dashboard, user logs in immediately
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
           display_name: username
-        }
+        },
+        // Redirect back to the app after email confirmation (if enabled)
+        emailRedirectTo: `${window.location.origin}/login`
       }
     });
 
-    if (authError) throw authError;
+    if (authError) {
+      // Handle rate limiting specifically
+      if (authError.message?.includes('rate limit') ||
+          authError.message?.includes('email rate limit') ||
+          authError.status === 429) {
+        throw new Error('Too many signup attempts. Please wait a few minutes and try again, or contact your team lead.');
+      }
+      // Handle "User already registered" - suggest login instead
+      if (authError.message?.includes('already registered') ||
+          authError.message?.includes('already exists')) {
+        throw new Error('An account with this email already exists. Please sign in instead.');
+      }
+      throw authError;
+    }
     const newUser = authData.user;
     if (!newUser) throw new Error('Failed to create user account');
 

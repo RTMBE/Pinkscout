@@ -174,13 +174,28 @@ export default function Login() {
   
   const getErrorMessage = (error) => {
     const code = error.code || '';
+    const message = error.message || '';
+
+    // Check for rate limiting errors (Supabase returns these in various formats)
+    if (message.includes('rate limit') ||
+        message.includes('email rate limit') ||
+        message.includes('Too many signup') ||
+        error.status === 429) {
+      return 'Email rate limit reached. Please wait 5-10 minutes and try again. If you continue to have issues, contact your team lead.';
+    }
+
+    // Check for "already exists" errors
+    if (message.includes('already registered') ||
+        message.includes('already exists') ||
+        code === 'auth/email-already-in-use') {
+      return 'An account with this email already exists. Please sign in instead.';
+    }
+
     switch (code) {
       case 'auth/user-not-found':
         return 'No account found with this email.';
       case 'auth/wrong-password':
         return 'Incorrect password.';
-      case 'auth/email-already-in-use':
-        return 'An account with this email already exists.';
       case 'auth/weak-password':
         return 'Password should be at least 6 characters.';
       case 'auth/invalid-email':
@@ -190,7 +205,7 @@ export default function Login() {
       case 'auth/too-many-requests':
         return 'Too many failed attempts. Please try again later.';
       default:
-        return error.message || 'An error occurred. Please try again.';
+        return message || 'An error occurred. Please try again.';
     }
   };
 

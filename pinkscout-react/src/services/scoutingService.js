@@ -32,6 +32,7 @@
 import { supabase } from './supabase';
 import { ROLES, isMasterAdmin } from './roleService';
 import { isOnline, addToOfflineQueue } from './offlineSyncService';
+import { applySmartAggregation } from '../utils/smartAggregation';
 
 // Collection reference
 const SCOUTING_COLLECTION = 'scouting';
@@ -378,7 +379,7 @@ export async function getAllScoutingData(roleContext = null, options = {}) {
 export async function getTeamScoutingData(teamNumber, options = {}) {
   try {
     const teamNum = parseInt(teamNumber);
-    const { year, eventKey, roleContext, useAllEventData = false } = options;
+    const { year, eventKey, roleContext, useAllEventData = false, applySmartAgg = true } = options;
 
     let query = supabase
       .from(SCOUTING_COLLECTION)
@@ -425,6 +426,14 @@ export async function getTeamScoutingData(teamNumber, options = {}) {
       });
     }
 
+    // Apply smart aggregation when data sharing is enabled
+    // This deduplicates entries where multiple teams scouted the same match
+    // and removes outliers while prioritizing your own team's data
+    if (useAllEventData && applySmartAgg && roleContext?.teamLeadUid) {
+      const { entries } = applySmartAggregation(results, roleContext.teamLeadUid);
+      results = entries;
+    }
+
     return results;
   } catch (error) {
     if (import.meta.env.DEV) {
@@ -453,7 +462,7 @@ export async function getTeamScoutingData(teamNumber, options = {}) {
  * @returns {Array} - Array of scouting entries for the event
  */
 export async function getEventScoutingData(eventKey, roleContext = null, options = {}) {
-  const { useAllEventData = false } = options;
+  const { useAllEventData = false, applySmartAgg = true } = options;
 
   try {
     let query = supabase
@@ -480,10 +489,20 @@ export async function getEventScoutingData(eventKey, roleContext = null, options
 
     if (error) throw error;
 
-    return (data || []).map(entry => ({
+    let results = (data || []).map(entry => ({
       id: entry.id,
       ...convertToCamelCase(entry)
     }));
+
+    // Apply smart aggregation when data sharing is enabled
+    // This deduplicates entries where multiple teams scouted the same match
+    // and removes outliers while prioritizing your own team's data
+    if (useAllEventData && applySmartAgg && roleContext?.teamLeadUid) {
+      const { entries } = applySmartAggregation(results, roleContext.teamLeadUid);
+      results = entries;
+    }
+
+    return results;
   } catch (error) {
     if (import.meta.env.DEV) {
       console.error('❌ Error fetching event scouting data:', error);
@@ -856,7 +875,7 @@ export async function getPaginatedScoutingData(options = {}) {
  * @returns {Object} - Map of teamNumber -> entries array
  */
 export async function getCrossEventScoutingData(teamNumbers, roleContext = null, options = {}) {
-  const { useAllEventData = false } = options;
+  const { useAllEventData = false, applySmartAgg = true } = options;
 
   if (!teamNumbers || teamNumbers.length === 0) {
     return {};
@@ -900,6 +919,14 @@ export async function getCrossEventScoutingData(teamNumbers, roleContext = null,
         result[teamNum] = [];
       }
       result[teamNum].push(camelEntry);
+    }
+
+    // Apply smart aggregation per team when data sharing is enabled
+    if (useAllEventData && applySmartAgg && roleContext?.teamLeadUid) {
+      for (const teamNum of Object.keys(result)) {
+        const { entries } = applySmartAggregation(result[teamNum], roleContext.teamLeadUid);
+        result[teamNum] = entries;
+      }
     }
 
     return result;

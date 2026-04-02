@@ -836,27 +836,42 @@ export default function Scouting() {
             {/* --- Match Type Selector (Quals/Semis/Finals) --- */}
             <div className="form-group">
               <label>Match Type</label>
-              <div className="alliance-toggle">
+              <div className="alliance-toggle" style={{ gap: '4px' }}>
                 <button
                   type="button"
                   className={`alliance-btn ${formData.matchType === 'qm' ? 'active' : ''}`}
                   onClick={() => setFormData(prev => ({ ...prev, matchType: 'qm' }))}
+                  style={{
+                    background: formData.matchType === 'qm' ? 'var(--primary-color)' : 'var(--bg-secondary)',
+                    color: formData.matchType === 'qm' ? 'white' : 'inherit',
+                    fontWeight: formData.matchType === 'qm' ? 'bold' : 'normal'
+                  }}
                 >
-                  Quals
+                  Qualification
                 </button>
                 <button
                   type="button"
                   className={`alliance-btn ${formData.matchType === 'sf' ? 'active' : ''}`}
                   onClick={() => setFormData(prev => ({ ...prev, matchType: 'sf' }))}
+                  style={{
+                    background: formData.matchType === 'sf' ? '#ff9800' : 'var(--bg-secondary)',
+                    color: formData.matchType === 'sf' ? 'white' : 'inherit',
+                    fontWeight: formData.matchType === 'sf' ? 'bold' : 'normal'
+                  }}
                 >
-                  Semis
+                  Semifinal
                 </button>
                 <button
                   type="button"
                   className={`alliance-btn ${formData.matchType === 'f' ? 'active' : ''}`}
                   onClick={() => setFormData(prev => ({ ...prev, matchType: 'f' }))}
+                  style={{
+                    background: formData.matchType === 'f' ? '#ffc107' : 'var(--bg-secondary)',
+                    color: formData.matchType === 'f' ? '#000' : 'inherit',
+                    fontWeight: formData.matchType === 'f' ? 'bold' : 'normal'
+                  }}
                 >
-                  Finals
+                  Final
                 </button>
               </div>
             </div>
@@ -884,17 +899,17 @@ export default function Scouting() {
               </div>
             </div>
 
-            {/* --- Alliance Position (for TBA auto-fill) --- */}
+            {/* --- Driver Station Number (for TBA auto-fill) --- */}
             <div className="form-group">
               <label>
-                Position in Alliance
+                🎮 Driver Station
                 {autoFillTeamNumber && (
                   <span style={{ fontSize: '0.75rem', color: 'var(--primary-color)', marginLeft: '0.5rem' }}>
                     → Team {autoFillTeamNumber}
                   </span>
                 )}
               </label>
-              <div className="alliance-toggle" style={{ maxWidth: '200px' }}>
+              <div className="alliance-toggle" style={{ maxWidth: '250px' }}>
                 {[1, 2, 3].map(pos => (
                   <button
                     key={pos}
@@ -914,7 +929,7 @@ export default function Scouting() {
                       padding: '0.5rem'
                     }}
                   >
-                    {pos}
+                    DS {pos}
                   </button>
                 ))}
               </div>
@@ -1008,33 +1023,59 @@ export default function Scouting() {
               </select>
             </div>
 
-            {/* Team Won Auto - Large prominent toggle */}
+            {/* Alliance Won Auto - Large prominent toggle with clear options */}
             <div className="form-group" style={{ gridColumn: 'span 2' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                🏆 Team Won Auto?
+              <label style={{ display: 'block', marginBottom: '0.75rem', fontWeight: 'bold', fontSize: '1rem' }}>
+                🏆 Did This Alliance Win Auto? <span style={{ fontWeight: 'normal', fontSize: '0.85rem', color: 'var(--text-muted)' }}>(scored more points in autonomous)</span>
               </label>
-              <button
-                type="button"
-                onClick={() => setFormData(prev => ({ ...prev, hubControlFirst: !prev.hubControlFirst }))}
-                style={{
-                  width: '100%',
-                  padding: '1.25rem 1.5rem',
-                  fontSize: '1.25rem',
-                  fontWeight: 'bold',
-                  borderRadius: '12px',
-                  border: '3px solid',
-                  borderColor: formData.hubControlFirst ? '#43a047' : 'var(--border-color)',
-                  background: formData.hubControlFirst
-                    ? 'linear-gradient(135deg, #43a047, #66bb6a)'
-                    : 'var(--bg-secondary)',
-                  color: formData.hubControlFirst ? '#fff' : 'var(--text-color)',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  boxShadow: formData.hubControlFirst ? '0 4px 12px rgba(67, 160, 71, 0.4)' : 'none'
-                }}
-              >
-                {formData.hubControlFirst ? '✅ YES - Won Auto!' : '❌ NO - Did Not Win Auto'}
-              </button>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, hubControlFirst: true }))}
+                  style={{
+                    flex: 1,
+                    padding: '1rem 1.5rem',
+                    fontSize: '1.1rem',
+                    fontWeight: 'bold',
+                    borderRadius: '12px',
+                    border: '3px solid',
+                    borderColor: formData.hubControlFirst ? '#43a047' : 'var(--border-color)',
+                    background: formData.hubControlFirst
+                      ? 'linear-gradient(135deg, #43a047, #66bb6a)'
+                      : 'var(--bg-secondary)',
+                    color: formData.hubControlFirst ? '#fff' : 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    boxShadow: formData.hubControlFirst ? '0 4px 12px rgba(67, 160, 71, 0.4)' : 'none'
+                  }}
+                >
+                  ✅ YES
+                  <div style={{ fontSize: '0.75rem', fontWeight: 'normal', marginTop: '4px' }}>Won Auto</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, hubControlFirst: false }))}
+                  style={{
+                    flex: 1,
+                    padding: '1rem 1.5rem',
+                    fontSize: '1.1rem',
+                    fontWeight: 'bold',
+                    borderRadius: '12px',
+                    border: '3px solid',
+                    borderColor: !formData.hubControlFirst ? '#c62828' : 'var(--border-color)',
+                    background: !formData.hubControlFirst
+                      ? 'linear-gradient(135deg, #c62828, #e53935)'
+                      : 'var(--bg-secondary)',
+                    color: !formData.hubControlFirst ? '#fff' : 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    boxShadow: !formData.hubControlFirst ? '0 4px 12px rgba(198, 40, 40, 0.4)' : 'none'
+                  }}
+                >
+                  ❌ NO
+                  <div style={{ fontSize: '0.75rem', fontWeight: 'normal', marginTop: '4px' }}>Lost Auto</div>
+                </button>
+              </div>
             </div>
           </div>
         </div>

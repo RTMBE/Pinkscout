@@ -176,6 +176,8 @@
 html {
   font-size: 16px;
   scroll-behavior: smooth;
+  /* Prevent horizontal scrolling on the entire page */
+  overflow-x: hidden;
 }
 
 body {
@@ -184,6 +186,10 @@ body {
   color: var(--text-primary);
   line-height: 1.6;
   min-height: 100vh;
+  /* Prevent horizontal scrolling */
+  overflow-x: hidden;
+  /* Ensure content doesn't overflow viewport */
+  max-width: 100vw;
 }
 
 a {
@@ -203,6 +209,9 @@ a:hover {
 .app-container {
   display: flex;
   min-height: 100vh;
+  /* Prevent horizontal overflow */
+  overflow-x: hidden;
+  max-width: 100vw;
 }
 
 /* Sidebar */
@@ -643,6 +652,10 @@ a:hover {
   margin-left: var(--sidebar-width);
   padding: var(--spacing-xl);
   min-height: 100vh;
+  /* Prevent horizontal overflow and offset issues */
+  overflow-x: hidden;
+  max-width: calc(100vw - var(--sidebar-width));
+  box-sizing: border-box;
 }
 
 /* =============================================================================
@@ -2993,6 +3006,12 @@ a:hover {
     margin-left: 0;
     padding: var(--spacing-md);
     padding-top: calc(var(--spacing-md) + 60px); /* Space for mobile menu button */
+    /* Prevent horizontal scrolling on mobile */
+    max-width: 100vw;
+    overflow-x: hidden;
+    box-sizing: border-box;
+    /* Ensure content fits within viewport */
+    width: 100%;
   }
 
   .page-header h1 {
@@ -3077,6 +3096,45 @@ a:hover {
 
   .result-vs {
     display: none;
+  }
+
+  /* Prevent content cards from overflowing viewport */
+  .content-card,
+  .card,
+  .stat-card {
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+
+  /* Ensure forms don't cause horizontal scroll */
+  .scouting-form,
+  .form-section,
+  form {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Fix alliance toggle buttons on mobile */
+  .alliance-toggle {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+
+  .alliance-toggle button,
+  .alliance-btn {
+    min-width: 0;
+    flex: 1 1 auto;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+  }
+
+  /* Ensure all page content fits viewport */
+  .page-header,
+  .form-grid,
+  .stats-grid {
+    max-width: 100%;
+    box-sizing: border-box;
   }
 }
 

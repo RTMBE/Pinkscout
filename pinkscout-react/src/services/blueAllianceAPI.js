@@ -73,7 +73,26 @@ export function clearCache(key = null) {
 // HELPER: Make authenticated request to TBA (with caching & conditional requests)
 // =============================================================================
 
+// SCALING FIX: Rate limiting and retry configuration
+const RETRY_CONFIG = {
+  maxRetries: 3,
+  initialDelayMs: 500,
+  maxDelayMs: 5000
+};
+
+// Track rate limit state
+let rateLimitedUntil = 0;
+
 async function tbaFetch(endpoint, cacheTTL = null, forceRefresh = false) {
+  // SCALING FIX: Check if we're rate limited
+  if (Date.now() < rateLimitedUntil) {
+    const cached = cache.get(endpoint);
+    if (cached) {
+      return cached.data;
+    }
+    throw new Error('TBA API rate limited. Please wait a moment.');
+  }
+
   // Check cache first (unless force refresh)
   if (cacheTTL && !forceRefresh) {
     const cached = getFromCache(endpoint, cacheTTL);
@@ -96,36 +115,85 @@ async function tbaFetch(endpoint, cacheTTL = null, forceRefresh = false) {
     headers['If-Modified-Since'] = lastMod;
   }
 
-  const response = await fetch(`${API_URLS.TBA}${endpoint}`, { headers });
+  let lastError = null;
 
-  // 304 Not Modified - return cached data
-  if (response.status === 304) {
-    const cached = cache.get(endpoint);
-    if (cached) {
-      // Refresh cache timestamp
-      cached.timestamp = Date.now();
-      return cached.data;
+  for (let attempt = 1; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
+    try {
+      // SCALING FIX: Add timeout to prevent hanging requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+
+      const response = await fetch(`${API_URLS.TBA}${endpoint}`, {
+        headers,
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      // 304 Not Modified - return cached data
+      if (response.status === 304) {
+        const cached = cache.get(endpoint);
+        if (cached) {
+          // Refresh cache timestamp
+          cached.timestamp = Date.now();
+          return cached.data;
+        }
+      }
+
+      // SCALING FIX: Handle rate limiting (429)
+      if (response.status === 429) {
+        const retryAfter = parseInt(response.headers.get('Retry-After') || '60', 10);
+        rateLimitedUntil = Date.now() + (retryAfter * 1000);
+
+        // Return cached data if available
+        const cached = cache.get(endpoint);
+        if (cached) {
+          return cached.data;
+        }
+        throw new Error('TBA API rate limited. Please wait a moment.');
+      }
+
+      if (!response.ok) {
+        throw new Error(`TBA API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Store Last-Modified header for future requests
+      const modHeader = response.headers.get('Last-Modified');
+      if (modHeader) {
+        lastModified.set(endpoint, modHeader);
+      }
+
+      // Cache the response
+      if (cacheTTL) {
+        setCache(endpoint, data);
+      }
+
+      return data;
+    } catch (error) {
+      lastError = error;
+
+      // Don't retry abort errors or rate limits
+      if (error.name === 'AbortError') {
+        throw new Error('Request timed out. Please try again.');
+      }
+      if (error.message?.includes('rate limited')) {
+        throw error;
+      }
+
+      // Wait before retrying (exponential backoff)
+      if (attempt < RETRY_CONFIG.maxRetries) {
+        const delay = Math.min(
+          RETRY_CONFIG.initialDelayMs * Math.pow(2, attempt - 1),
+          RETRY_CONFIG.maxDelayMs
+        );
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
   }
 
-  if (!response.ok) {
-    throw new Error(`TBA API error: ${response.status}`);
-  }
-
-  const data = await response.json();
-
-  // Store Last-Modified header for future requests
-  const modHeader = response.headers.get('Last-Modified');
-  if (modHeader) {
-    lastModified.set(endpoint, modHeader);
-  }
-
-  // Cache the response
-  if (cacheTTL) {
-    setCache(endpoint, data);
-  }
-
-  return data;
+  throw lastError || new Error('Failed to fetch data from TBA');
 }
 
 /**

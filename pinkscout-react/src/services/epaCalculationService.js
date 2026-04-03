@@ -588,10 +588,14 @@ export async function getAdjustedEPA(teamNumber, eventKey) {
  */
 export async function getEventAdjustedEPAs(eventKey) {
   try {
+    // SCALING FIX: Limit rows per event (max ~100 teams at an event)
+    const MAX_TEAMS_PER_EVENT = 200;
+
     const { data, error } = await supabase
       .from(ADJUSTED_EPA_COLLECTION)
       .select('*')
-      .eq('event_key', eventKey);
+      .eq('event_key', eventKey)
+      .limit(MAX_TEAMS_PER_EVENT);
 
     if (error) throw error;
 

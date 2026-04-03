@@ -181,67 +181,89 @@ async function validateScoutingData(data) {
  * @throws {Error} - If validation fails or save fails
  */
 export async function saveScoutingData(scoutingData) {
-  try {
-    // Check if offline - queue for later sync
-    if (!isOnline()) {
-      const queued = addToOfflineQueue('scouting', scoutingData);
-      if (queued) {
-        return 'offline-queued';
-      } else {
-        throw new Error('Failed to save offline. Please try again.');
-      }
+  // SCALING FIX: Retry configuration for transient failures
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY_MS = 1000;
+
+  // Check if offline - queue for later sync
+  if (!isOnline()) {
+    const queued = addToOfflineQueue('scouting', scoutingData);
+    if (queued) {
+      return 'offline-queued';
+    } else {
+      throw new Error('Failed to save offline. Please try again.');
     }
-
-    // Validate and sanitize input data (async - checks profile existence)
-    const validatedData = await validateScoutingData(scoutingData);
-
-    // Convert camelCase to snake_case for Supabase
-    const snakeCaseData = convertToSnakeCase(validatedData);
-
-    const { data, error } = await supabase
-      .from(SCOUTING_COLLECTION)
-      .insert(snakeCaseData)
-      .select('id')
-      .single();
-
-    if (error) {
-      // Provide more specific error messages for common issues
-      if (error.code === '23503') {
-        // Foreign key violation
-        throw new Error('Validation failed: User profile not found. Please refresh the page or re-login.');
-      }
-      if (error.code === '42501') {
-        // RLS policy violation
-        throw new Error('Permission denied. Please ensure you are logged in.');
-      }
-      throw error;
-    }
-
-    // Only log in development mode
-    if (import.meta.env.DEV) {
-      console.log('✅ Scouting data saved with ID:', data.id);
-    }
-
-    // Trigger EPA recalculation asynchronously (don't block the save)
-    // This runs in the background and doesn't affect the save operation
-    triggerEPARecalculation(validatedData.teamNumber, validatedData.eventKey);
-
-    return data.id;
-  } catch (error) {
-    // Log error in development, but don't expose details in production
-    if (import.meta.env.DEV) {
-      console.error('❌ Error saving scouting data:', error);
-    }
-
-    // Throw a user-friendly error message
-    if (error.message?.startsWith('Validation failed')) {
-      throw error; // Keep validation errors as-is
-    }
-    if (error.message?.startsWith('Permission denied')) {
-      throw error; // Keep permission errors as-is
-    }
-    throw new Error('Failed to save scouting data. Please try again.');
   }
+
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      // Validate and sanitize input data (async - checks profile existence)
+      const validatedData = await validateScoutingData(scoutingData);
+
+      // Convert camelCase to snake_case for Supabase
+      const snakeCaseData = convertToSnakeCase(validatedData);
+
+      const { data, error } = await supabase
+        .from(SCOUTING_COLLECTION)
+        .insert(snakeCaseData)
+        .select('id')
+        .single();
+
+      if (error) {
+        // Don't retry permission or validation errors
+        if (error.code === '23503') {
+          throw new Error('Validation failed: User profile not found. Please refresh the page or re-login.');
+        }
+        if (error.code === '42501') {
+          throw new Error('Permission denied. Please ensure you are logged in.');
+        }
+        // Don't retry duplicate key errors
+        if (error.code === '23505') {
+          throw new Error('This entry already exists. Please refresh the page.');
+        }
+        throw error;
+      }
+
+      // Only log in development mode
+      if (import.meta.env.DEV) {
+        console.log('✅ Scouting data saved with ID:', data.id);
+      }
+
+      // Trigger EPA recalculation asynchronously (don't block the save)
+      // This runs in the background and doesn't affect the save operation
+      triggerEPARecalculation(validatedData.teamNumber, validatedData.eventKey);
+
+      return data.id;
+    } catch (error) {
+      lastError = error;
+
+      // Don't retry non-transient errors
+      if (error.message?.startsWith('Validation failed') ||
+          error.message?.startsWith('Permission denied') ||
+          error.message?.includes('already exists')) {
+        throw error;
+      }
+
+      // Log retry attempt in development
+      if (import.meta.env.DEV && attempt < MAX_RETRIES) {
+        console.warn(`⚠️ Save attempt ${attempt} failed, retrying...`, error);
+      }
+
+      // Wait before retrying (exponential backoff)
+      if (attempt < MAX_RETRIES) {
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * attempt));
+      }
+    }
+  }
+
+  // All retries failed
+  if (import.meta.env.DEV) {
+    console.error('❌ Error saving scouting data after retries:', lastError);
+  }
+
+  throw new Error('Failed to save scouting data. Please check your connection and try again.');
 }
 
 /**
@@ -320,10 +342,15 @@ export async function getAllScoutingData(roleContext = null, options = {}) {
   const { useAllEventData = false } = options;
 
   try {
+    // SCALING FIX: Add limit to prevent fetching unlimited rows
+    // For large teams, fetching all data at once can cause memory issues
+    const MAX_ROWS = 2000;
+
     let query = supabase
       .from(SCOUTING_COLLECTION)
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(MAX_ROWS);
 
     // Apply role-based filtering
     if (roleContext?.isMasterAdmin) {
@@ -381,11 +408,15 @@ export async function getTeamScoutingData(teamNumber, options = {}) {
     const teamNum = parseInt(teamNumber);
     const { year, eventKey, roleContext, useAllEventData = false, applySmartAgg = true } = options;
 
+    // SCALING FIX: Add limit to prevent fetching unlimited rows per team
+    const MAX_ROWS_PER_TEAM = 500;
+
     let query = supabase
       .from(SCOUTING_COLLECTION)
       .select('*')
       .eq('team_number', teamNum)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(MAX_ROWS_PER_TEAM);
 
     // Apply role-based filtering
     if (roleContext?.isMasterAdmin) {
@@ -465,11 +496,16 @@ export async function getEventScoutingData(eventKey, roleContext = null, options
   const { useAllEventData = false, applySmartAgg = true } = options;
 
   try {
+    // SCALING FIX: Add limit to prevent fetching unlimited rows per event
+    // A typical event has ~100 matches * 6 teams * 2 alliances = ~1200 max entries
+    const MAX_ROWS_PER_EVENT = 3000;
+
     let query = supabase
       .from(SCOUTING_COLLECTION)
       .select('*')
       .eq('event_key', eventKey)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(MAX_ROWS_PER_EVENT);
 
     // Apply role-based filtering
     if (roleContext?.isMasterAdmin) {
@@ -882,12 +918,20 @@ export async function getCrossEventScoutingData(teamNumbers, roleContext = null,
   }
 
   try {
+    // SCALING FIX: Limit team numbers to prevent massive queries
+    const MAX_TEAMS_PER_QUERY = 100;
+    const limitedTeamNumbers = teamNumbers.slice(0, MAX_TEAMS_PER_QUERY);
+
+    // SCALING FIX: Add limit to prevent fetching unlimited rows
+    const MAX_ROWS_CROSS_EVENT = 5000;
+
     // Build query for all specified teams
     let query = supabase
       .from(SCOUTING_COLLECTION)
       .select('*')
-      .in('team_number', teamNumbers)
-      .order('created_at', { ascending: false });
+      .in('team_number', limitedTeamNumbers)
+      .order('created_at', { ascending: false })
+      .limit(MAX_ROWS_CROSS_EVENT);
 
     // Apply role-based filtering
     if (roleContext?.isMasterAdmin) {

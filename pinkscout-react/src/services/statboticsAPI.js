@@ -61,6 +61,91 @@ export function clearCache(key = null) {
 }
 
 // =============================================================================
+// SCALING FIX: Retry configuration and rate limiting
+// =============================================================================
+
+const RETRY_CONFIG = {
+  maxRetries: 3,
+  initialDelayMs: 500,
+  maxDelayMs: 5000,
+  timeoutMs: 15000
+};
+
+let rateLimitedUntil = 0;
+
+/**
+ * Make a fetch request with retry logic and timeout
+ */
+async function fetchWithRetry(url, cacheKey, cacheTTL) {
+  // Check if we're rate limited
+  if (Date.now() < rateLimitedUntil) {
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return cached.data;
+    }
+    return null;
+  }
+
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
+    try {
+      // Add timeout to prevent hanging requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), RETRY_CONFIG.timeoutMs);
+
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      // Handle rate limiting
+      if (response.status === 429) {
+        const retryAfter = parseInt(response.headers.get('Retry-After') || '60', 10);
+        rateLimitedUntil = Date.now() + (retryAfter * 1000);
+        const cached = cache.get(cacheKey);
+        return cached ? cached.data : null;
+      }
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          return null;
+        }
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (cacheTTL) {
+        setCache(cacheKey, data);
+      }
+      return data;
+    } catch (error) {
+      lastError = error;
+
+      // Don't retry abort errors
+      if (error.name === 'AbortError') {
+        if (import.meta.env.DEV) {
+          console.warn('Statbotics request timed out');
+        }
+        return null;
+      }
+
+      // Wait before retrying (exponential backoff)
+      if (attempt < RETRY_CONFIG.maxRetries) {
+        const delay = Math.min(
+          RETRY_CONFIG.initialDelayMs * Math.pow(2, attempt - 1),
+          RETRY_CONFIG.maxDelayMs
+        );
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  if (import.meta.env.DEV) {
+    console.error('Statbotics API error after retries:', lastError);
+  }
+  return null;
+}
+
+// =============================================================================
 // GET TEAM DATA
 // =============================================================================
 
@@ -75,28 +160,11 @@ export async function getStatboticsTeam(teamNumber) {
   const cached = getFromCache(cacheKey, CACHE_TTL.team);
   if (cached !== null) return cached;
 
-  try {
-    const response = await fetch(`${API_URLS.STATBOTICS}/team/${teamNumber}`);
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        if (import.meta.env.DEV) {
-          console.log(`Team ${teamNumber} not found in Statbotics`);
-        }
-        return null;
-      }
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const data = await response.json();
-    setCache(cacheKey, data);
-    return data;
-  } catch (error) {
-    if (import.meta.env.DEV) {
-      console.error('Statbotics API error:', error);
-    }
-    return null;
-  }
+  return fetchWithRetry(
+    `${API_URLS.STATBOTICS}/team/${teamNumber}`,
+    cacheKey,
+    CACHE_TTL.team
+  );
 }
 
 // =============================================================================
@@ -115,25 +183,11 @@ export async function getTeamEventStats(teamNumber, eventKey) {
   const cached = getFromCache(cacheKey, CACHE_TTL.teamEvent);
   if (cached !== null) return cached;
 
-  try {
-    const response = await fetch(
-      `${API_URLS.STATBOTICS}/team_event/${teamNumber}/${eventKey}`
-    );
-
-    if (!response.ok) {
-      if (response.status === 404) return null;
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const data = await response.json();
-    setCache(cacheKey, data);
-    return data;
-  } catch (error) {
-    if (import.meta.env.DEV) {
-      console.error('Statbotics team event error:', error);
-    }
-    return null;
-  }
+  return fetchWithRetry(
+    `${API_URLS.STATBOTICS}/team_event/${teamNumber}/${eventKey}`,
+    cacheKey,
+    CACHE_TTL.teamEvent
+  );
 }
 
 // =============================================================================
@@ -152,40 +206,34 @@ export async function getEventTeamStats(eventKey) {
   const cached = getFromCache(cacheKey, CACHE_TTL.eventStats);
   if (cached !== null) return cached;
 
-  try {
-    const response = await fetch(
-      `${API_URLS.STATBOTICS}/team_events?event=${eventKey}`
-    );
+  // Use fetchWithRetry but handle the transformation separately
+  const data = await fetchWithRetry(
+    `${API_URLS.STATBOTICS}/team_events?event=${eventKey}`,
+    null, // Don't cache raw data
+    null
+  );
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    // Transform data to match expected format
-    const result = data.map(teamEvent => ({
-      team_number: teamEvent.team,
-      nickname: teamEvent.team_name || `Team ${teamEvent.team}`,
-      epa_raw: teamEvent.epa?.total_points?.mean || 0,
-      epa_total: teamEvent.epa?.breakdown?.total_points || 0,
-      epa_teleop: teamEvent.epa?.breakdown?.teleop_points || 0,
-      epa_auto: teamEvent.epa?.breakdown?.auto_points || 0,
-      epa_endgame: teamEvent.epa?.breakdown?.endgame_points || 0,
-      epa_percentile: (teamEvent.epa?.unitless || 0) * 100,
-      wins: teamEvent.record?.wins || 0,
-      losses: teamEvent.record?.losses || 0,
-      rank: teamEvent.rank || null
-    }));
-
-    setCache(cacheKey, result);
-    return result;
-  } catch (error) {
-    if (import.meta.env.DEV) {
-      console.error('Statbotics event stats error:', error);
-    }
+  if (!data || !Array.isArray(data)) {
     return [];
   }
+
+  // Transform data to match expected format
+  const result = data.map(teamEvent => ({
+    team_number: teamEvent.team,
+    nickname: teamEvent.team_name || `Team ${teamEvent.team}`,
+    epa_raw: teamEvent.epa?.total_points?.mean || 0,
+    epa_total: teamEvent.epa?.breakdown?.total_points || 0,
+    epa_teleop: teamEvent.epa?.breakdown?.teleop_points || 0,
+    epa_auto: teamEvent.epa?.breakdown?.auto_points || 0,
+    epa_endgame: teamEvent.epa?.breakdown?.endgame_points || 0,
+    epa_percentile: (teamEvent.epa?.unitless || 0) * 100,
+    wins: teamEvent.record?.wins || 0,
+    losses: teamEvent.record?.losses || 0,
+    rank: teamEvent.rank || null
+  }));
+
+  setCache(cacheKey, result);
+  return result;
 }
 
 // =============================================================================
@@ -204,25 +252,11 @@ export async function getTeamYearStats(teamNumber, year) {
   const cached = getFromCache(cacheKey, CACHE_TTL.teamYear);
   if (cached !== null) return cached;
 
-  try {
-    const response = await fetch(
-      `${API_URLS.STATBOTICS}/team_year/${teamNumber}/${year}`
-    );
-
-    if (!response.ok) {
-      if (response.status === 404) return null;
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const data = await response.json();
-    setCache(cacheKey, data);
-    return data;
-  } catch (error) {
-    if (import.meta.env.DEV) {
-      console.error('Statbotics team year error:', error);
-    }
-    return null;
-  }
+  return fetchWithRetry(
+    `${API_URLS.STATBOTICS}/team_year/${teamNumber}/${year}`,
+    cacheKey,
+    CACHE_TTL.teamYear
+  );
 }
 
 // =============================================================================
@@ -237,27 +271,18 @@ export async function getTeamYearStats(teamNumber, year) {
  * @returns {Array} - Array of top teams sorted by EPA
  */
 export async function getTopTeams(year, limit = 20) {
-  const cacheKey = `top_teams/${year}/${limit}`;
+  // SCALING FIX: Cap limit to prevent excessive data fetching
+  const cappedLimit = Math.min(limit, 100);
+  const cacheKey = `top_teams/${year}/${cappedLimit}`;
   const cached = getFromCache(cacheKey, CACHE_TTL.topTeams);
   if (cached !== null) return cached;
 
-  try {
-    const response = await fetch(
-      `${API_URLS.STATBOTICS}/team_years?year=${year}&limit=${limit}&metric=epa_end&ascending=false`
-    );
+  const data = await fetchWithRetry(
+    `${API_URLS.STATBOTICS}/team_years?year=${year}&limit=${cappedLimit}&metric=epa_end&ascending=false`,
+    cacheKey,
+    CACHE_TTL.topTeams
+  );
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const data = await response.json();
-    setCache(cacheKey, data);
-    return data;
-  } catch (error) {
-    if (import.meta.env.DEV) {
-      console.error('Statbotics top teams error:', error);
-    }
-    return [];
-  }
+  return data || [];
 }
 

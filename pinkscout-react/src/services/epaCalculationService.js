@@ -28,9 +28,9 @@
 import { supabase } from './supabase';
 import { getTeamYearStats, getTeamEventStats } from './statboticsAPI';
 
-// Collection names
-const EPA_BASELINE_COLLECTION = 'epaBaseline';
-const ADJUSTED_EPA_COLLECTION = 'adjustedEPA';
+// Collection names - use snake_case for Supabase tables
+const EPA_BASELINE_COLLECTION = 'epa_baseline';
+const ADJUSTED_EPA_COLLECTION = 'adjusted_epa';
 
 // =============================================================================
 // WEIGHTING CONFIGURATION
@@ -127,16 +127,27 @@ export async function importEPABaseline(teamNumber, year, forceRefresh = false) 
       losses: statboticsData.record?.losses || 0,
       // Metadata
       source: 'statbotics',
-      raw_data: statboticsData // Preserve full raw data
+      imported_at: new Date().toISOString()
     };
 
     // Store in Supabase (upsert to handle updates)
-    const { error: upsertError } = await supabase
-      .from(EPA_BASELINE_COLLECTION)
-      .upsert(epaBaseline, { onConflict: 'id' });
+    // Wrap in try-catch to prevent errors from breaking the flow
+    try {
+      const { error: upsertError } = await supabase
+        .from(EPA_BASELINE_COLLECTION)
+        .upsert(epaBaseline, { onConflict: 'id' });
 
-    if (upsertError) {
-      console.error('Error storing EPA baseline:', upsertError);
+      if (upsertError) {
+        // Log but don't throw - EPA storage failure shouldn't break functionality
+        if (import.meta.env.DEV) {
+          console.error('Error storing EPA baseline:', upsertError);
+        }
+      }
+    } catch (err) {
+      // Silently catch storage errors - EPA caching is non-critical
+      if (import.meta.env.DEV) {
+        console.error('EPA baseline storage failed:', err);
+      }
     }
 
     if (import.meta.env.DEV) {
@@ -485,16 +496,28 @@ export async function calculateAdjustedEPA(teamNumber, eventKey, scoutingEntries
       } : null,
 
       // Metadata
-      scouting_entries_count: scoutingEntries?.length || 0
+      scouting_entries_count: scoutingEntries?.length || 0,
+      updated_at: new Date().toISOString()
     };
 
     // Store in Supabase (upsert to handle updates)
-    const { error: upsertError } = await supabase
-      .from(ADJUSTED_EPA_COLLECTION)
-      .upsert(adjustedEPADoc, { onConflict: 'id' });
+    // Wrap in try-catch to prevent errors from breaking the flow
+    try {
+      const { error: upsertError } = await supabase
+        .from(ADJUSTED_EPA_COLLECTION)
+        .upsert(adjustedEPADoc, { onConflict: 'id' });
 
-    if (upsertError) {
-      console.error('Error storing adjusted EPA:', upsertError);
+      if (upsertError) {
+        // Log but don't throw - EPA storage failure shouldn't break scouting
+        if (import.meta.env.DEV) {
+          console.error('Error storing adjusted EPA:', upsertError);
+        }
+      }
+    } catch (err) {
+      // Silently catch storage errors - EPA is non-critical
+      if (import.meta.env.DEV) {
+        console.error('EPA storage failed:', err);
+      }
     }
 
     if (import.meta.env.DEV) {

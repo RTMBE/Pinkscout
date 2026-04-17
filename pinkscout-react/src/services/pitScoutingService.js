@@ -24,11 +24,15 @@ import { compressImage } from '../utils/imageCompression';
  * @returns {Promise<Array>} Array of pit scouting entries
  */
 export async function getPitScoutingByEvent(eventKey, roleContext) {
+  // SCALING FIX: Limit pit scouting entries (max ~100 teams at an event)
+  const MAX_PIT_ENTRIES = 200;
+
   let query = supabase
     .from('pit_scouting')
     .select('*')
     .eq('event_key', eventKey)
-    .order('team_number', { ascending: true });
+    .order('team_number', { ascending: true })
+    .limit(MAX_PIT_ENTRIES);
 
   // Apply team isolation if user has a team lead
   if (roleContext?.teamLeadUid) {
@@ -38,7 +42,9 @@ export async function getPitScoutingByEvent(eventKey, roleContext) {
   const { data, error } = await query;
 
   if (error) {
-    console.error('Error fetching pit scouting data:', error);
+    if (import.meta.env.DEV) {
+      console.error('Error fetching pit scouting data:', error);
+    }
     throw error;
   }
 
@@ -84,6 +90,10 @@ export async function getPitScoutingForTeam(teamNumber, eventKey, roleContext) {
  * @returns {Promise<Object>} Saved pit scouting entry
  */
 export async function savePitScoutingData(pitData) {
+  // SCALING FIX: Retry configuration
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY_MS = 1000;
+
   // Check if offline - queue for later sync
   if (!isOnline()) {
     const queued = addToOfflineQueue('pit_scouting', pitData);
@@ -122,22 +132,43 @@ export async function savePitScoutingData(pitData) {
     notes: pitData.notes || null
   };
 
-  // Use upsert to handle both insert and update
-  const { data, error } = await supabase
-    .from('pit_scouting')
-    .upsert(dbData, {
-      onConflict: 'team_number,event_key,team_lead_uid',
-      ignoreDuplicates: false
-    })
-    .select()
-    .single();
+  let lastError = null;
 
-  if (error) {
-    console.error('Error saving pit scouting data:', error);
-    throw error;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      // Use upsert to handle both insert and update
+      const { data, error } = await supabase
+        .from('pit_scouting')
+        .upsert(dbData, {
+          onConflict: 'team_number,event_key,team_lead_uid',
+          ignoreDuplicates: false
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      lastError = error;
+
+      if (import.meta.env.DEV && attempt < MAX_RETRIES) {
+        console.warn(`⚠️ Pit scouting save attempt ${attempt} failed, retrying...`, error);
+      }
+
+      // Wait before retrying (exponential backoff)
+      if (attempt < MAX_RETRIES) {
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * attempt));
+      }
+    }
   }
 
-  return data;
+  if (import.meta.env.DEV) {
+    console.error('Error saving pit scouting data after retries:', lastError);
+  }
+  throw new Error('Failed to save pit scouting data. Please try again.');
 }
 
 // =============================================================================

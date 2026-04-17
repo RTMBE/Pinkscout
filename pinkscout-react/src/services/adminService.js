@@ -136,9 +136,13 @@ export async function deleteQuestion(docId) {
  */
 export async function getAdminList() {
   try {
+    // SCALING FIX: Limit admin list (should never have many admins)
+    const MAX_ADMINS = 50;
+
     const { data, error } = await supabase
       .from('admins')
-      .select('email');
+      .select('email')
+      .limit(MAX_ADMINS);
 
     if (error) throw error;
 

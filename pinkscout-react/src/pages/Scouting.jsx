@@ -107,8 +107,8 @@ export default function Scouting() {
 
   // useAuth() is our custom hook that provides:
   // - user: The logged-in user's authentication info (id, email, etc.)
-  // - userProfile: The user's profile data from our database (teamNumber, role, etc.)
-  // - roleContext: Permission info (scoutingId, teamLeadUid) for data isolation
+  // - userProfile: The user's display profile data (not authorization)
+  // - roleContext: Active membership context for team-scoped data isolation
   const { user, userProfile, roleContext } = useAuth();
 
   // ===========================================================================
@@ -246,10 +246,10 @@ export default function Scouting() {
       // If no event is saved AND user has a team number, try to auto-select
       // their team's current or upcoming event for convenience
       const savedEvent = localStorage.getItem(STORAGE_KEY_EVENT);
-      if (!savedEvent && userProfile?.teamNumber && eventList.length > 0) {
+      if (!savedEvent && roleContext?.teamNumber && eventList.length > 0) {
         try {
           // Get all events that the user's team is registered for
-          const teamEvents = await getTeamEvents(userProfile.teamNumber, selectedYear);
+          const teamEvents = await getTeamEvents(roleContext.teamNumber, selectedYear);
 
           if (teamEvents.length > 0) {
             const now = new Date();
@@ -525,10 +525,10 @@ export default function Scouting() {
         throw new Error('Please select an event');
       }
 
-      // Check that user has permission to submit scouting data
-      // They need either scoutingId (old system) or teamLeadUid (new team system)
-      if (!roleContext?.scoutingId && !roleContext?.teamLeadUid) {
-        throw new Error('Your account is not linked to a team. Please update your profile or join a team.');
+      // A membership-backed team context is required. The database stamps the
+      // final team/author values and rejects caller-selected ownership fields.
+      if (!roleContext?.activeTeamId) {
+        throw new Error('Join or create a team before submitting scouting data.');
       }
 
       // --- Build the data object to save ---
@@ -539,19 +539,10 @@ export default function Scouting() {
         matchNumber: parseInt(formData.matchNumber) || 0,                 // Default to 0 if empty
         eventKey: selectedEvent,                                          // Which event
         eventYear: selectedYear,                                          // Which year
-        scouterName: userProfile?.displayName || user?.displayName || user?.email,  // Who scouted
-        scouterUid: user?.id                                              // Scouter's user ID (Supabase uses user.id)
+        scouterName: userProfile?.displayName || user?.displayName || user?.email,
+        scouterUid: user?.id,
+        teamId: roleContext.activeTeamId
       };
-
-      // Include scoutingId if available (legacy system for data isolation)
-      if (roleContext.scoutingId) {
-        dataToSave.scoutingId = roleContext.scoutingId;
-      }
-
-      // Include teamLeadUid if available (new team system for data isolation)
-      if (roleContext.teamLeadUid) {
-        dataToSave.teamLeadUid = roleContext.teamLeadUid;
-      }
 
       // --- Save to database ---
       // This calls our scoutingService which inserts into Supabase
@@ -1314,4 +1305,3 @@ export default function Scouting() {
 // =============================================================================
 // END OF FILE
 // =============================================================================
-

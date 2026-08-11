@@ -13,6 +13,29 @@ import { supabase } from './supabase';
 import { isOnline, addToOfflineQueue } from './offlineSyncService';
 import { compressImage } from '../utils/imageCompression';
 
+const PRIVATE_IMAGE_BUCKET = 'team-robot-images';
+const TEAM_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function addSignedImageUrls(entries) {
+  const paths = [...new Set(entries.map((entry) => entry.robot_image_path).filter(Boolean))];
+  if (!paths.length) return entries;
+
+  const { data, error } = await supabase.storage
+    .from(PRIVATE_IMAGE_BUCKET)
+    // Signed URLs are bearer URLs. Keep the post-revocation window short; a
+    // fresh team-scoped data read signs a new URL when the view is reopened.
+    .createSignedUrls(paths, 60);
+  if (error) {
+    if (import.meta.env.DEV) console.error('Unable to sign robot image URLs:', error);
+    return entries.map((entry) => ({ ...entry, robot_image_url: null }));
+  }
+  const urls = new Map((data || []).map((item) => [item.path, item.signedUrl]));
+  return entries.map((entry) => ({
+    ...entry,
+    robot_image_url: entry.robot_image_path ? (urls.get(entry.robot_image_path) || null) : null
+  }));
+}
+
 // =============================================================================
 // GET PIT SCOUTING DATA
 // =============================================================================
@@ -34,10 +57,8 @@ export async function getPitScoutingByEvent(eventKey, roleContext) {
     .order('team_number', { ascending: true })
     .limit(MAX_PIT_ENTRIES);
 
-  // Apply team isolation if user has a team lead
-  if (roleContext?.teamLeadUid) {
-    query = query.eq('team_lead_uid', roleContext.teamLeadUid);
-  }
+  if (!roleContext?.activeTeamId) return [];
+  query = query.eq('team_id', roleContext.activeTeamId);
 
   const { data, error } = await query;
 
@@ -48,7 +69,7 @@ export async function getPitScoutingByEvent(eventKey, roleContext) {
     throw error;
   }
 
-  return data || [];
+  return addSignedImageUrls(data || []);
 }
 
 /**
@@ -65,10 +86,8 @@ export async function getPitScoutingForTeam(teamNumber, eventKey, roleContext) {
     .eq('team_number', teamNumber)
     .eq('event_key', eventKey);
 
-  // Apply team isolation
-  if (roleContext?.teamLeadUid) {
-    query = query.eq('team_lead_uid', roleContext.teamLeadUid);
-  }
+  if (!roleContext?.activeTeamId) return null;
+  query = query.eq('team_id', roleContext.activeTeamId);
 
   const { data, error } = await query.maybeSingle();
 
@@ -77,7 +96,8 @@ export async function getPitScoutingForTeam(teamNumber, eventKey, roleContext) {
     throw error;
   }
 
-  return data;
+  const [entry] = await addSignedImageUrls(data ? [data] : []);
+  return entry || null;
 }
 
 // =============================================================================
@@ -96,7 +116,10 @@ export async function savePitScoutingData(pitData) {
 
   // Check if offline - queue for later sync
   if (!isOnline()) {
-    const queued = addToOfflineQueue('pit_scouting', pitData);
+    const queued = await addToOfflineQueue('pit_scouting', pitData, {
+      userId: pitData.scouterUid,
+      teamId: pitData.teamId
+    });
     if (queued) {
       return { id: 'offline-queued', offline: true };
     } else {
@@ -111,8 +134,13 @@ export async function savePitScoutingData(pitData) {
   if (!pitData.eventKey) {
     throw new Error('Event key is required');
   }
-  if (!pitData.scouterUid) {
-    throw new Error('Scouter UID is required');
+  if (!pitData.teamId || !TEAM_ID_PATTERN.test(pitData.teamId)) {
+    throw new Error('An active team membership is required');
+  }
+
+  const { data: authData } = await supabase.auth.getUser();
+  if (!authData?.user) {
+    throw new Error('Please sign in before saving pit scouting data.');
   }
 
   // Format data for database (snake_case)
@@ -124,13 +152,17 @@ export async function savePitScoutingData(pitData) {
     shooter_type: pitData.shooterType || null,
     intake_type: pitData.intakeType || null,
     preferred_strategy: pitData.preferredStrategy || null,
-    robot_image_url: pitData.robotImageUrl || null,
-    scouter_uid: pitData.scouterUid,
+    robot_image_path: pitData.robotImagePath || null,
+    // The database trigger stamps team and author from the session. `teamId`
+    // is used only for the local membership precheck above; it is never sent
+    // as a client-owned identity field.
     scouter_name: pitData.scouterName || null,
-    team_lead_uid: pitData.teamLeadUid || null,
-    scouting_id: pitData.scoutingId || null,
     notes: pitData.notes || null
   };
+
+  if (typeof pitData.idempotencyKey === 'string' && pitData.idempotencyKey.length >= 16) {
+    dbData.idempotency_key = pitData.idempotencyKey;
+  }
 
   let lastError = null;
 
@@ -140,7 +172,7 @@ export async function savePitScoutingData(pitData) {
       const { data, error } = await supabase
         .from('pit_scouting')
         .upsert(dbData, {
-          onConflict: 'team_number,event_key,team_lead_uid',
+          onConflict: 'team_id,team_number,event_key',
           ignoreDuplicates: false
         })
         .select()
@@ -199,14 +231,18 @@ export async function deletePitScoutingEntry(id) {
 /**
  * Upload robot image to Supabase Storage
  * @param {File} file - The image file to upload
+ * @param {string} teamId - Active team UUID for private object path
  * @param {number} teamNumber - Team number for file naming
  * @param {string} eventKey - Event key for file naming
- * @returns {Promise<string>} Public URL of the uploaded image
+ * @returns {Promise<string>} Private storage path, not a public URL
  */
-export async function uploadRobotImage(file, teamNumber, eventKey) {
+export async function uploadRobotImage(file, teamId, teamNumber, eventKey) {
   // Validate file
   if (!file) {
     throw new Error('No file provided');
+  }
+  if (!TEAM_ID_PATTERN.test(teamId || '')) {
+    throw new Error('An active team membership is required to upload an image');
   }
 
   // Check file size (max 5MB before compression)
@@ -240,16 +276,21 @@ export async function uploadRobotImage(file, teamNumber, eventKey) {
     uploadFile = file;
   }
 
-  // Generate unique filename (always .jpg after compression)
-  const filename = `robot_${teamNumber}_${eventKey}_${Date.now()}.jpg`;
-  const path = `pit-scouting/${filename}`;
+  // Preserve the actual normalized MIME type (small images may not need canvas
+  // compression) so storage metadata and filename always agree.
+  const extensionByType = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+  const extension = extensionByType[uploadFile.type];
+  if (!extension) throw new Error('Image compression produced an unsupported format');
+  const filename = `robot_${teamNumber}_${eventKey}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}.${extension}`;
+  const path = `${teamId}/pit-scouting/${filename}`;
 
   // Upload to Supabase Storage
   const { data, error } = await supabase.storage
-    .from('robot-images')
+    .from(PRIVATE_IMAGE_BUCKET)
     .upload(path, uploadFile, {
       cacheControl: '3600',
-      upsert: true
+      upsert: false,
+      contentType: uploadFile.type
     });
 
   if (error) {
@@ -257,11 +298,5 @@ export async function uploadRobotImage(file, teamNumber, eventKey) {
     throw error;
   }
 
-  // Get public URL
-  const { data: urlData } = supabase.storage
-    .from('robot-images')
-    .getPublicUrl(path);
-
-  return urlData.publicUrl;
+  return data.path;
 }
-

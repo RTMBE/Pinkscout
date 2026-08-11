@@ -1,654 +1,378 @@
 /**
- * =============================================================================
- * AUTHCONTEXT.JSX - Supabase Authentication Context Provider
- * =============================================================================
+ * Authentication and membership context.
  *
- * WHAT IS THIS FILE?
- * Provides global authentication state throughout the React app using Context API.
- *
- * FEATURES:
- * - Tracks current user state
- * - Provides login, signup, logout functions
- * - Checks admin rights
- * - Stores user profile in Supabase on signup
- *
- * USAGE:
- * 1. Wrap your app with <AuthProvider>
- * 2. Use the useAuth() hook in any component to access auth state/functions
- *
- * EXAMPLE:
- *   const { user, login, logout, isAdmin } = useAuth();
- *   if (!user) return <Navigate to="/login" />;
- *
- * =============================================================================
+ * Authorization is loaded from the membership-backed `get_my_team` RPC; UI
+ * state is never trusted by the database. Browser sessions are ephemeral for
+ * shared scouting tablets and local private caches are cleared on sign-out.
  */
 
-import { createContext, useContext, useState, useEffect } from 'react';
-import { supabase, PRIMARY_ADMIN_EMAIL } from '../services/supabase';
-import { getRoleContext, ROLES, MASTER_ADMIN_EMAIL, isMasterAdmin } from '../services/roleService';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { supabase } from '../services/supabase';
+import { getRoleContext } from '../services/roleService';
 import {
-  validateTeamCode,
-  linkMemberToTeam,
-  generateTeamCode
+  createMyTeam,
+  isInviteToken,
+  redeemTeamInvite
 } from '../services/teamCodeService';
 import { getUserSettings, isMobileDevice } from '../services/userSettingsService';
+import { clearOfflineQueue, purgeLegacyPrivateCaches } from '../services/offlineSyncService';
 
-// =============================================================================
-// UTILITY: Convert snake_case to camelCase
-// =============================================================================
+const AuthContext = createContext(null);
+const PENDING_ENROLLMENT_KEY = 'pinkscout_pending_enrollment';
+
+const EMPTY_ROLE_CONTEXT = Object.freeze({
+  role: null,
+  membershipRole: null,
+  activeTeamId: null,
+  teamNumber: null,
+  teamVerified: false,
+  scoutingId: null,
+  userUid: null,
+  isMasterAdmin: false,
+  canViewAll: false,
+  isTeamLead: false,
+  teamLeadUid: null,
+  teamCode: null
+});
 
 function snakeToCamelCase(obj) {
   if (!obj || typeof obj !== 'object') return obj;
-  const result = {};
-  for (const [key, value] of Object.entries(obj)) {
-    const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-    result[camelKey] = value;
-  }
-  return result;
+  return Object.fromEntries(
+    Object.entries(obj).map(([key, value]) => [
+      key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase()),
+      value
+    ])
+  );
 }
 
-// =============================================================================
-// CREATE CONTEXT
-// =============================================================================
+function browserSessionStorage() {
+  try {
+    return globalThis.sessionStorage;
+  } catch {
+    return null;
+  }
+}
 
-const AuthContext = createContext(null);
+function savePendingEnrollment(enrollment) {
+  const storage = browserSessionStorage();
+  if (!storage) return;
+  storage.setItem(PENDING_ENROLLMENT_KEY, JSON.stringify(enrollment));
+}
 
-// =============================================================================
-// AUTH PROVIDER COMPONENT
-// =============================================================================
+function takePendingEnrollment(userId) {
+  const storage = browserSessionStorage();
+  if (!storage) return null;
+  try {
+    const parsed = JSON.parse(storage.getItem(PENDING_ENROLLMENT_KEY) || 'null');
+    if (!parsed || parsed.userId !== userId || Date.now() - parsed.createdAt > 60 * 60 * 1000) {
+      storage.removeItem(PENDING_ENROLLMENT_KEY);
+      return null;
+    }
+    storage.removeItem(PENDING_ENROLLMENT_KEY);
+    return parsed;
+  } catch {
+    storage.removeItem(PENDING_ENROLLMENT_KEY);
+    return null;
+  }
+}
+
+function applyUserSettings(settings) {
+  if (typeof document === 'undefined') return;
+  document.body.classList.toggle('large-button-mode', Boolean(settings?.largeButtonMode));
+  document.body.classList.remove('theme-frc-red', 'theme-frc-blue', 'theme-high-contrast');
+  if (settings?.theme && settings.theme !== 'default') {
+    document.body.classList.add(`theme-${settings.theme.replace('_', '-')}`);
+  }
+}
+
+function resetUserSettings() {
+  applyUserSettings({ largeButtonMode: false, theme: 'default' });
+}
 
 export function AuthProvider({ children }) {
-  // Current authenticated user (null if not logged in)
   const [user, setUser] = useState(null);
-
-  // Loading state while checking auth
   const [loading, setLoading] = useState(true);
-
-  // Is current user an admin?
   const [isAdmin, setIsAdmin] = useState(false);
-
-  // User profile from Supabase
   const [userProfile, setUserProfile] = useState(null);
+  const [roleContext, setRoleContext] = useState(EMPTY_ROLE_CONTEXT);
+  const authGeneration = useRef(0);
+  const mounted = useRef(true);
 
-  // Role context for RBAC (role-based access control)
-  const [roleContext, setRoleContext] = useState({
-    role: null,
-    scoutingId: null,
-    userUid: null,
-    isMasterAdmin: false,
-    canViewAll: false,
-    isTeamLead: false,
-    teamLeadUid: null,
-    teamCode: null
-  });
+  const isCurrent = (candidate, generation) => (
+    mounted.current
+    && authGeneration.current === generation
+    && candidate?.id
+    && candidate.id === userRef.current?.id
+  );
+  const userRef = useRef(null);
 
-  // =========================================================================
-  // AUTH STATE LISTENER
-  // =========================================================================
-  // Listens for Supabase auth state changes and updates context
+  const resetAuthState = () => {
+    userRef.current = null;
+    setUser(null);
+    setIsAdmin(false);
+    setUserProfile(null);
+    setRoleContext(EMPTY_ROLE_CONTEXT);
+    resetUserSettings();
+  };
+
+  const purgePrivateClientState = async () => {
+    await Promise.allSettled([clearOfflineQueue(), purgeLegacyPrivateCaches()]);
+  };
+
+  async function finishPendingEnrollment(currentUser, context) {
+    const pending = takePendingEnrollment(currentUser.id);
+    if (!pending || context?.activeTeamId) return { context, notice: null };
+
+    try {
+      if (pending.action === 'create') {
+        await createMyTeam(pending.teamNumber);
+        return {
+          context: await getRoleContext(currentUser),
+          notice: 'Your team was created. Set up MFA in your profile before creating an invite.'
+        };
+      }
+      if (pending.action === 'redeem' && isInviteToken(pending.token)) {
+        await redeemTeamInvite(pending.token);
+        return { context: await getRoleContext(currentUser), notice: 'You joined your team.' };
+      }
+    } catch (error) {
+      // Do not retry a stale/invalid invite forever or reveal why it failed.
+      if (import.meta.env.DEV) console.error('Pending enrollment could not finish:', error);
+    }
+    return { context, notice: null };
+  }
+
+  async function loadUserData(currentUser, generation) {
+    const [contextResult, profileResult, settingsResult] = await Promise.allSettled([
+      getRoleContext(currentUser),
+      supabase.from('profiles').select('*').eq('id', currentUser.id).maybeSingle(),
+      getUserSettings(currentUser.id)
+    ]);
+
+    if (!isCurrent(currentUser, generation)) return;
+
+    let context = contextResult.status === 'fulfilled'
+      ? contextResult.value
+      : { ...EMPTY_ROLE_CONTEXT, userUid: currentUser.id };
+    const enrollment = await finishPendingEnrollment(currentUser, context);
+    if (!isCurrent(currentUser, generation)) return;
+    context = enrollment.context;
+
+    setRoleContext(context);
+    setIsAdmin(Boolean(context?.isMasterAdmin));
+
+    if (profileResult.status === 'fulfilled' && profileResult.value?.data && !profileResult.value.error) {
+      setUserProfile(snakeToCamelCase(profileResult.value.data));
+    } else {
+      // The auth trigger may be processing; use a non-authoritative display
+      // fallback but never create/update a profile from the browser.
+      setUserProfile({
+        id: currentUser.id,
+        email: currentUser.email,
+        displayName: currentUser.user_metadata?.display_name || currentUser.email?.split('@')[0] || 'Scout',
+        teamNumber: context?.teamNumber || null
+      });
+    }
+
+    if (settingsResult.status === 'fulfilled') {
+      applyUserSettings(settingsResult.value);
+    } else {
+      applyUserSettings({ largeButtonMode: isMobileDevice(), theme: 'default' });
+    }
+  }
+
+  async function handleAuthChange(nextUser, generation) {
+    if (!mounted.current || generation !== authGeneration.current) return;
+    userRef.current = nextUser;
+    setUser(nextUser);
+    setLoading(false);
+
+    if (!nextUser) {
+      resetAuthState();
+      void purgePrivateClientState();
+      return;
+    }
+
+    // Load after the state is committed, guarded against account switches.
+    void loadUserData(nextUser, generation);
+  }
 
   useEffect(() => {
-    let isMounted = true;
+    mounted.current = true;
+    void purgeLegacyPrivateCaches();
 
-    // Get initial session first, then set up listener
-    const initializeAuth = async () => {
+    const initialize = async () => {
+      const generation = ++authGeneration.current;
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data, error } = await supabase.auth.getSession();
         if (error) throw error;
-
-        if (isMounted) {
-          const supabaseUser = session?.user || null;
-          await handleAuthChange(supabaseUser);
-        }
+        await handleAuthChange(data.session?.user || null, generation);
       } catch (error) {
-        if (import.meta.env.DEV) {
-          console.error('Error getting initial session:', error);
-        }
-        if (isMounted) {
-          setLoading(false);
-        }
+        if (import.meta.env.DEV) console.error('Error getting initial session:', error);
+        if (mounted.current) setLoading(false);
       }
     };
+    void initialize();
 
-    initializeAuth();
+    // Supabase recommends keeping this callback synchronous. Defer work so
+    // database calls cannot deadlock the auth state-change callback.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION') return;
+      const generation = ++authGeneration.current;
+      setTimeout(() => {
+        void handleAuthChange(session?.user || null, generation);
+      }, 0);
+    });
 
-    // Listen for subsequent auth changes (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        // Skip INITIAL_SESSION since we handle it above with getSession()
-        if (event === 'INITIAL_SESSION') return;
-
-        if (isMounted) {
-          const supabaseUser = session?.user || null;
-          await handleAuthChange(supabaseUser);
-        }
-      }
-    );
-
-    // Cleanup
     return () => {
-      isMounted = false;
+      mounted.current = false;
+      authGeneration.current += 1;
       subscription.unsubscribe();
     };
   }, []);
 
-  // Handle auth state changes
-  async function handleAuthChange(supabaseUser) {
-    // Set user and loading state IMMEDIATELY - don't wait for additional data
-    setUser(supabaseUser);
-    setLoading(false);
-
-    if (supabaseUser) {
-      // Load additional data in the background (non-blocking)
-      // These don't affect the loading state - UI can render while these load
-      loadUserData(supabaseUser);
-    } else {
-      setIsAdmin(false);
-      setUserProfile(null);
-      setRoleContext({
-        role: null,
-        scoutingId: null,
-        userUid: null,
-        isMasterAdmin: false,
-        canViewAll: false,
-        isTeamLead: false,
-        teamLeadUid: null,
-        teamCode: null
-      });
-    }
-  }
-
-  // Load additional user data in the background (non-blocking)
-  async function loadUserData(supabaseUser) {
-    // Check admin rights
-    try {
-      const adminStatus = await checkAdminRights(supabaseUser);
-      setIsAdmin(adminStatus);
-    } catch (error) {
-      if (import.meta.env.DEV) {
-        console.error('Error checking admin rights:', error);
-      }
-      setIsAdmin(false);
-    }
-
-    // Load role context for RBAC
-    try {
-      const context = await getRoleContext(supabaseUser);
-      setRoleContext(context);
-    } catch (error) {
-      if (import.meta.env.DEV) {
-        console.error('Error loading role context:', error);
-      }
-    }
-
-    // Load user profile from Supabase
-    try {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', supabaseUser.id)
-        .single();
-
-      if (profile && !error) {
-        // Convert snake_case keys to camelCase for consistent access
-        setUserProfile(snakeToCamelCase(profile));
-      } else if (error?.code === 'PGRST116') {
-        // Profile doesn't exist - create it automatically
-        // This can happen if profile creation failed during signup
-        if (import.meta.env.DEV) {
-          console.log('Creating missing profile for user:', supabaseUser.id);
-        }
-        const newProfile = {
-          id: supabaseUser.id,
-          email: supabaseUser.email,
-          display_name: supabaseUser.user_metadata?.display_name || supabaseUser.email?.split('@')[0] || '',
-          role: ROLES.SCOUT,
-          is_team_lead: false
-        };
-
-        const { data: createdProfile, error: createError } = await supabase
-          .from('profiles')
-          .insert(newProfile)
-          .select()
-          .single();
-
-        if (createdProfile && !createError) {
-          setUserProfile(snakeToCamelCase(createdProfile));
-          if (import.meta.env.DEV) {
-            console.log('✅ Auto-created profile for user:', supabaseUser.id);
-          }
-        } else if (import.meta.env.DEV) {
-          console.error('Error auto-creating profile:', createError);
-        }
-      }
-    } catch (error) {
-      if (import.meta.env.DEV) {
-        console.error('Error loading user profile:', error);
-      }
-    }
-
-    // Load and apply user settings (large button mode, theme)
-    try {
-      const settings = await getUserSettings(supabaseUser.id);
-      applyUserSettings(settings);
-    } catch (error) {
-      if (import.meta.env.DEV) {
-        console.error('Error loading user settings:', error);
-      }
-      // Apply defaults based on device
-      const defaultLargeButton = isMobileDevice();
-      applyUserSettings({ largeButtonMode: defaultLargeButton, theme: 'default' });
-    }
-  }
-
-  // Apply user settings to the document body
-  function applyUserSettings(settings) {
-    // Apply large button mode
-    if (settings.largeButtonMode) {
-      document.body.classList.add('large-button-mode');
-    } else {
-      document.body.classList.remove('large-button-mode');
-    }
-    // Apply theme
-    document.body.classList.remove('theme-frc-red', 'theme-frc-blue', 'theme-high-contrast');
-    if (settings.theme && settings.theme !== 'default') {
-      document.body.classList.add(`theme-${settings.theme.replace('_', '-')}`);
-    }
-  }
-
-  // =========================================================================
-  // CHECK ADMIN RIGHTS
-  // =========================================================================
-
-  async function checkAdminRights(user) {
-    if (!user) return false;
-
-    // Primary admin always has access
-    if (user.email?.toLowerCase() === PRIMARY_ADMIN_EMAIL?.toLowerCase()) return true;
-
-    // Check Supabase admin list
-    try {
-      const { data: admins, error } = await supabase
-        .from('admins')
-        .select('email');
-
-      if (!error && admins) {
-        const adminEmails = admins.map(a => a.email?.toLowerCase());
-        return adminEmails.includes(user.email?.toLowerCase());
-      }
-    } catch (error) {
-      console.error('Error checking admin rights:', error);
-    }
-
-    return false;
-  }
-
-  // =========================================================================
-  // LOGIN FUNCTION
-  // =========================================================================
-
   async function login(email, password) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
     return data;
   }
-
-  // =========================================================================
-  // GOOGLE OAUTH LOGIN
-  // =========================================================================
-  // Sign in with Google - no email limits, completely free!
 
   async function signInWithGoogle() {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/dashboard`,
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent'
-        }
-      }
+      options: { redirectTo: `${window.location.origin}/dashboard` }
     });
-
     if (error) throw error;
     return data;
   }
-
-  // =========================================================================
-  // DISCORD OAUTH LOGIN
-  // =========================================================================
-  // Sign in with Discord - no email limits, completely free!
 
   async function signInWithDiscord() {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'discord',
-      options: {
-        redirectTo: `${window.location.origin}/dashboard`
-      }
+      options: { redirectTo: `${window.location.origin}/dashboard` }
     });
-
     if (error) throw error;
     return data;
   }
 
-  // =========================================================================
-  // SIGNUP FUNCTION
-  // =========================================================================
-
   /**
-   * Sign up a new user as either a Team Lead or Member
-   *
-   * @param {string} email - User email
-   * @param {string} password - User password
-   * @param {string} username - Display name
-   * @param {string} signupCode - Team invite code (required for members)
-   * @param {number|string|null} teamNumber - FRC team number (optional)
-   * @param {boolean} isTeamLead - True if creating a Team Lead account
-   * @returns {Promise<Object>} - { user, teamCode? }
+   * Sign up without pre-validating a team invite. A raw invite is redeemed only
+   * after authentication, and validation failures reveal no team information.
    */
-  async function signup(email, password, username, signupCode, teamNumber = null, isTeamLead = false) {
-    let teamLeadUid = null;
-    let teamCode = null;
-
-    // If creating a Member account, validate the team code first
-    if (!isTeamLead) {
-      if (!signupCode || signupCode.trim().length === 0) {
-        throw new Error('Team code is required. Get it from your Team Lead.');
-      }
-
-      const teamInfo = await validateTeamCode(signupCode);
-      if (!teamInfo) {
-        throw new Error('Invalid team code. Please check with your Team Lead.');
-      }
-      teamLeadUid = teamInfo.teamLeadUid;
-      teamCode = signupCode.toUpperCase().trim();
+  async function signup(email, password, username, inviteToken, teamNumber = null, createTeam = false) {
+    if (!createTeam && !isInviteToken(inviteToken)) {
+      throw new Error('Enter the 64-character invite token supplied by your team owner.');
+    }
+    const normalizedTeamNumber = teamNumber === '' || teamNumber === null
+      ? null
+      : Number(teamNumber);
+    if (normalizedTeamNumber !== null && (!Number.isInteger(normalizedTeamNumber)
+      || normalizedTeamNumber < 1 || normalizedTeamNumber > 99999)) {
+      throw new Error('Enter a valid FRC team number.');
     }
 
-    // Create user in Supabase Auth
-    // Note: emailRedirectTo helps with email confirmation flow
-    // If email confirmation is disabled in Supabase dashboard, user logs in immediately
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: {
-          display_name: username
-        },
-        // Redirect back to the app after email confirmation (if enabled)
+        data: { display_name: username },
         emailRedirectTo: `${window.location.origin}/login`
       }
     });
+    if (authError) throw authError;
+    if (!authData.user) throw new Error('Failed to create user account.');
 
-    if (authError) {
-      // Handle rate limiting specifically
-      if (authError.message?.includes('rate limit') ||
-          authError.message?.includes('email rate limit') ||
-          authError.status === 429) {
-        throw new Error('Too many signup attempts. Please wait a few minutes and try again, or contact your team lead.');
-      }
-      // Handle "User already registered" - suggest login instead
-      if (authError.message?.includes('already registered') ||
-          authError.message?.includes('already exists')) {
-        throw new Error('An account with this email already exists. Please sign in instead.');
-      }
-      throw authError;
-    }
-    const newUser = authData.user;
-    if (!newUser) throw new Error('Failed to create user account');
-
-    // Create user profile in Supabase
-    const profileData = {
-      id: newUser.id,
-      email: newUser.email,
-      display_name: username,
-      role: ROLES.SCOUT,
-      is_team_lead: isTeamLead
+    const enrollment = {
+      userId: authData.user.id,
+      action: createTeam ? 'create' : 'redeem',
+      teamNumber: normalizedTeamNumber,
+      token: createTeam ? null : inviteToken.trim().toLowerCase(),
+      createdAt: Date.now()
     };
 
-    // Add team number if provided
-    if (teamNumber) {
-      const teamNum = parseInt(teamNumber, 10);
-      profileData.team_number = teamNum;
-      profileData.scouting_id = String(teamNum);
+    // Email confirmation commonly returns no session. Keep only a short-lived
+    // sessionStorage record for the same account and finish after it signs in.
+    if (!authData.session?.user || authData.session.user.id !== authData.user.id) {
+      savePendingEnrollment(enrollment);
+      return { user: authData.user, requiresEmailConfirmation: true, teamCode: null };
     }
 
-    // If Member, link to Team Lead
-    if (!isTeamLead && teamLeadUid) {
-      profileData.team_lead_uid = teamLeadUid;
-      profileData.team_code = teamCode;
+    if (createTeam) {
+      await createMyTeam(normalizedTeamNumber);
+    } else {
+      await redeemTeamInvite(enrollment.token);
     }
-
-    // IMPORTANT: Use .select() to verify the profile was actually created
-    // and contains the correct is_team_lead value, team_number, and team_code
-    let createdProfile = null;
-    let profileError = null;
-
-    try {
-      const result = await supabase
-        .from('profiles')
-        .insert(profileData)
-        .select('id, is_team_lead, team_lead_uid, team_code, team_number, scouting_id')
-        .single();
-
-      createdProfile = result.data;
-      profileError = result.error;
-    } catch (err) {
-      profileError = err;
-    }
-
-    if (profileError) {
-      console.error('Error creating profile:', profileError);
-      // For Team Leads, this is critical - they need a profile to generate a team code
-      if (isTeamLead) {
-        throw new Error('Failed to create Team Lead profile. Please try signing up again.');
-      }
-      // For members, the error might be a conflict - try upsert approach
-      // This handles the case where the profile was partially created by a trigger
-      try {
-        const { data: upsertProfile, error: upsertError } = await supabase
-          .from('profiles')
-          .upsert(profileData, { onConflict: 'id' })
-          .select('id, is_team_lead, team_lead_uid, team_code, team_number, scouting_id')
-          .single();
-
-        if (!upsertError && upsertProfile) {
-          createdProfile = upsertProfile;
-          profileError = null;
-          if (import.meta.env.DEV) {
-            console.log('✅ Profile upserted after initial insert failed:', upsertProfile);
-          }
-        }
-      } catch (upsertErr) {
-        console.error('Upsert also failed:', upsertErr);
-      }
-    } else if (import.meta.env.DEV) {
-      console.log('✅ Profile created:', createdProfile);
-    }
-
-    // Track what needs to be fixed
-    const needsFixes = {};
-
-    // Check is_team_lead
-    if (isTeamLead && createdProfile && createdProfile.is_team_lead !== true) {
-      needsFixes.is_team_lead = true;
-    }
-
-    // Check team_number
-    const expectedTeamNum = teamNumber ? parseInt(teamNumber, 10) : null;
-    if (expectedTeamNum && (!createdProfile || createdProfile.team_number !== expectedTeamNum)) {
-      needsFixes.team_number = expectedTeamNum;
-      needsFixes.scouting_id = String(expectedTeamNum);
-    }
-
-    // Check team_code for members
-    if (!isTeamLead && teamCode && (!createdProfile || createdProfile.team_code !== teamCode)) {
-      needsFixes.team_code = teamCode;
-      needsFixes.team_lead_uid = teamLeadUid;
-    }
-
-    // Apply all fixes in a single update and verify
-    if (Object.keys(needsFixes).length > 0) {
-      console.log('🔧 Fixing missing profile fields:', Object.keys(needsFixes));
-
-      const { data: fixedProfile, error: fixError } = await supabase
-        .from('profiles')
-        .update(needsFixes)
-        .eq('id', newUser.id)
-        .select('id, is_team_lead, team_lead_uid, team_code, team_number, scouting_id')
-        .single();
-
-      if (fixError) {
-        console.error('Error fixing profile:', fixError);
-        // This is critical for members - throw an error they can see
-        if (!isTeamLead && (needsFixes.team_code || needsFixes.team_lead_uid)) {
-          throw new Error('Failed to link your account to your team. Please try again or update your settings after login.');
-        }
-      } else if (fixedProfile) {
-        createdProfile = fixedProfile;
-        if (import.meta.env.DEV) {
-          console.log('✅ Profile fixed successfully:', fixedProfile);
-        }
-      }
-    }
-
-    // If Team Lead, generate their team code after profile creation
-    if (isTeamLead) {
-      try {
-        const generatedCode = await generateTeamCode(newUser.id, newUser.email);
-        teamCode = generatedCode;
-        if (import.meta.env.DEV) {
-          console.log('✅ Team code generated for new Team Lead:', generatedCode);
-        }
-      } catch (error) {
-        // For Team Leads, this is important - log prominently but allow signup to complete
-        console.error('Error generating team code during signup:', error);
-        // They can generate code later from Profile page
-      }
-    }
-
-    return { user: newUser, teamCode };
+    await refreshRoleContext();
+    return { user: authData.user, requiresEmailConfirmation: false };
   }
 
-  // =========================================================================
-  // UPDATE USER PROFILE
-  // =========================================================================
-
   async function updateUserProfile(updates) {
-    if (!user) throw new Error('No user logged in');
-
-    // Convert camelCase keys to snake_case for Supabase
-    const snakeCaseUpdates = {};
-    for (const [key, value] of Object.entries(updates)) {
-      const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
-      snakeCaseUpdates[snakeKey] = value;
+    if (!userRef.current) throw new Error('No user logged in.');
+    const allowed = {};
+    if (typeof updates.displayName === 'string') {
+      allowed.display_name = updates.displayName.trim().slice(0, 100);
+    }
+    if (!Object.keys(allowed).length) {
+      throw new Error('No editable profile fields were supplied.');
     }
 
-    // IMPORTANT: Use .select() to verify the update actually happened
-    // Without .select(), Supabase returns no error even if 0 rows were updated
-    const { data: updatedProfile, error } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
-      .update(snakeCaseUpdates)
-      .eq('id', user.id)
+      .update(allowed)
+      .eq('id', userRef.current.id)
       .select('*')
       .single();
-
     if (error) throw error;
-
-    // Verify the update actually happened
-    if (!updatedProfile) {
-      throw new Error('Profile update failed - no data returned');
-    }
-
-    if (import.meta.env.DEV) {
-      console.log('✅ Profile updated:', Object.keys(snakeCaseUpdates), updatedProfile);
-    }
-
-    // Update local profile state with the returned profile (convert to camelCase)
-    setUserProfile(snakeToCamelCase(updatedProfile));
-
+    setUserProfile(snakeToCamelCase(data));
     return true;
   }
 
-  // =========================================================================
-  // LOGOUT FUNCTION
-  // =========================================================================
+  async function refreshRoleContext() {
+    const currentUser = userRef.current;
+    if (!currentUser) return EMPTY_ROLE_CONTEXT;
+    const generation = authGeneration.current;
+    const context = await getRoleContext(currentUser);
+    if (!isCurrent(currentUser, generation)) return EMPTY_ROLE_CONTEXT;
+    setRoleContext(context);
+    setIsAdmin(Boolean(context?.isMasterAdmin));
+    return context;
+  }
 
   async function logout() {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-  }
-
-  // =========================================================================
-  // REFRESH ROLE CONTEXT
-  // =========================================================================
-
-  async function refreshRoleContext() {
-    if (!user) return;
+    let signOutError;
     try {
-      const context = await getRoleContext(user);
-      setRoleContext(context);
-
-      // Also refresh user profile
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      if (profile && !error) {
-        setUserProfile(snakeToCamelCase(profile));
-      }
-    } catch (error) {
-      if (import.meta.env.DEV) {
-        console.error('Error refreshing role context:', error);
-      }
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
+      signOutError = error;
+    } finally {
+      authGeneration.current += 1;
+      resetAuthState();
+      await purgePrivateClientState();
     }
+    if (signOutError) throw signOutError;
   }
 
-  // =========================================================================
-  // CONTEXT VALUE
-  // =========================================================================
-  // All values and functions exposed to consumers
-
-  const value = {
-    user,               // Current Supabase user object
-    userProfile,        // User profile from Supabase
-    isAdmin,            // Boolean: is user an admin?
-    loading,            // Boolean: is auth state being checked?
-    roleContext,        // RBAC context: { role, scoutingId, isMasterAdmin, canViewAll }
-    login,              // Function: login(email, password)
-    signInWithGoogle,   // Function: signInWithGoogle() - OAuth login
-    signInWithDiscord,  // Function: signInWithDiscord() - OAuth login
-    signup,             // Function: signup(email, password, username, signupCode, teamNumber)
-    logout,             // Function: logout()
-    updateUserProfile,  // Function: updateUserProfile(updates)
-    refreshRoleContext  // Function: refreshRoleContext() - call after role changes
-  };
-
-  // Render children with loading state available via context
-  // Note: We always render children now - components use the `loading` state
-  // to show their own loading UI. This fixes blank page on tab duplication.
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{
+      user,
+      userProfile,
+      isAdmin,
+      loading,
+      roleContext,
+      login,
+      signInWithGoogle,
+      signInWithDiscord,
+      signup,
+      logout,
+      updateUserProfile,
+      refreshRoleContext
+    }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-// =============================================================================
-// USE AUTH HOOK
-// =============================================================================
-// Custom hook to access auth context from any component
-
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 }
-

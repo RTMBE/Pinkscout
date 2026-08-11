@@ -8,9 +8,10 @@ node_modules/
 # Build output
 dist/
 
-# Environment variables (IMPORTANT: never commit .env.local with real secrets)
-.env.local
-.env.*.local
+# Environment variables (IMPORTANT: never commit real secrets)
+.env
+.env.*
+!.env.example
 
 # IDE and editor files
 .vscode/
@@ -33,3 +34,5 @@ yarn-error.log*
 # TypeScript cache
 *.tsbuildinfo
 
+# Supabase CLI local project metadata
+supabase/.temp/

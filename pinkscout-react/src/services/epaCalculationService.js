@@ -20,7 +20,7 @@
  *
  * SUPABASE TABLES:
  * - epa_baseline - Read-only Statbotics data
- * - adjusted_epa - Calculated adjusted values
+ * - team_adjusted_epa - Team-private calculated values
  *
  * =============================================================================
  */
@@ -30,7 +30,28 @@ import { getTeamYearStats, getTeamEventStats } from './statboticsAPI';
 
 // Collection names - use snake_case for Supabase tables
 const EPA_BASELINE_COLLECTION = 'epa_baseline';
-const ADJUSTED_EPA_COLLECTION = 'adjusted_epa';
+const ADJUSTED_EPA_COLLECTION = 'team_adjusted_epa';
+
+function isTeamId(value) {
+  return typeof value === 'string'
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+/**
+ * EPA calculations must never combine scouting rows from different teams.
+ * `teamId` comes from RLS-protected scouting reads and is used as a local
+ * consistency check and composite-upsert key. The database trigger overwrites
+ * the persisted owner from the current authenticated membership.
+ */
+function getSingleScoutingTeamId(scoutingEntries) {
+  const teamIds = new Set(
+    (scoutingEntries || [])
+      .map(entry => entry?.teamId || entry?.team_id)
+      .filter(isTeamId)
+  );
+
+  return teamIds.size === 1 ? [...teamIds][0] : null;
+}
 
 // =============================================================================
 // WEIGHTING CONFIGURATION
@@ -421,6 +442,11 @@ function clamp(value, min, max) {
  */
 export async function calculateAdjustedEPA(teamNumber, eventKey, scoutingEntries) {
   try {
+    const teamId = getSingleScoutingTeamId(scoutingEntries);
+    if (!teamId) {
+      throw new Error('Adjusted EPA requires scouting entries from exactly one active team.');
+    }
+
     const year = parseInt(eventKey.substring(0, 4));
 
     // Get baseline EPA (try event-specific first, then yearly)
@@ -449,9 +475,10 @@ export async function calculateAdjustedEPA(teamNumber, eventKey, scoutingEntries
     const adjustment = calculateEPAAdjustment(scoutingMetrics, baseline);
 
     // Build adjusted EPA document
-    const docId = `${teamNumber}_${eventKey}`;
     const adjustedEPADoc = {
-      id: docId,
+      // Required by the composite upsert key. The server-side trigger still
+      // derives and verifies this from auth.uid(), so this is not authority.
+      team_id: teamId,
       team_number: parseInt(teamNumber),
       event_key: eventKey,
       year,
@@ -505,7 +532,7 @@ export async function calculateAdjustedEPA(teamNumber, eventKey, scoutingEntries
     try {
       const { error: upsertError } = await supabase
         .from(ADJUSTED_EPA_COLLECTION)
-        .upsert(adjustedEPADoc, { onConflict: 'id' });
+        .upsert(adjustedEPADoc, { onConflict: 'team_id,team_number,event_key' });
 
       if (upsertError) {
         // Log but don't throw - EPA storage failure shouldn't break scouting
@@ -527,6 +554,7 @@ export async function calculateAdjustedEPA(teamNumber, eventKey, scoutingEntries
     // Return camelCase version for frontend
     return {
       teamNumber: parseInt(teamNumber),
+      teamId,
       eventKey,
       year,
       baselineEPA: adjustedEPADoc.baseline_epa,
@@ -548,22 +576,27 @@ export async function calculateAdjustedEPA(teamNumber, eventKey, scoutingEntries
  *
  * @param {number} teamNumber - FRC team number
  * @param {string} eventKey - Event key
+ * @param {string} teamId - Active membership team ID
  * @returns {Object|null} - Stored adjusted EPA or null
  */
-export async function getAdjustedEPA(teamNumber, eventKey) {
+export async function getAdjustedEPA(teamNumber, eventKey, teamId) {
+  if (!isTeamId(teamId)) return null;
+
   try {
-    const docId = `${teamNumber}_${eventKey}`;
     const { data, error } = await supabase
       .from(ADJUSTED_EPA_COLLECTION)
       .select('*')
-      .eq('id', docId)
-      .single();
+      .eq('team_id', teamId)
+      .eq('team_number', parseInt(teamNumber))
+      .eq('event_key', eventKey)
+      .maybeSingle();
 
     if (error || !data) return null;
 
     // Return camelCase version for frontend
     return {
       teamNumber: data.team_number,
+      teamId: data.team_id,
       eventKey: data.event_key,
       year: data.year,
       baselineEPA: data.baseline_epa,
@@ -584,9 +617,12 @@ export async function getAdjustedEPA(teamNumber, eventKey) {
  * Get adjusted EPA for all teams at an event
  *
  * @param {string} eventKey - Event key
+ * @param {string} teamId - Active membership team ID
  * @returns {Array} - Array of adjusted EPA documents
  */
-export async function getEventAdjustedEPAs(eventKey) {
+export async function getEventAdjustedEPAs(eventKey, teamId) {
+  if (!isTeamId(teamId)) return [];
+
   try {
     // SCALING FIX: Limit rows per event (max ~100 teams at an event)
     const MAX_TEAMS_PER_EVENT = 200;
@@ -594,6 +630,7 @@ export async function getEventAdjustedEPAs(eventKey) {
     const { data, error } = await supabase
       .from(ADJUSTED_EPA_COLLECTION)
       .select('*')
+      .eq('team_id', teamId)
       .eq('event_key', eventKey)
       .limit(MAX_TEAMS_PER_EVENT);
 
@@ -603,6 +640,7 @@ export async function getEventAdjustedEPAs(eventKey) {
     return (data || []).map(entry => ({
       id: entry.id,
       teamNumber: entry.team_number,
+      teamId: entry.team_id,
       eventKey: entry.event_key,
       year: entry.year,
       baselineEPA: entry.baseline_epa,

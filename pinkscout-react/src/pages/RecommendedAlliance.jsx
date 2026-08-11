@@ -91,10 +91,10 @@ export default function RecommendedAlliance() {
   // ---------------------------------------------------------------------------
   // HOOKS - Get auth context and navigation
   // ---------------------------------------------------------------------------
-  const { userProfile, roleContext } = useAuth();  // Current user's profile
+  const { roleContext } = useAuth();               // Membership-backed team context
   const { useAllEventData } = useDataSharing();    // Data sharing preference
   const navigate = useNavigate();                   // Function to navigate to other pages
-  const teamNumber = userProfile?.teamNumber;       // User's FRC team number (e.g., 4639)
+  const teamNumber = roleContext?.teamNumber;       // User's verified team number (e.g., 4639)
 
   // ---------------------------------------------------------------------------
   // STATE VARIABLES - Track data and UI state

@@ -20,14 +20,12 @@ import {
   FIELD_TYPES,
   FIELD_CATEGORIES,
   DEFAULT_FIELDS,
-  DEFAULT_SCORING_WEIGHTS,
-  getDataSharingSetting,
-  updateDataSharingSetting
+  DEFAULT_SCORING_WEIGHTS
 } from '../services/scoutingConfigService';
 import '../styles/ScoutingConfig.css';
 
 export default function ScoutingConfig() {
-  const { user, roleContext } = useAuth();
+  const { roleContext } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [config, setConfig] = useState(null);
@@ -37,67 +35,49 @@ export default function ScoutingConfig() {
   const [year, setYear] = useState(2026);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [editingField, setEditingField] = useState(null);
-  const [useAllEventData, setUseAllEventData] = useState(true); // Default: use all data
-  const [savingDataSharing, setSavingDataSharing] = useState(false);
 
-  // Check if user is team lead
-  const isTeamLead = roleContext?.isTeamLead || roleContext?.isMasterAdmin;
-  const teamLeadUid = roleContext?.teamLeadUid || user?.id;
+  // A team manager may configure only their membership-backed active team.
+  // Platform admins still need an active team context to edit its private
+  // configuration; the database enforces this independently through RLS.
+  const teamId = roleContext?.activeTeamId;
+  const canManageConfig = Boolean(teamId) && Boolean(roleContext?.isTeamLead);
 
   // Load configuration
   useEffect(() => {
     async function loadConfig() {
-      if (!teamLeadUid) return;
+      if (!teamId) {
+        setConfig(null);
+        setFields(DEFAULT_FIELDS);
+        setWeights(DEFAULT_SCORING_WEIGHTS);
+        setConfigName('Default Config');
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       try {
-        const data = await getScoutingConfig(teamLeadUid, year);
+        const data = await getScoutingConfig(teamId, year);
         setConfig(data);
         setFields(data.fields || DEFAULT_FIELDS);
         setWeights(data.scoring_weights || DEFAULT_SCORING_WEIGHTS);
         setConfigName(data.config_name || 'Custom Config');
 
-        // Load data sharing setting
-        const sharingEnabled = await getDataSharingSetting(teamLeadUid);
-        setUseAllEventData(sharingEnabled);
       } catch (error) {
         setMessage({ type: 'error', text: 'Failed to load configuration' });
       }
       setLoading(false);
     }
     loadConfig();
-  }, [teamLeadUid, year]);
-
-  // Handle data sharing toggle
-  const handleDataSharingToggle = async (enabled) => {
-    if (!isTeamLead || !teamLeadUid) return;
-
-    setSavingDataSharing(true);
-    const success = await updateDataSharingSetting(teamLeadUid, enabled);
-
-    if (success) {
-      setUseAllEventData(enabled);
-      setMessage({
-        type: 'success',
-        text: enabled
-          ? 'Now viewing all available scouting data from all teams'
-          : 'Now viewing only your team\'s scouting data'
-      });
-      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
-    } else {
-      setMessage({ type: 'error', text: 'Failed to update data sharing setting' });
-    }
-    setSavingDataSharing(false);
-  };
+  }, [teamId, year]);
 
   // Save configuration
   const handleSave = async () => {
-    if (!isTeamLead) {
-      setMessage({ type: 'error', text: 'Only team leads can save configurations' });
+    if (!canManageConfig) {
+      setMessage({ type: 'error', text: 'An owner or admin membership is required to save configurations' });
       return;
     }
     setSaving(true);
     try {
-      await saveScoutingConfig(teamLeadUid, {
+      await saveScoutingConfig(teamId, {
         config_name: configName,
         year,
         fields,
@@ -155,7 +135,7 @@ export default function ScoutingConfig() {
     }
   };
 
-  if (!isTeamLead) {
+  if (!canManageConfig) {
     return (
       <div className="page-container">
         <Helmet><title>Scouting Config - PinkScout</title></Helmet>
@@ -163,7 +143,7 @@ export default function ScoutingConfig() {
           <h1>⚙️ Scouting Configuration</h1>
         </header>
         <div className="content-card">
-          <p>Only team leads can configure scouting fields.</p>
+          <p>An owner or admin membership for an active team is required to configure scouting fields.</p>
         </div>
       </div>
     );
@@ -215,36 +195,13 @@ export default function ScoutingConfig() {
         </div>
       </div>
 
-      {/* Data Sharing Settings */}
       <div className="content-card">
-        <h3>🔗 Data Sharing</h3>
+        <h3>🔒 Team Data Privacy</h3>
         <p className="section-description">
-          Choose whether to view scouting data from all teams at the same competition,
-          or only data collected by your team.
+          Raw scouting data is restricted to your team. Cross-team sharing is
+          intentionally disabled until a consented, read-only aggregate sharing
+          workflow is available.
         </p>
-        <div className="data-sharing-toggle">
-          <div className="toggle-options">
-            <button
-              className={`toggle-btn ${useAllEventData ? 'active' : ''}`}
-              onClick={() => handleDataSharingToggle(true)}
-              disabled={savingDataSharing}
-            >
-              <span className="toggle-icon">🌐</span>
-              <span className="toggle-label">All Available Data</span>
-              <span className="toggle-desc">See data from all teams scouting this event</span>
-            </button>
-            <button
-              className={`toggle-btn ${!useAllEventData ? 'active' : ''}`}
-              onClick={() => handleDataSharingToggle(false)}
-              disabled={savingDataSharing}
-            >
-              <span className="toggle-icon">🔒</span>
-              <span className="toggle-label">My Team Only</span>
-              <span className="toggle-desc">Only see data from your team members</span>
-            </button>
-          </div>
-          {savingDataSharing && <span className="saving-indicator">Saving...</span>}
-        </div>
       </div>
 
       {/* Field Editor */}
@@ -337,4 +294,3 @@ export default function ScoutingConfig() {
     </div>
   );
 }
-

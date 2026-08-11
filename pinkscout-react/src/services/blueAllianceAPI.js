@@ -12,13 +12,14 @@
  * 
  * API DOCUMENTATION: https://www.thebluealliance.com/apidocs/v3
  * 
- * AUTHENTICATION:
- * TBA requires an API key passed in the X-TBA-Auth-Key header
+ * SECURITY:
+ * Requests are made through PinkScout's authenticated `/api/competition`
+ * endpoint. The TBA key is never shipped to the browser.
  * 
  * =============================================================================
  */
 
-import { API_KEYS, API_URLS } from './supabase';
+import { getCompetitionData } from './competitionApi';
 
 // =============================================================================
 // IN-MEMORY CACHE FOR PERFORMANCE
@@ -36,9 +37,6 @@ const CACHE_TTL = {
   liveMatches: 10 * 1000,      // 10 seconds for live match data
   awards: 30 * 60 * 1000       // 30 minutes for awards (only change after event)
 };
-
-// Last-Modified tracking for conditional requests
-const lastModified = new Map();
 
 /**
  * Get cached data or null if expired/missing
@@ -73,27 +71,27 @@ export function clearCache(key = null) {
 // HELPER: Make authenticated request to TBA (with caching & conditional requests)
 // =============================================================================
 
-// SCALING FIX: Rate limiting and retry configuration
-const RETRY_CONFIG = {
-  maxRetries: 3,
-  initialDelayMs: 500,
-  maxDelayMs: 5000
-};
-
-// Track rate limit state
-let rateLimitedUntil = 0;
+function requestForEndpoint(endpoint) {
+  let match;
+  if ((match = endpoint.match(/^\/events\/(\d{4})$/))) return { op: 'events', params: { year: match[1] } };
+  if ((match = endpoint.match(/^\/event\/(\d{4}[a-z0-9]+)\/teams$/i))) return { op: 'eventTeams', params: { eventKey: match[1] } };
+  if ((match = endpoint.match(/^\/event\/(\d{4}[a-z0-9]+)\/matches$/i))) return { op: 'eventMatches', params: { eventKey: match[1] } };
+  if ((match = endpoint.match(/^\/event\/(\d{4}[a-z0-9]+)\/rankings$/i))) return { op: 'eventRankings', params: { eventKey: match[1] } };
+  if ((match = endpoint.match(/^\/event\/(\d{4}[a-z0-9]+)\/awards$/i))) return { op: 'eventAwards', params: { eventKey: match[1] } };
+  if ((match = endpoint.match(/^\/event\/(\d{4}[a-z0-9]+)$/i))) return { op: 'event', params: { eventKey: match[1] } };
+  if ((match = endpoint.match(/^\/team\/frc(\d+)\/events\/(\d{4})$/i))) return { op: 'teamEvents', params: { teamNumber: match[1], year: match[2] } };
+  if ((match = endpoint.match(/^\/team\/frc(\d+)\/event\/(\d{4}[a-z0-9]+)\/matches$/i))) return { op: 'teamEventMatches', params: { teamNumber: match[1], eventKey: match[2] } };
+  if ((match = endpoint.match(/^\/team\/frc(\d+)\/awards\/(\d{4})$/i))) return { op: 'teamAwardsForYear', params: { teamNumber: match[1], year: match[2] } };
+  if ((match = endpoint.match(/^\/team\/frc(\d+)\/matches\/(\d{4})$/i))) return { op: 'teamMatchesForYear', params: { teamNumber: match[1], year: match[2] } };
+  if ((match = endpoint.match(/^\/team\/frc(\d+)\/years_participated$/i))) return { op: 'teamYearsParticipated', params: { teamNumber: match[1] } };
+  if ((match = endpoint.match(/^\/team\/frc(\d+)\/awards$/i))) return { op: 'teamAllAwards', params: { teamNumber: match[1] } };
+  if ((match = endpoint.match(/^\/team\/frc(\d+)$/i))) return { op: 'team', params: { teamNumber: match[1] } };
+  throw new Error('Unsupported TBA request');
+}
 
 async function tbaFetch(endpoint, cacheTTL = null, forceRefresh = false) {
-  // SCALING FIX: Check if we're rate limited
-  if (Date.now() < rateLimitedUntil) {
-    const cached = cache.get(endpoint);
-    if (cached) {
-      return cached.data;
-    }
-    throw new Error('TBA API rate limited. Please wait a moment.');
-  }
-
-  // Check cache first (unless force refresh)
+  // The client cache is only a UX optimization. Server-side cache and rate
+  // limits are authoritative; a force refresh cannot bypass those controls.
   if (cacheTTL && !forceRefresh) {
     const cached = getFromCache(endpoint, cacheTTL);
     if (cached) {
@@ -104,96 +102,10 @@ async function tbaFetch(endpoint, cacheTTL = null, forceRefresh = false) {
     }
   }
 
-  // Build headers with If-Modified-Since for conditional requests
-  const headers = {
-    'X-TBA-Auth-Key': API_KEYS.TBA
-  };
-
-  // Use Last-Modified for conditional requests (saves bandwidth)
-  const lastMod = lastModified.get(endpoint);
-  if (lastMod && !forceRefresh) {
-    headers['If-Modified-Since'] = lastMod;
-  }
-
-  let lastError = null;
-
-  for (let attempt = 1; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
-    try {
-      // SCALING FIX: Add timeout to prevent hanging requests
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-
-      const response = await fetch(`${API_URLS.TBA}${endpoint}`, {
-        headers,
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      // 304 Not Modified - return cached data
-      if (response.status === 304) {
-        const cached = cache.get(endpoint);
-        if (cached) {
-          // Refresh cache timestamp
-          cached.timestamp = Date.now();
-          return cached.data;
-        }
-      }
-
-      // SCALING FIX: Handle rate limiting (429)
-      if (response.status === 429) {
-        const retryAfter = parseInt(response.headers.get('Retry-After') || '60', 10);
-        rateLimitedUntil = Date.now() + (retryAfter * 1000);
-
-        // Return cached data if available
-        const cached = cache.get(endpoint);
-        if (cached) {
-          return cached.data;
-        }
-        throw new Error('TBA API rate limited. Please wait a moment.');
-      }
-
-      if (!response.ok) {
-        throw new Error(`TBA API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      // Store Last-Modified header for future requests
-      const modHeader = response.headers.get('Last-Modified');
-      if (modHeader) {
-        lastModified.set(endpoint, modHeader);
-      }
-
-      // Cache the response
-      if (cacheTTL) {
-        setCache(endpoint, data);
-      }
-
-      return data;
-    } catch (error) {
-      lastError = error;
-
-      // Don't retry abort errors or rate limits
-      if (error.name === 'AbortError') {
-        throw new Error('Request timed out. Please try again.');
-      }
-      if (error.message?.includes('rate limited')) {
-        throw error;
-      }
-
-      // Wait before retrying (exponential backoff)
-      if (attempt < RETRY_CONFIG.maxRetries) {
-        const delay = Math.min(
-          RETRY_CONFIG.initialDelayMs * Math.pow(2, attempt - 1),
-          RETRY_CONFIG.maxDelayMs
-        );
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-  }
-
-  throw lastError || new Error('Failed to fetch data from TBA');
+  const request = requestForEndpoint(endpoint);
+  const data = await getCompetitionData('tba', request.op, request.params);
+  if (cacheTTL) setCache(endpoint, data);
+  return data;
 }
 
 /**
@@ -337,63 +249,6 @@ export async function getTeamInfo(teamNumber) {
 // GET ALL TEAMS FOR SEARCH (using paginated TBA API)
 // =============================================================================
 
-// In-memory team cache for search
-let allTeamsCache = null;
-let allTeamsCacheTime = 0;
-const ALL_TEAMS_CACHE_TTL = 60 * 60 * 1000; // 1 hour cache for all teams
-
-/**
- * Fetch all teams from TBA (paginated)
- * Caches results for 1 hour to avoid repeated large fetches
- *
- * @returns {Array} - Array of all teams [{key, nickname, team_number}]
- */
-async function getAllTeamsForSearch() {
-  // Check cache first
-  if (allTeamsCache && Date.now() - allTeamsCacheTime < ALL_TEAMS_CACHE_TTL) {
-    return allTeamsCache;
-  }
-
-  try {
-    // TBA API v3 returns teams in pages of ~500 teams each
-    // There are typically 20+ pages of teams
-    const allTeams = [];
-    const currentYear = new Date().getFullYear();
-
-    // Fetch all pages in parallel (up to 20 pages should cover all teams)
-    const pagePromises = [];
-    for (let page = 0; page < 20; page++) {
-      pagePromises.push(
-        tbaFetch(`/teams/${currentYear}/${page}`, CACHE_TTL.teams)
-          .catch(() => []) // Return empty array on error
-      );
-    }
-
-    const pages = await Promise.all(pagePromises);
-
-    for (const page of pages) {
-      if (Array.isArray(page)) {
-        allTeams.push(...page);
-      }
-    }
-
-    // Cache the results
-    allTeamsCache = allTeams;
-    allTeamsCacheTime = Date.now();
-
-    if (import.meta.env.DEV) {
-      console.log(`📋 Loaded ${allTeams.length} teams for search`);
-    }
-
-    return allTeams;
-  } catch (error) {
-    if (import.meta.env.DEV) {
-      console.error('Error fetching all teams:', error);
-    }
-    return allTeamsCache || []; // Return cached data if available
-  }
-}
-
 /**
  * Search teams by name or number
  * Returns ranked results: exact team number match first, then partial number, then name matches
@@ -404,86 +259,16 @@ async function getAllTeamsForSearch() {
  */
 export async function searchTeams(query, maxResults = 10) {
   if (!query || !query.trim()) return [];
-
-  const searchQuery = query.trim().toLowerCase();
-  const isNumeric = /^\d+$/.test(searchQuery);
-
-  // Get all teams for search
-  const allTeams = await getAllTeamsForSearch();
-  if (!allTeams || allTeams.length === 0) {
-    // Fallback: try direct team lookup for numeric queries
-    if (isNumeric) {
-      try {
-        const teamInfo = await getTeamInfo(searchQuery);
-        if (teamInfo) {
-          return [{
-            teamNumber: searchQuery,
-            nickname: teamInfo.nickname || `Team ${searchQuery}`,
-            matchType: 'direct_lookup',
-            score: 100
-          }];
-        }
-      } catch (err) {
-        // Ignore errors
-      }
-    }
+  try {
+    const results = await getCompetitionData('tba', 'searchTeams', {
+      year: new Date().getFullYear(),
+      query: query.trim()
+    });
+    return (results || []).slice(0, Math.min(maxResults, 10));
+  } catch (error) {
+    if (import.meta.env.DEV) console.error('Error searching teams:', error);
     return [];
   }
-
-  const results = [];
-
-  for (const team of allTeams) {
-    // Extract team number from key (e.g., "frc254" -> "254") or use team_number
-    const teamNumber = String(team.team_number || team.key?.replace('frc', '') || '');
-    const nickname = team.nickname || '';
-
-    let matchType = null;
-    let score = 0;
-
-    if (isNumeric) {
-      // Numeric search - prioritize team number matches
-      if (teamNumber === searchQuery) {
-        matchType = 'exact_number';
-        score = 100;
-      } else if (teamNumber.startsWith(searchQuery)) {
-        matchType = 'partial_number_start';
-        score = 80;
-      } else if (teamNumber.includes(searchQuery)) {
-        matchType = 'partial_number';
-        score = 60;
-      }
-    } else {
-      // Text search - search by team name (case-insensitive)
-      const nicknameLower = nickname.toLowerCase();
-      if (nicknameLower === searchQuery) {
-        matchType = 'exact_name';
-        score = 90;
-      } else if (nicknameLower.startsWith(searchQuery)) {
-        matchType = 'partial_name_start';
-        score = 70;
-      } else if (nicknameLower.includes(searchQuery)) {
-        matchType = 'partial_name';
-        score = 50;
-      }
-    }
-
-    if (matchType) {
-      results.push({
-        teamNumber,
-        nickname,
-        matchType,
-        score
-      });
-    }
-  }
-
-  // Sort by score (descending), then by team number (ascending)
-  results.sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    return parseInt(a.teamNumber) - parseInt(b.teamNumber);
-  });
-
-  return results.slice(0, maxResults);
 }
 
 // =============================================================================
@@ -723,4 +508,3 @@ export async function getFullEventData(eventKey) {
     return { event: null, teams: [], matches: [], rankings: [] };
   }
 }
-

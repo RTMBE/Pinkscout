@@ -60,15 +60,17 @@ export default function Analytics() {
   // Load ECS weights from team configuration
   useEffect(() => {
     async function loadEcsWeights() {
-      if (roleContext?.teamLeadUid) {
-        const config = await getScoutingConfig(roleContext.teamLeadUid, 2026);
+      if (roleContext?.activeTeamId) {
+        const config = await getScoutingConfig(roleContext.activeTeamId, 2026);
         if (config?.scoring_weights) {
           setEcsWeights(config.scoring_weights);
         }
+      } else {
+        setEcsWeights(DEFAULT_SCORING_WEIGHTS);
       }
     }
     loadEcsWeights();
-  }, [roleContext?.teamLeadUid]);
+  }, [roleContext?.activeTeamId]);
 
   // ==========================================================================
   // AUTOCOMPLETE: Search teams as user types
@@ -640,4 +642,3 @@ function formatIntakeType(intakeType) {
   };
   return types[intakeType] || '—';
 }
-

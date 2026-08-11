@@ -28,10 +28,10 @@ import { classifyEPA, calculateAutoPoints, calculateTeleopPoints } from '../util
 import { predictMatch } from '../utils/predictionUtils';
 
 export default function MyMatches() {
-  const { userProfile, roleContext } = useAuth();
+  const { roleContext } = useAuth();
   const { useAllEventData } = useDataSharing();
   const navigate = useNavigate();
-  const teamNumber = userProfile?.teamNumber;
+  const teamNumber = roleContext?.teamNumber;
 
   // State
   const currentYear = new Date().getFullYear();
@@ -726,4 +726,3 @@ export default function MyMatches() {
     </>
   );
 }
-

@@ -76,15 +76,17 @@ export default function Teams() {
   // Load ECS weights from team configuration
   useEffect(() => {
     async function loadEcsWeights() {
-      if (roleContext?.teamLeadUid) {
-        const config = await getScoutingConfig(roleContext.teamLeadUid, 2026);
+      if (roleContext?.activeTeamId) {
+        const config = await getScoutingConfig(roleContext.activeTeamId, 2026);
         if (config?.scoring_weights) {
           setEcsWeights(config.scoring_weights);
         }
+      } else {
+        setEcsWeights(DEFAULT_SCORING_WEIGHTS);
       }
     }
     loadEcsWeights();
-  }, [roleContext?.teamLeadUid]);
+  }, [roleContext?.activeTeamId]);
 
   // ==========================================================================
   // SEARCH ON URL PARAM CHANGE
@@ -990,4 +992,3 @@ export default function Teams() {
     </>
   );
 }
-

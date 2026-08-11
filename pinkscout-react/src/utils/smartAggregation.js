@@ -134,10 +134,10 @@ export function groupEntriesByMatch(entries) {
  * 3. Return deduplicated entries ready for standard aggregation
  *
  * @param {Array} entries - Array of scouting entries
- * @param {string} ownTeamLeadUid - The team_lead_uid of the current user's team
+ * @param {string} ownTeamId - The immutable membership-backed team ID
  * @returns {Object} - { entries: Array, stats: { totalEntries, duplicatesFound, outliersRemoved } }
  */
-export function applySmartAggregation(entries, ownTeamLeadUid) {
+export function applySmartAggregation(entries, ownTeamId) {
   if (!entries || entries.length === 0) {
     return { entries: [], stats: { totalEntries: 0, duplicatesFound: 0, outliersRemoved: 0 } };
   }
@@ -157,8 +157,8 @@ export function applySmartAggregation(entries, ownTeamLeadUid) {
     duplicatesFound += groupEntries.length - 1;
 
     // Check if we have our own team's data in this group
-    const ownTeamEntries = groupEntries.filter(e => e.teamLeadUid === ownTeamLeadUid);
-    const otherTeamEntries = groupEntries.filter(e => e.teamLeadUid !== ownTeamLeadUid);
+    const ownTeamEntries = groupEntries.filter(e => e.teamId === ownTeamId);
+    const otherTeamEntries = groupEntries.filter(e => e.teamId !== ownTeamId);
 
     // If we have ONLY our own team's data, use the most recent one
     if (ownTeamEntries.length > 0 && otherTeamEntries.length === 0) {
@@ -183,7 +183,7 @@ export function applySmartAggregation(entries, ownTeamLeadUid) {
         // Remove outliers, but NEVER remove your own team's data
         filteredEntries = groupEntries.filter((entry, index) => {
           const isOutlier = outlierIndices.includes(index);
-          const isOwnTeam = entry.teamLeadUid === ownTeamLeadUid;
+          const isOwnTeam = entry.teamId === ownTeamId;
 
           if (isOutlier && !isOwnTeam) {
             outliersRemoved++;
@@ -198,7 +198,7 @@ export function applySmartAggregation(entries, ownTeamLeadUid) {
     }
 
     // Create weighted average entry
-    const aggregatedEntry = createWeightedAverageEntry(filteredEntries, ownTeamLeadUid);
+    const aggregatedEntry = createWeightedAverageEntry(filteredEntries, ownTeamId);
     processedEntries.push(aggregatedEntry);
   }
 
@@ -226,15 +226,15 @@ export function applySmartAggregation(entries, ownTeamLeadUid) {
  * Your own team's data gets double weight
  *
  * @param {Array} entries - Array of scouting entries for the same match
- * @param {string} ownTeamLeadUid - The team_lead_uid of the current user's team
+ * @param {string} ownTeamId - The immutable membership-backed team ID
  * @returns {Object} - Single aggregated entry
  */
-function createWeightedAverageEntry(entries, ownTeamLeadUid) {
+function createWeightedAverageEntry(entries, ownTeamId) {
   if (entries.length === 1) return entries[0];
 
   // Calculate weights for each entry
   const weights = entries.map(e =>
-    e.teamLeadUid === ownTeamLeadUid ? SMART_AGG_CONFIG.OWN_TEAM_WEIGHT : 1.0
+    e.teamId === ownTeamId ? SMART_AGG_CONFIG.OWN_TEAM_WEIGHT : 1.0
   );
   const totalWeight = weights.reduce((a, b) => a + b, 0);
 
@@ -274,7 +274,7 @@ function createWeightedAverageEntry(entries, ownTeamLeadUid) {
 
   // For boolean fields, use own team's value if available, else majority vote
   for (const field of booleanFields) {
-    const ownEntry = entries.find(e => e.teamLeadUid === ownTeamLeadUid);
+    const ownEntry = entries.find(e => e.teamId === ownTeamId);
     if (ownEntry && ownEntry[field] !== undefined) {
       base[field] = ownEntry[field];
     } else {
@@ -286,7 +286,7 @@ function createWeightedAverageEntry(entries, ownTeamLeadUid) {
 
   // For category fields, use own team's value if available, else most common
   for (const field of categoryFields) {
-    const ownEntry = entries.find(e => e.teamLeadUid === ownTeamLeadUid);
+    const ownEntry = entries.find(e => e.teamId === ownTeamId);
     if (ownEntry && ownEntry[field]) {
       base[field] = ownEntry[field];
     } else {
@@ -307,11 +307,10 @@ function createWeightedAverageEntry(entries, ownTeamLeadUid) {
   // Mark as aggregated for transparency
   base._aggregated = true;
   base._sourceCount = entries.length;
-  base._ownTeamIncluded = entries.some(e => e.teamLeadUid === ownTeamLeadUid);
+  base._ownTeamIncluded = entries.some(e => e.teamId === ownTeamId);
 
   return base;
 }
 
 // Export configuration for reference
 export { SMART_AGG_CONFIG };
-

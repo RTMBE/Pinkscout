@@ -55,52 +55,10 @@ export default defineConfig(({ mode }) => ({
       workbox: {
         // Cache all static assets
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
-        // Runtime caching for API requests
-        runtimeCaching: [
-          {
-            // Cache Blue Alliance API responses
-            urlPattern: /^https:\/\/www\.thebluealliance\.com\/api\/v3\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'tba-api-cache',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 // 1 hour
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          },
-          {
-            // Cache Statbotics API responses
-            urlPattern: /^https:\/\/api\.statbotics\.io\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'statbotics-api-cache',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 // 1 hour
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          },
-          {
-            // Network-first for Supabase (we need fresh data)
-            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'supabase-cache',
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 5 // 5 minutes
-              },
-              networkTimeoutSeconds: 10
-            }
-          }
-        ]
+        // Do not cache API responses in the browser. Supabase responses and
+        // offline scouting records can be private, especially on shared FRC
+        // tablets. The server-side competition gateway owns public-data cache.
+        runtimeCaching: []
       }
     })
   ],
@@ -110,15 +68,20 @@ export default defineConfig(({ mode }) => ({
     outDir: 'dist',
     // Disable sourcemaps in production for security
     sourcemap: mode === 'development',
-    // Strip console and debugger statements in production
-    minify: 'esbuild',
-    // esbuild options for production optimization
-    target: 'es2020'
-  },
-
-  // esbuild options - strip console/debugger in production
-  esbuild: {
-    drop: mode === 'production' ? ['console', 'debugger'] : []
+    // Vite 8 uses Rolldown/Oxc. Keep production diagnostics out of the
+    // shipped bundle without relying on Vite's deprecated esbuild setting.
+    minify: 'oxc',
+    target: 'es2020',
+    rolldownOptions: {
+      output: {
+        minify: {
+          compress: {
+            dropConsole: mode === 'production',
+            dropDebugger: mode === 'production'
+          }
+        }
+      }
+    }
   },
 
   // Development server configuration
@@ -139,4 +102,3 @@ export default defineConfig(({ mode }) => ({
     }
   }
 }))
-

@@ -7,7 +7,7 @@
  * The main application component that:
  * 1. Sets up React Router routes
  * 2. Implements protected routes (auth required)
- * 3. Implements admin-only routes (email-based access)
+ * 3. Implements admin-only routes (server-backed platform role)
  * 4. Renders the layout (sidebar + content)
  *
  * ROUTE STRUCTURE:
@@ -15,7 +15,7 @@
  * /teams        → Team Search (protected)
  * /events       → Event Page (protected)
  * /scouting     → Scouting Form (protected)
- * /admin        → Admin Panel (protected + email whitelist)
+ * /admin        → Admin Panel (protected + platform-admin role)
  * /analytics    → Analytics (protected)
  * /rules        → Rules Reference (public)
  * /login        → Login Page (public, no sidebar)
@@ -100,11 +100,11 @@ function ProtectedRoute({ children }) {
 // ADMIN ROUTE COMPONENT
 // =============================================================================
 /**
- * Wrapper that only allows access if user is an admin
- * Note: The Admin page itself handles email-based access control
+ * Wrapper that only allows access when the membership RPC identifies a
+ * platform administrator. The database RLS is still authoritative.
  */
 function AdminRoute({ children }) {
-  const { user, loading } = useAuth();
+  const { user, loading, roleContext } = useAuth();
 
   if (loading) {
     return <LoadingSpinner />;
@@ -114,7 +114,10 @@ function AdminRoute({ children }) {
     return <Navigate to="/login" replace />;
   }
 
-  // Let the Admin page handle its own access control based on email
+  if (!roleContext?.isMasterAdmin) {
+    return <Navigate to="/" replace />;
+  }
+
   return children;
 }
 
@@ -280,4 +283,3 @@ export default function App() {
     </>
   );
 }
-

@@ -100,8 +100,8 @@ export default function PitScouting() {
     setLoadingEvents(true);
     try {
       // Try to get user's team events first
-      if (userProfile?.teamNumber) {
-        const teamEvents = await getTeamEvents(userProfile.teamNumber, selectedYear);
+      if (roleContext?.teamNumber) {
+        const teamEvents = await getTeamEvents(roleContext.teamNumber, selectedYear);
         if (teamEvents.length > 0) {
           setEvents(teamEvents);
           // Auto-select current/next event
@@ -219,16 +219,21 @@ export default function PitScouting() {
       if (!selectedEvent) {
         throw new Error('Please select an event');
       }
-      if (!roleContext?.scoutingId && !roleContext?.teamLeadUid) {
-        throw new Error('Your account is not linked to a team. Please update your profile.');
+      if (!roleContext?.activeTeamId) {
+        throw new Error('Join or create a team before submitting pit scouting data.');
       }
 
       // Upload image first if present
-      let imageUrl = editingEntry?.robot_image_url || null;
+      let imagePath = editingEntry?.robot_image_path || null;
       if (imageFile) {
         try {
           setUploadingImage(true);
-          imageUrl = await uploadRobotImage(imageFile, formData.teamNumber, selectedEvent);
+          imagePath = await uploadRobotImage(
+            imageFile,
+            roleContext.activeTeamId,
+            formData.teamNumber,
+            selectedEvent
+          );
         } catch (imgErr) {
           console.error('Image upload failed:', imgErr);
           // Continue with submission even if image fails
@@ -240,11 +245,10 @@ export default function PitScouting() {
       const dataToSave = {
         ...formData,
         eventKey: selectedEvent,
-        robotImageUrl: imageUrl,
+        robotImagePath: imagePath,
         scouterUid: user?.id,
         scouterName: userProfile?.displayName || user?.email,
-        teamLeadUid: roleContext?.teamLeadUid,
-        scoutingId: roleContext?.scoutingId
+        teamId: roleContext.activeTeamId
       };
 
       await savePitScoutingData(dataToSave);

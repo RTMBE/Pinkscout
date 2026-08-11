@@ -92,7 +92,7 @@ const ROBOT_STARTING_POSITIONS = {
 };
 
 export default function Strategy() {
-  const { user, userProfile, roleContext } = useAuth();
+  const { roleContext } = useAuth();
   const currentYear = new Date().getFullYear();
 
   // Canvas refs
@@ -199,8 +199,8 @@ export default function Strategy() {
   const loadEvents = async () => {
     setLoadingEvents(true);
     try {
-      if (userProfile?.teamNumber) {
-        const teamEvents = await getTeamEvents(userProfile.teamNumber, selectedYear);
+      if (roleContext?.teamNumber) {
+        const teamEvents = await getTeamEvents(roleContext.teamNumber, selectedYear);
         if (teamEvents.length > 0) {
           setEvents(teamEvents);
           const now = new Date();
@@ -700,8 +700,7 @@ export default function Strategy() {
         drawingData: { imageData: drawingData },
         title: drawingTitle || `Strategy ${new Date().toLocaleString()}`,
         isDefault: isDefault,
-        createdBy: user?.id,
-        teamLeadUid: roleContext?.teamLeadUid
+        teamId: roleContext?.activeTeamId
       };
 
       const saved = await saveStrategyDrawing(drawingToSave);
@@ -745,7 +744,7 @@ export default function Strategy() {
     if (!window.confirm('Delete this strategy?')) return;
 
     try {
-      await deleteStrategyDrawing(id);
+      await deleteStrategyDrawing(id, roleContext);
       if (currentDrawingId === id) {
         setCurrentDrawingId(null);
         setDrawingTitle('');

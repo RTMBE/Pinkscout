@@ -6,14 +6,10 @@
  * WHAT IS THIS PAGE?
  * Handles user authentication:
  * - Sign In: Email + Password for existing users
- * - Sign Up: Email + Password + Confirm + Username + Sign-Up Code
- * 
- * SIGNUP CODE VALIDATION:
- * The signup code must be exactly "1551"
- * If incorrect, show clear error message
+ * - Sign Up: Email + Password + Confirm + Username + secure invite token
  * 
  * ON SUCCESS:
- * - Stores user profile in Supabase (profiles table)
+ * - Auth trigger creates a minimal profile; team membership is server-managed
  * - Redirects to dashboard
  * 
  * NO SIDEBAR:
@@ -46,13 +42,11 @@ export default function Login() {
   const [signupCode, setSignupCode] = useState('');
   const [teamNumber, setTeamNumber] = useState('');
 
-  // Generated team code for Team Lead signup
-  const [generatedCode, setGeneratedCode] = useState('');
-  
   // UI state
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [postAuthRoute, setPostAuthRoute] = useState(null);
   
   // Hooks
   const { user, login, signup, signInWithGoogle, signInWithDiscord, loading: authLoading } = useAuth();
@@ -65,9 +59,9 @@ export default function Login() {
   useEffect(() => {
     // Only redirect after auth state is determined (not during loading)
     if (!authLoading && user) {
-      navigate('/dashboard', { replace: true });
+      navigate(postAuthRoute || '/dashboard', { replace: true });
     }
-  }, [user, authLoading, navigate]);
+  }, [user, authLoading, postAuthRoute, navigate]);
 
   // ==========================================================================
   // SHOW LOADING WHILE AUTH STATE IS BEING DETERMINED
@@ -90,7 +84,7 @@ export default function Login() {
   const toggleMode = () => {
     setIsLoginMode(!isLoginMode);
     setAccountType('member'); // Reset to member when toggling
-    setGeneratedCode('');
+    setPostAuthRoute(null);
     setError('');
     setSuccess('');
   };
@@ -103,12 +97,12 @@ export default function Login() {
     e.preventDefault();
     setError('');
     setSuccess('');
-    setGeneratedCode('');
     setLoading(true);
 
     try {
       if (isLoginMode) {
         // ====== SIGN IN ======
+        setPostAuthRoute('/dashboard');
         await login(email, password);
         // Navigation handled by useEffect above
 
@@ -131,6 +125,7 @@ export default function Login() {
         }
 
         const isTeamLead = accountType === 'teamLead';
+        setPostAuthRoute(isTeamLead ? '/profile' : '/dashboard');
 
         // Signup with appropriate account type
         const result = await signup(
@@ -142,21 +137,18 @@ export default function Login() {
           isTeamLead
         );
 
-        if (isTeamLead && result.teamCode) {
-          // Show the generated code to Team Lead
-          setGeneratedCode(result.teamCode);
-          setSuccess(`Team Lead account created! Your team code is: ${result.teamCode}`);
-
-          // Longer delay to allow user to see and copy code
-          setTimeout(() => {
-            navigate('/dashboard', { replace: true });
-          }, 3000);
+        if (result.requiresEmailConfirmation) {
+          setSuccess(isTeamLead
+            ? 'Account created. Confirm your email, then sign in to finish creating your team and set up MFA before inviting scouts.'
+            : 'Account created. Confirm your email, then sign in to finish joining your team.');
         } else {
-          setSuccess('Account created! Redirecting...');
+          setSuccess(isTeamLead
+            ? 'Team created. Redirecting to set up manager MFA...'
+            : 'Account created! Redirecting...');
 
           // Short delay to show success
           setTimeout(() => {
-            navigate('/dashboard', { replace: true });
+            navigate(isTeamLead ? '/profile' : '/dashboard', { replace: true });
           }, 1000);
         }
       }
@@ -335,13 +327,13 @@ export default function Login() {
                       onClick={() => setAccountType('teamLead')}
                       style={{ flex: 1 }}
                     >
-                      👑 Team Lead
+                      👑 Team Owner
                     </button>
                   </div>
                   <small className="form-hint">
                     {accountType === 'teamLead'
-                      ? 'Create a team and invite members with your code'
-                      : 'Join an existing team with a code from your Team Lead'}
+                      ? 'Create a team and issue a secure one-time invite'
+                      : 'Join an existing team with an invite token from an owner'}
                   </small>
                 </div>
 
@@ -389,52 +381,26 @@ export default function Login() {
                   <small className="form-hint">This enables the "My Matches" feature</small>
                 </div>
 
-                {/* Team Code - Only for Members */}
+                {/* Invite token - only for members; it is redeemed after auth. */}
                 {accountType === 'member' && (
                   <div className="form-group">
-                    <label htmlFor="signupCode">Team Code</label>
+                    <label htmlFor="signupCode">Team Invite Token</label>
                     <input
                       type="text"
                       id="signupCode"
                       value={signupCode}
-                      onChange={(e) => setSignupCode(e.target.value.toUpperCase())}
+                      onChange={(e) => setSignupCode(e.target.value.trim())}
                       required
-                      placeholder="Enter 6-character code"
-                      maxLength={6}
-                      style={{ textTransform: 'uppercase', letterSpacing: '0.1em' }}
+                      placeholder="Paste 64-character invite token"
+                      maxLength={64}
+                      autoComplete="off"
+                      spellCheck="false"
+                      style={{ fontFamily: 'monospace', letterSpacing: '0.04em' }}
                     />
-                    <small className="form-hint">Get this code from your Team Lead</small>
+                    <small className="form-hint">Get this private token from a team owner. It is single-use and expires.</small>
                   </div>
                 )}
 
-                {/* Generated Code Display - After Team Lead signup */}
-                {generatedCode && (
-                  <div className="form-group" style={{
-                    background: 'var(--success-bg, #d4edda)',
-                    padding: '1rem',
-                    borderRadius: '0.5rem',
-                    border: '2px solid var(--success, #28a745)'
-                  }}>
-                    <label style={{ color: 'var(--success, #155724)', fontWeight: 'bold' }}>
-                      🎉 Your Team Code
-                    </label>
-                    <div style={{
-                      fontSize: '1.5rem',
-                      fontWeight: 'bold',
-                      letterSpacing: '0.2em',
-                      textAlign: 'center',
-                      padding: '0.5rem',
-                      background: 'white',
-                      borderRadius: '0.25rem',
-                      marginTop: '0.5rem'
-                    }}>
-                      {generatedCode}
-                    </div>
-                    <small style={{ color: 'var(--success, #155724)' }}>
-                      Share this code with your team members so they can join!
-                    </small>
-                  </div>
-                )}
               </>
             )}
 
@@ -554,4 +520,3 @@ export default function Login() {
     </>
   );
 }
-

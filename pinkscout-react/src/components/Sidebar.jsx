@@ -56,7 +56,7 @@ const NAV_GROUPS = {
  * Sidebar Navigation Component (Redesigned with Groups)
  */
 export default function Sidebar({ isOpen = false, onClose }) {
-  const { user, userProfile, logout } = useAuth();
+  const { user, userProfile, roleContext, logout } = useAuth();
   const location = useLocation();
 
   // Track which groups are expanded
@@ -108,9 +108,10 @@ export default function Sidebar({ isOpen = false, onClose }) {
     }
   };
 
-  // Check if user is admin
-  const isAdmin = userProfile?.role === 'master_admin' || userProfile?.role === 'admin';
-  const hasTeam = userProfile?.teamNumber;
+  // Navigation is a convenience only; database policies remain authoritative.
+  // Do not use mutable profile fields to decide whether to expose admin paths.
+  const isAdmin = Boolean(roleContext?.isMasterAdmin);
+  const hasTeam = Boolean(roleContext?.activeTeamId);
 
   return (
     <aside className={`sidebar sidebar-redesigned ${isOpen ? 'mobile-open' : ''}`}>
@@ -308,8 +309,8 @@ export default function Sidebar({ isOpen = false, onClose }) {
             </div>
             <div className="user-details">
               <span className="user-name">{userProfile?.displayName || 'User'}</span>
-              {userProfile?.teamNumber && (
-                <span className="user-team">Team {userProfile.teamNumber}</span>
+              {roleContext?.teamNumber && (
+                <span className="user-team">Team {roleContext.teamNumber}</span>
               )}
             </div>
           </div>
@@ -322,4 +323,3 @@ export default function Sidebar({ isOpen = false, onClose }) {
     </aside>
   );
 }
-

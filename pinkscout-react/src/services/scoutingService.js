@@ -30,9 +30,7 @@
  */
 
 import { supabase } from './supabase';
-import { ROLES, isMasterAdmin } from './roleService';
 import { isOnline, addToOfflineQueue } from './offlineSyncService';
-import { applySmartAggregation } from '../utils/smartAggregation';
 
 // Collection reference
 const SCOUTING_COLLECTION = 'scouting';
@@ -63,6 +61,29 @@ function sanitizeString(str, maxLength = 500) {
   return str.trim().slice(0, maxLength);
 }
 
+function createIdempotencyKey() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  globalThis.crypto?.getRandomValues?.(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+    || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function hasValidIdempotencyKey(value) {
+  return typeof value === 'string' && value.length >= 16 && value.length <= 100;
+}
+
+function withoutOwnershipFields(data) {
+  const {
+    teamId,
+    scouterUid,
+    teamLeadUid,
+    scoutingId,
+    ...writeData
+  } = data;
+  return writeData;
+}
+
 /**
  * Validate and sanitize scouting data before saving
  * @param {Object} data - Raw scouting data
@@ -85,40 +106,13 @@ async function validateScoutingData(data) {
     errors.push('Event key is required');
   }
 
-  if (!data.scouterUid || typeof data.scouterUid !== 'string') {
-    errors.push('Scouter UID is required');
+  if (!data.teamId || typeof data.teamId !== 'string'
+      || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.teamId)) {
+    errors.push('An active team membership is required');
   }
 
-  // scoutingId is required for team isolation (legacy)
-  // OR teamLeadUid for new team-based isolation
-  if (!data.scoutingId && !data.teamLeadUid) {
-    errors.push('Either Scouting ID or Team Lead UID is required');
-  }
-
-  // Verify user profile exists (required for foreign key constraint)
-  if (data.scouterUid) {
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('id', data.scouterUid)
-      .single();
-
-    if (profileError || !profile) {
-      errors.push('User profile not found. Please refresh the page or re-login.');
-    }
-  }
-
-  // Verify team lead profile exists (required for foreign key constraint)
-  if (data.teamLeadUid) {
-    const { data: teamLeadProfile, error: teamLeadError } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('id', data.teamLeadUid)
-      .single();
-
-    if (teamLeadError || !teamLeadProfile) {
-      errors.push('Team Lead profile not found. Please contact your team lead or re-link your account.');
-    }
+  if (!hasValidIdempotencyKey(data.idempotencyKey)) {
+    errors.push('Submission key is invalid');
   }
 
   if (errors.length > 0) {
@@ -140,15 +134,16 @@ async function validateScoutingData(data) {
     endgameTowerLevel: ['none', 'level1', 'level2', 'level3'].includes(data.endgameTowerLevel) ? data.endgameTowerLevel : 'none'
   };
 
-  // Normalize scoutingId if present (legacy support)
-  if (data.scoutingId) {
-    sanitized.scoutingId = sanitizeString(data.scoutingId, 50).toLowerCase();
-  }
+  sanitized.teamId = data.teamId;
+  sanitized.idempotencyKey = data.idempotencyKey;
 
-  // Include teamLeadUid if present (new team system)
-  if (data.teamLeadUid) {
-    sanitized.teamLeadUid = sanitizeString(data.teamLeadUid, 50);
+  // The server-side trigger stamps this from auth.uid(). Keeping the value in
+  // the payload supports user-bound offline queueing but does not authorize it.
+  const { data: authData } = await supabase.auth.getUser();
+  if (!authData?.user) {
+    throw new Error('Please sign in before submitting scouting data.');
   }
+  sanitized.scouterUid = authData.user.id;
 
   // Ensure numeric fields are integers and within reasonable bounds
   const numericFields = [
@@ -185,9 +180,21 @@ export async function saveScoutingData(scoutingData) {
   const MAX_RETRIES = 3;
   const RETRY_DELAY_MS = 1000;
 
+  // Every attempt carries a stable, non-secret key. The database enforces a
+  // team-scoped uniqueness constraint so retrying a completed request is safe.
+  const submission = {
+    ...scoutingData,
+    idempotencyKey: hasValidIdempotencyKey(scoutingData?.idempotencyKey)
+      ? scoutingData.idempotencyKey
+      : createIdempotencyKey()
+  };
+
   // Check if offline - queue for later sync
   if (!isOnline()) {
-    const queued = addToOfflineQueue('scouting', scoutingData);
+    const queued = await addToOfflineQueue('scouting', submission, {
+      userId: submission.scouterUid,
+      teamId: submission.teamId
+    });
     if (queued) {
       return 'offline-queued';
     } else {
@@ -200,10 +207,11 @@ export async function saveScoutingData(scoutingData) {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       // Validate and sanitize input data (async - checks profile existence)
-      const validatedData = await validateScoutingData(scoutingData);
+      const validatedData = await validateScoutingData(submission);
 
-      // Convert camelCase to snake_case for Supabase
-      const snakeCaseData = convertToSnakeCase(validatedData);
+      // The trigger owns team/author fields; the browser supplies only the
+      // scouting content and an idempotency key.
+      const snakeCaseData = convertToSnakeCase(withoutOwnershipFields(validatedData));
 
       const { data, error } = await supabase
         .from(SCOUTING_COLLECTION)
@@ -219,8 +227,18 @@ export async function saveScoutingData(scoutingData) {
         if (error.code === '42501') {
           throw new Error('Permission denied. Please ensure you are logged in.');
         }
-        // Don't retry duplicate key errors
+        // A timeout can leave the server write committed. Resolve the stable
+        // idempotency key before treating a uniqueness error as a failure.
         if (error.code === '23505') {
+          const { data: existing, error: lookupError } = await supabase
+            .from(SCOUTING_COLLECTION)
+            .select('id')
+            .eq('team_id', validatedData.teamId)
+            .eq('idempotency_key', validatedData.idempotencyKey)
+            .maybeSingle();
+          if (!lookupError && existing?.id) {
+            return existing.id;
+          }
           throw new Error('This entry already exists. Please refresh the page.');
         }
         throw error;
@@ -327,19 +345,14 @@ async function triggerEPARecalculation(teamNumber, eventKey) {
 // =============================================================================
 
 /**
- * Get all scouting entries, filtered by role context
- * - Master admin: sees all data
- * - Team Lead (isTeamLead) OR Member with teamLeadUid: sees all data with matching teamLeadUid
- *   UNLESS useAllEventData is true, then sees all data (for data sharing)
- * - Legacy Scout Lead (canViewAll + scoutingId): sees all data with matching scoutingId
- * - Scout: sees only their OWN entries (by scouterUid)
+ * Get all scouting entries for the caller's active team. Browser reads never
+ * receive a platform-wide bypass; database RLS remains authoritative.
  *
  * @param {Object} roleContext - From useAuth().roleContext
  * @param {Object} options - Optional { useAllEventData: boolean }
  * @returns {Array} - Array of scouting entries with IDs
  */
-export async function getAllScoutingData(roleContext = null, options = {}) {
-  const { useAllEventData = false } = options;
+export async function getAllScoutingData(roleContext = null, _options = {}) {
 
   try {
     // SCALING FIX: Add limit to prevent fetching unlimited rows
@@ -352,23 +365,12 @@ export async function getAllScoutingData(roleContext = null, options = {}) {
       .order('created_at', { ascending: false })
       .limit(MAX_ROWS);
 
-    // Apply role-based filtering
-    if (roleContext?.isMasterAdmin) {
-      // Master admin sees everything - no filter
-    } else if (useAllEventData && roleContext?.canViewAll) {
-      // Data sharing enabled - Team Lead sees ALL data from all teams
-      // No team_lead_uid filter applied
-    } else if (roleContext?.teamLeadUid) {
-      // Team Lead OR Member with teamLeadUid: sees all data linked to their Team Lead
-      query = query.eq('team_lead_uid', roleContext.teamLeadUid);
-    } else if (roleContext?.canViewAll && roleContext?.scoutingId) {
-      // Legacy Scout Lead (canViewAll + scoutingId): sees all with matching scoutingId
-      query = query.eq('scouting_id', roleContext.scoutingId);
-    } else if (roleContext?.userUid) {
-      // Regular Scout: sees only their OWN entries (by scouterUid)
-      query = query.eq('scouter_uid', roleContext.userUid);
+    if (!roleContext?.activeTeamId) {
+      // Do not make an unscoped request when membership is unresolved.
+      return [];
     }
-    // Fallback: no filter (legacy behavior)
+    // RLS is authoritative; this is an intentional client-side guardrail.
+    query = query.eq('team_id', roleContext.activeTeamId);
 
     const { data, error } = await query;
 
@@ -391,13 +393,8 @@ export async function getAllScoutingData(roleContext = null, options = {}) {
 // =============================================================================
 
 /**
- * Get all scouting entries for a specific team
- * Filtered by roleContext for team isolation:
- * - Master admin: sees all
- * - Team Lead/Member with teamLeadUid: sees all with matching teamLeadUid
- *   UNLESS useAllEventData is true, then sees all data (for data sharing)
- * - Legacy Scout Lead (canViewAll + scoutingId): sees all with matching scoutingId
- * - Scout: sees only their own entries
+ * Get scouting entries for a specific FRC robot within the caller's active
+ * team dataset. The FRC number identifies the scouted robot, not ownership.
  *
  * @param {number|string} teamNumber - The team number to fetch data for
  * @param {Object} options - Optional filters { year, eventKey, roleContext, useAllEventData }
@@ -406,7 +403,7 @@ export async function getAllScoutingData(roleContext = null, options = {}) {
 export async function getTeamScoutingData(teamNumber, options = {}) {
   try {
     const teamNum = parseInt(teamNumber);
-    const { year, eventKey, roleContext, useAllEventData = false, applySmartAgg = true } = options;
+    const { year, eventKey, roleContext } = options;
 
     // SCALING FIX: Add limit to prevent fetching unlimited rows per team
     const MAX_ROWS_PER_TEAM = 500;
@@ -418,19 +415,10 @@ export async function getTeamScoutingData(teamNumber, options = {}) {
       .order('created_at', { ascending: false })
       .limit(MAX_ROWS_PER_TEAM);
 
-    // Apply role-based filtering
-    if (roleContext?.isMasterAdmin) {
-      // Master admin sees all - no filter
-    } else if (useAllEventData && roleContext?.canViewAll) {
-      // Data sharing enabled - see all data for this team from all scouting teams
-      // No team_lead_uid filter applied
-    } else if (roleContext?.teamLeadUid) {
-      query = query.eq('team_lead_uid', roleContext.teamLeadUid);
-    } else if (roleContext?.canViewAll && roleContext?.scoutingId) {
-      query = query.eq('scouting_id', roleContext.scoutingId);
-    } else if (roleContext?.userUid) {
-      query = query.eq('scouter_uid', roleContext.userUid);
+    if (!roleContext?.activeTeamId) {
+      return [];
     }
+    query = query.eq('team_id', roleContext.activeTeamId);
 
     // Filter by event if specified
     if (eventKey) {
@@ -457,14 +445,6 @@ export async function getTeamScoutingData(teamNumber, options = {}) {
       });
     }
 
-    // Apply smart aggregation when data sharing is enabled
-    // This deduplicates entries where multiple teams scouted the same match
-    // and removes outliers while prioritizing your own team's data
-    if (useAllEventData && applySmartAgg && roleContext?.teamLeadUid) {
-      const { entries } = applySmartAggregation(results, roleContext.teamLeadUid);
-      results = entries;
-    }
-
     return results;
   } catch (error) {
     if (import.meta.env.DEV) {
@@ -479,21 +459,14 @@ export async function getTeamScoutingData(teamNumber, options = {}) {
 // =============================================================================
 
 /**
- * Get all scouting entries for a specific event
- * Filtered by roleContext for team isolation:
- * - Master admin: sees all
- * - Team Lead/Member with teamLeadUid: sees all with matching teamLeadUid
- *   UNLESS useAllEventData is true, then sees all data (for data sharing)
- * - Legacy Scout Lead (canViewAll + scoutingId): sees all with matching scoutingId
- * - Scout: sees only their own entries
+ * Get scouting entries for an event within the caller's active team dataset.
  *
  * @param {string} eventKey - The event key to fetch data for
  * @param {Object} roleContext - From useAuth().roleContext
  * @param {Object} options - Optional { useAllEventData: boolean }
  * @returns {Array} - Array of scouting entries for the event
  */
-export async function getEventScoutingData(eventKey, roleContext = null, options = {}) {
-  const { useAllEventData = false, applySmartAgg = true } = options;
+export async function getEventScoutingData(eventKey, roleContext = null, _options = {}) {
 
   try {
     // SCALING FIX: Add limit to prevent fetching unlimited rows per event
@@ -507,19 +480,10 @@ export async function getEventScoutingData(eventKey, roleContext = null, options
       .order('created_at', { ascending: false })
       .limit(MAX_ROWS_PER_EVENT);
 
-    // Apply role-based filtering
-    if (roleContext?.isMasterAdmin) {
-      // Master admin sees all - no filter
-    } else if (useAllEventData && roleContext?.canViewAll) {
-      // Data sharing enabled - see all data for this event from all scouting teams
-      // No team_lead_uid filter applied
-    } else if (roleContext?.teamLeadUid) {
-      query = query.eq('team_lead_uid', roleContext.teamLeadUid);
-    } else if (roleContext?.canViewAll && roleContext?.scoutingId) {
-      query = query.eq('scouting_id', roleContext.scoutingId);
-    } else if (roleContext?.userUid) {
-      query = query.eq('scouter_uid', roleContext.userUid);
+    if (!roleContext?.activeTeamId) {
+      return [];
     }
+    query = query.eq('team_id', roleContext.activeTeamId);
 
     const { data, error } = await query;
 
@@ -529,14 +493,6 @@ export async function getEventScoutingData(eventKey, roleContext = null, options
       id: entry.id,
       ...convertToCamelCase(entry)
     }));
-
-    // Apply smart aggregation when data sharing is enabled
-    // This deduplicates entries where multiple teams scouted the same match
-    // and removes outliers while prioritizing your own team's data
-    if (useAllEventData && applySmartAgg && roleContext?.teamLeadUid) {
-      const { entries } = applySmartAggregation(results, roleContext.teamLeadUid);
-      results = entries;
-    }
 
     return results;
   } catch (error) {
@@ -561,8 +517,9 @@ export async function getEventScoutingData(eventKey, roleContext = null, options
  */
 export async function updateScoutingData(docId, data, teamNumber = null, eventKey = null) {
   try {
-    // Convert camelCase to snake_case for Supabase
-    const snakeCaseData = convertToSnakeCase(data);
+    // Never send mutable ownership fields back during edits. The database
+    // trigger preserves the original author and team.
+    const snakeCaseData = convertToSnakeCase(withoutOwnershipFields(data));
 
     const { error } = await supabase
       .from(SCOUTING_COLLECTION)
@@ -828,9 +785,8 @@ export function calculateTeamAggregates(entries) {
  * @param {Object} options - Optional { useAllEventData: boolean }
  * @returns {Object} - Team summary with aggregates
  */
-export async function getTeamEventSummary(teamNumber, eventKey, roleContext = null, options = {}) {
-  const { useAllEventData = false } = options;
-  const entries = await getTeamScoutingData(teamNumber, { eventKey, roleContext, useAllEventData });
+export async function getTeamEventSummary(teamNumber, eventKey, roleContext = null) {
+  const entries = await getTeamScoutingData(teamNumber, { eventKey, roleContext });
   const aggregates = calculateTeamAggregates(entries);
 
   return {
@@ -844,11 +800,7 @@ export async function getTeamEventSummary(teamNumber, eventKey, roleContext = nu
 /**
  * Get paginated scouting entries (for large datasets)
  * Reduces memory usage by loading entries in chunks
- * Filtered by roleContext:
- * - Master admin: sees all
- * - Team Lead/Member with teamLeadUid: sees all with matching teamLeadUid
- * - Legacy Scout Lead (canViewAll + scoutingId): sees all with matching scoutingId
- * - Scout: sees only their own entries
+ * All browser results are scoped to the caller's active team.
  *
  * @param {Object} options - { pageSize, offset, roleContext }
  * @returns {Object} - { entries, offset, hasMore }
@@ -863,16 +815,10 @@ export async function getPaginatedScoutingData(options = {}) {
       .order('created_at', { ascending: false })
       .range(offset, offset + pageSize - 1);
 
-    // Apply role-based filtering
-    if (roleContext && !roleContext.isMasterAdmin) {
-      if (roleContext.teamLeadUid) {
-        query = query.eq('team_lead_uid', roleContext.teamLeadUid);
-      } else if (roleContext.canViewAll && roleContext.scoutingId) {
-        query = query.eq('scouting_id', roleContext.scoutingId);
-      } else if (roleContext.userUid) {
-        query = query.eq('scouter_uid', roleContext.userUid);
-      }
+    if (!roleContext?.activeTeamId) {
+      return { entries: [], offset, hasMore: false };
     }
+    query = query.eq('team_id', roleContext.activeTeamId);
 
     const { data, error } = await query;
 
@@ -910,8 +856,7 @@ export async function getPaginatedScoutingData(options = {}) {
  * @param {Object} options - Optional { useAllEventData: boolean }
  * @returns {Object} - Map of teamNumber -> entries array
  */
-export async function getCrossEventScoutingData(teamNumbers, roleContext = null, options = {}) {
-  const { useAllEventData = false, applySmartAgg = true } = options;
+export async function getCrossEventScoutingData(teamNumbers, roleContext = null, _options = {}) {
 
   if (!teamNumbers || teamNumbers.length === 0) {
     return {};
@@ -933,19 +878,10 @@ export async function getCrossEventScoutingData(teamNumbers, roleContext = null,
       .order('created_at', { ascending: false })
       .limit(MAX_ROWS_CROSS_EVENT);
 
-    // Apply role-based filtering
-    if (roleContext?.isMasterAdmin) {
-      // Master admin sees all - no filter
-    } else if (useAllEventData && roleContext?.canViewAll) {
-      // Data sharing enabled - see all data for these teams from all scouting teams
-      // No team_lead_uid filter applied
-    } else if (roleContext?.teamLeadUid) {
-      query = query.eq('team_lead_uid', roleContext.teamLeadUid);
-    } else if (roleContext?.canViewAll && roleContext?.scoutingId) {
-      query = query.eq('scouting_id', roleContext.scoutingId);
-    } else if (roleContext?.userUid) {
-      query = query.eq('scouter_uid', roleContext.userUid);
+    if (!roleContext?.activeTeamId) {
+      return {};
     }
+    query = query.eq('team_id', roleContext.activeTeamId);
 
     const { data, error } = await query;
 
@@ -963,14 +899,6 @@ export async function getCrossEventScoutingData(teamNumbers, roleContext = null,
         result[teamNum] = [];
       }
       result[teamNum].push(camelEntry);
-    }
-
-    // Apply smart aggregation per team when data sharing is enabled
-    if (useAllEventData && applySmartAgg && roleContext?.teamLeadUid) {
-      for (const teamNum of Object.keys(result)) {
-        const { entries } = applySmartAggregation(result[teamNum], roleContext.teamLeadUid);
-        result[teamNum] = entries;
-      }
     }
 
     return result;

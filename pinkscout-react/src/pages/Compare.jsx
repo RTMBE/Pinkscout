@@ -85,15 +85,17 @@ export default function Compare() {
   // Load ECS weights from team configuration
   useEffect(() => {
     async function loadEcsWeights() {
-      if (roleContext?.teamLeadUid) {
-        const config = await getScoutingConfig(roleContext.teamLeadUid, selectedYear);
+      if (roleContext?.activeTeamId) {
+        const config = await getScoutingConfig(roleContext.activeTeamId, selectedYear);
         if (config?.scoring_weights) {
           setEcsWeights(config.scoring_weights);
         }
+      } else {
+        setEcsWeights(DEFAULT_SCORING_WEIGHTS);
       }
     }
     loadEcsWeights();
-  }, [roleContext?.teamLeadUid, selectedYear]);
+  }, [roleContext?.activeTeamId, selectedYear]);
 
   // Debounced team search
   useEffect(() => {

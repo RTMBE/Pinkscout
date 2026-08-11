@@ -62,56 +62,65 @@ export const DEFAULT_SCORING_WEIGHTS = {
 // CRUD OPERATIONS
 // =============================================================================
 
+function defaultConfig(year = 2026) {
+  return {
+    id: null,
+    fields: DEFAULT_FIELDS,
+    scoring_weights: DEFAULT_SCORING_WEIGHTS,
+    ecs_config: { formula: 'default', version: 1 },
+    config_name: 'Default Config',
+    year,
+    is_default: true
+  };
+}
+
+function isTeamId(value) {
+  return typeof value === 'string'
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
 /**
  * Get active scouting configuration for a team
- * @param {string} teamLeadUid - Team lead's user ID
+ * @param {string} teamId - Active membership team ID
  * @param {number} year - Year for the configuration
  * @returns {Promise<Object|null>} - Configuration object or null
  */
-export async function getScoutingConfig(teamLeadUid, year = 2026) {
+export async function getScoutingConfig(teamId, year = 2026) {
+  if (!isTeamId(teamId)) return defaultConfig(year);
+
   try {
     const { data, error } = await supabase
       .from('scouting_config')
       .select('*')
-      .eq('team_lead_uid', teamLeadUid)
+      .eq('team_id', teamId)
       .eq('year', year)
       .eq('is_active', true)
-      .single();
+      .maybeSingle();
 
     if (error && error.code !== 'PGRST116') throw error;
     
     // Return default config if none exists
     if (!data) {
-      return {
-        id: null,
-        fields: DEFAULT_FIELDS,
-        scoring_weights: DEFAULT_SCORING_WEIGHTS,
-        ecs_config: { formula: 'default', version: 1 },
-        config_name: 'Default Config',
-        year,
-        is_default: true
-      };
+      return defaultConfig(year);
     }
 
     return data;
   } catch (error) {
     console.error('Error getting scouting config:', error);
-    return {
-      fields: DEFAULT_FIELDS,
-      scoring_weights: DEFAULT_SCORING_WEIGHTS,
-      ecs_config: { formula: 'default', version: 1 },
-      is_default: true
-    };
+    return defaultConfig(year);
   }
 }
 
 /**
  * Save or update scouting configuration
  */
-export async function saveScoutingConfig(teamLeadUid, config) {
+export async function saveScoutingConfig(teamId, config) {
+  if (!isTeamId(teamId)) {
+    throw new Error('An active team membership is required');
+  }
+
   try {
     const configData = {
-      team_lead_uid: teamLeadUid,
       config_name: config.config_name || 'Custom Config',
       year: config.year || 2026,
       is_active: true,
@@ -120,11 +129,12 @@ export async function saveScoutingConfig(teamLeadUid, config) {
       ecs_config: config.ecs_config || { formula: 'default', version: 1 }
     };
 
-    // Deactivate existing configs for this year first
+    // The team_id filter is a client-side guardrail. The database trigger
+    // stamps new rows from auth.uid() and RLS verifies manager permission.
     await supabase
       .from('scouting_config')
       .update({ is_active: false })
-      .eq('team_lead_uid', teamLeadUid)
+      .eq('team_id', teamId)
       .eq('year', configData.year);
 
     // Insert new config
@@ -191,52 +201,18 @@ export function calculateAverageECS(matches, weights = DEFAULT_SCORING_WEIGHTS) 
 // =============================================================================
 
 /**
- * Get data sharing setting for a team lead
- * @param {string} teamLeadUid - Team lead's user ID
- * @returns {Promise<boolean>} - True if using all event data (default), false for team-only
+ * Raw cross-team data access is deliberately disabled. A profile preference
+ * must never authorize access to another team's private scouting rows.
+ * @returns {Promise<boolean>} Always false (team-only)
  */
-export async function getDataSharingSetting(teamLeadUid) {
-  try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('use_all_event_data')
-      .eq('id', teamLeadUid)
-      .single();
-
-    if (error) {
-      console.error('Error getting data sharing setting:', error);
-      return true; // Default to true (use all data)
-    }
-
-    // Default to true if null or undefined
-    return data?.use_all_event_data !== false;
-  } catch (error) {
-    console.error('Error getting data sharing setting:', error);
-    return true; // Default to true
-  }
+export async function getDataSharingSetting() {
+  return false;
 }
 
 /**
- * Update data sharing setting for a team lead
- * @param {string} teamLeadUid - Team lead's user ID
- * @param {boolean} useAllData - True to use all event data, false for team-only
- * @returns {Promise<boolean>} - Success status
+ * Retained for callers during the secure-sharing migration. It intentionally
+ * never writes the legacy, client-controlled `profiles.use_all_event_data`.
  */
-export async function updateDataSharingSetting(teamLeadUid, useAllData) {
-  try {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ use_all_event_data: useAllData })
-      .eq('id', teamLeadUid);
-
-    if (error) {
-      console.error('Error updating data sharing setting:', error);
-      return false;
-    }
-
-    return true;
-  } catch (error) {
-    console.error('Error updating data sharing setting:', error);
-    return false;
-  }
+export async function updateDataSharingSetting() {
+  return false;
 }

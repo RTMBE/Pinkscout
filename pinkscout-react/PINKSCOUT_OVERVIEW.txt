@@ -1,5 +1,11 @@
 ================================================================================
-PINKSCOUT - Complete Website Overview (Detailed Edition)
+PINKSCOUT - Historical Website Overview (Detailed Edition)
+
+SECURITY NOTICE (2026-08): This document describes the legacy profile/team-code
+authorization design and is retained only for project history. It is not the
+production security design. See docs/SECURITY_DEPLOYMENT.md and
+supabase/migrations/20260810120000_security_hardening.sql for the
+membership-backed model.
 ================================================================================
 
 1. PROJECT OVERVIEW
@@ -788,12 +794,9 @@ Path                    | Component            | Auth | Description
 VITE_SUPABASE_URL=https://bfresqonbwibevksihez.supabase.co
 VITE_SUPABASE_ANON_KEY=sb_publishable_...
 
-# External APIs
-VITE_TBA_API_KEY=...   # The Blue Alliance
-VITE_NEXUS_API_KEY=... # FRC Nexus (optional)
-
-# Admin Configuration
-VITE_PRIMARY_ADMIN_EMAIL=rtmbe20@gmail.com
+# External APIs (legacy values deliberately removed)
+# The Blue Alliance credential is server-only: TBA_API_KEY
+# Browser code must never contain an API secret or an admin email allowlist.
 
 
 ================================================================================

@@ -9,8 +9,6 @@
  *
  * EXPORTS:
  * - supabase: Supabase client instance
- * - API_KEYS: External API keys (TBA, Nexus)
- * - API_URLS: External API URLs
  * - PRIMARY_ADMIN_EMAIL: Master admin email
  *
  * =============================================================================
@@ -30,35 +28,52 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env.local');
 }
 
+// PKCE needs the verifier to survive an OAuth/email-confirmation redirect, but
+// shared scouting tablets must not retain a session after their browser tab is
+// closed. Session storage gives us both properties and avoids localStorage.
+const sessionStorageAdapter = {
+  getItem(key) {
+    try {
+      return globalThis.sessionStorage?.getItem(key) ?? null;
+    } catch {
+      return null;
+    }
+  },
+  setItem(key, value) {
+    try {
+      globalThis.sessionStorage?.setItem(key, value);
+    } catch {
+      // Auth will surface a normal session error if storage is unavailable.
+    }
+  },
+  removeItem(key) {
+    try {
+      globalThis.sessionStorage?.removeItem(key);
+    } catch {
+      // Best-effort cleanup for restrictive browser privacy modes.
+    }
+  }
+};
+
 // Create Supabase client
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
+    // `persistSession` works with the storage adapter above: it survives an
+    // authorization redirect but expires when the browser tab/session ends.
     persistSession: true,
-    detectSessionInUrl: true
+    storage: sessionStorageAdapter,
+    detectSessionInUrl: true,
+    flowType: 'pkce'
   }
 });
 
 // =============================================================================
-// EXTERNAL API CONFIGURATION
-// =============================================================================
-
-export const API_KEYS = {
-  TBA: import.meta.env.VITE_TBA_API_KEY || '',
-  NEXUS: import.meta.env.VITE_NEXUS_API_KEY || ''
-};
-
-export const API_URLS = {
-  TBA: 'https://www.thebluealliance.com/api/v3',
-  STATBOTICS: 'https://api.statbotics.io/v3',
-  NEXUS: 'https://frc.nexus/api/v1'
-};
-
-// =============================================================================
 // PRIMARY ADMIN EMAIL
 // =============================================================================
-// The master admin email - has unrestricted access
-export const PRIMARY_ADMIN_EMAIL = import.meta.env.VITE_PRIMARY_ADMIN_EMAIL || 'rtmbe20@gmail.com';
+// This value is UI metadata only. Platform access is determined by the
+// server-side `platform_admins` table and RLS, never an email in browser code.
+export const PRIMARY_ADMIN_EMAIL = null;
 
 // =============================================================================
 // HELPER FUNCTIONS
@@ -84,4 +99,3 @@ export async function getSession() {
 
 // Export for backwards compatibility during migration
 export default supabase;
-

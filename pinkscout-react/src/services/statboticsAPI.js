@@ -11,12 +11,14 @@
  * 
  * API DOCUMENTATION: https://api.statbotics.io/
  * 
- * NOTE: Statbotics is a public API - no authentication required
+ * SECURITY:
+ * PinkScout reaches Statbotics through its authenticated server gateway. This
+ * centralizes validation, caching, abuse controls, and source availability.
  * 
  * =============================================================================
  */
 
-import { API_URLS } from './supabase';
+import { getCompetitionData } from './competitionApi';
 
 // =============================================================================
 // IN-MEMORY CACHE FOR PERFORMANCE
@@ -64,85 +66,18 @@ export function clearCache(key = null) {
 // SCALING FIX: Retry configuration and rate limiting
 // =============================================================================
 
-const RETRY_CONFIG = {
-  maxRetries: 3,
-  initialDelayMs: 500,
-  maxDelayMs: 5000,
-  timeoutMs: 15000
-};
-
-let rateLimitedUntil = 0;
-
 /**
- * Make a fetch request with retry logic and timeout
+ * Make an authenticated request through the PinkScout competition gateway.
  */
-async function fetchWithRetry(url, cacheKey, cacheTTL) {
-  // Check if we're rate limited
-  if (Date.now() < rateLimitedUntil) {
-    const cached = cache.get(cacheKey);
-    if (cached) {
-      return cached.data;
-    }
+async function fetchWithRetry(operation, params, cacheKey, cacheTTL) {
+  try {
+    const data = await getCompetitionData('statbotics', operation, params);
+    if (cacheTTL) setCache(cacheKey, data);
+    return data;
+  } catch (error) {
+    if (import.meta.env.DEV) console.error('Statbotics API error:', error);
     return null;
   }
-
-  let lastError = null;
-
-  for (let attempt = 1; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
-    try {
-      // Add timeout to prevent hanging requests
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), RETRY_CONFIG.timeoutMs);
-
-      const response = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeoutId);
-
-      // Handle rate limiting
-      if (response.status === 429) {
-        const retryAfter = parseInt(response.headers.get('Retry-After') || '60', 10);
-        rateLimitedUntil = Date.now() + (retryAfter * 1000);
-        const cached = cache.get(cacheKey);
-        return cached ? cached.data : null;
-      }
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          return null;
-        }
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (cacheTTL) {
-        setCache(cacheKey, data);
-      }
-      return data;
-    } catch (error) {
-      lastError = error;
-
-      // Don't retry abort errors
-      if (error.name === 'AbortError') {
-        if (import.meta.env.DEV) {
-          console.warn('Statbotics request timed out');
-        }
-        return null;
-      }
-
-      // Wait before retrying (exponential backoff)
-      if (attempt < RETRY_CONFIG.maxRetries) {
-        const delay = Math.min(
-          RETRY_CONFIG.initialDelayMs * Math.pow(2, attempt - 1),
-          RETRY_CONFIG.maxDelayMs
-        );
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-  }
-
-  if (import.meta.env.DEV) {
-    console.error('Statbotics API error after retries:', lastError);
-  }
-  return null;
 }
 
 // =============================================================================
@@ -161,7 +96,8 @@ export async function getStatboticsTeam(teamNumber) {
   if (cached !== null) return cached;
 
   return fetchWithRetry(
-    `${API_URLS.STATBOTICS}/team/${teamNumber}`,
+    'team',
+    { teamNumber },
     cacheKey,
     CACHE_TTL.team
   );
@@ -184,7 +120,8 @@ export async function getTeamEventStats(teamNumber, eventKey) {
   if (cached !== null) return cached;
 
   return fetchWithRetry(
-    `${API_URLS.STATBOTICS}/team_event/${teamNumber}/${eventKey}`,
+    'teamEvent',
+    { teamNumber, eventKey },
     cacheKey,
     CACHE_TTL.teamEvent
   );
@@ -208,7 +145,8 @@ export async function getEventTeamStats(eventKey) {
 
   // Use fetchWithRetry but handle the transformation separately
   const data = await fetchWithRetry(
-    `${API_URLS.STATBOTICS}/team_events?event=${eventKey}`,
+    'eventTeamStats',
+    { eventKey },
     null, // Don't cache raw data
     null
   );
@@ -253,7 +191,8 @@ export async function getTeamYearStats(teamNumber, year) {
   if (cached !== null) return cached;
 
   return fetchWithRetry(
-    `${API_URLS.STATBOTICS}/team_year/${teamNumber}/${year}`,
+    'teamYear',
+    { teamNumber, year },
     cacheKey,
     CACHE_TTL.teamYear
   );
@@ -278,11 +217,11 @@ export async function getTopTeams(year, limit = 20) {
   if (cached !== null) return cached;
 
   const data = await fetchWithRetry(
-    `${API_URLS.STATBOTICS}/team_years?year=${year}&limit=${cappedLimit}&metric=epa_end&ascending=false`,
+    'topTeams',
+    { year, limit: cappedLimit },
     cacheKey,
     CACHE_TTL.topTeams
   );
 
   return data || [];
 }
-

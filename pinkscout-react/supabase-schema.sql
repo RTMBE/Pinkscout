@@ -1,7 +1,11 @@
 -- =============================================================================
--- PINKSCOUT SUPABASE SCHEMA
+-- PINKSCOUT LEGACY BASELINE SCHEMA
 -- =============================================================================
--- Run this in Supabase SQL Editor to create all tables
+-- This file exists only to bootstrap a brand-new, private project that has no
+-- schema yet. It contains the historical authorization model and MUST be
+-- followed immediately by `supabase/migrations/20260810120000_security_hardening.sql`
+-- before any browser client is permitted to connect. For existing projects,
+-- use `supabase db push` and the security deployment runbook instead.
 -- =============================================================================
 
 -- Enable UUID extension
@@ -825,4 +829,3 @@ CREATE POLICY "Team members view team compatibility" ON alliance_compatibility
 CREATE TRIGGER alliance_compatibility_updated_at
   BEFORE UPDATE ON alliance_compatibility
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-
